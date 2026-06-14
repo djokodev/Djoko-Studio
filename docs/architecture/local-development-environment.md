@@ -83,6 +83,16 @@ Application services may be added later after they are scaffolded:
 - `services/media-worker`
 - `services/export-worker`
 
+## DS-010 Compose Baseline
+
+DS-010 introduces the first Docker Compose baseline at
+[`infra/local/docker-compose.yml`](../../infra/local/docker-compose.yml).
+
+This baseline includes infrastructure services only.
+Application services will be added later after they are scaffolded.
+
+The ports listed above remain local development conventions and may change later if conflicts arise.
+
 ## What DS-009 Does Not Implement
 
 This task does not implement any runtime or infrastructure artifacts.
@@ -95,12 +105,3 @@ This task does not implement any runtime or infrastructure artifacts.
 - no NATS streams are created
 - no coturn configuration is created
 - no secrets are committed
-
-## Future DS-010 Expectations
-
-DS-010 should create the first Docker Compose baseline for infrastructure dependencies only:
-
-- PostgreSQL
-- MinIO
-- NATS JetStream
-- coturn

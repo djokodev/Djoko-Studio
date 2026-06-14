@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-djoko_studio}
+      POSTGRES_USER: ${POSTGRES_USER:-djoko}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-djoko_local_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-djoko} -d ${POSTGRES_DB:-djoko_studio}
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - djoko-local
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-djoko}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-djoko_local_password}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - djoko-local
+
+  nats:
+    image: nats:2.14.2
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command:
+      - -js
+      - -m
+      - "8222"
+      - -sd
+      - /data
+    volumes:
+      - nats-data:/data
+    networks:
+      - djoko-local
+
+  coturn:
+    image: coturn/coturn:4.12.0-r0
+    restart: unless-stopped
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --fingerprint
+      - --lt-cred-mech
+      - --user=${TURN_USER:-djoko}:${TURN_PASSWORD:-djoko_local_password}
+      - --realm=${TURN_REALM:-djoko-studio.local}
+      - --no-cli
+      - --no-multicast-peers
+      - --no-tls
+      - --no-dtls
+    environment:
+      TURN_USER: ${TURN_USER:-djoko}
+      TURN_PASSWORD: ${TURN_PASSWORD:-djoko_local_password}
+      TURN_REALM: ${TURN_REALM:-djoko-studio.local}
+    networks:
+      - djoko-local
+
+volumes:
+  postgres-data:
+    name: postgres-data
+  minio-data:
+    name: minio-data
+  nats-data:
+    name: nats-data
+
+networks:
+  djoko-local:
+    name: djoko-local
+    driver: bridge
