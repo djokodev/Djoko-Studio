@@ -16,6 +16,8 @@ Rules:
 
 - One feature = one branch = one pull request.
 - Never push directly to `main`.
+- During implementation, Codex may set the current feature to `in_review`, but Codex must not mark the current feature as `merged`.
+- Post-merge tracker sync is the responsibility of the person or tool that completed the merge after the merge is finished.
 - Do not make architecture decisions without an ADR.
 - Do not add major dependencies without justification.
 - Keep scope small.
