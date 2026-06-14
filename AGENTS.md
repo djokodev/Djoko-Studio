@@ -27,3 +27,11 @@ Rules:
 - If scope is ambiguous, stop and ask for clarification before coding.
 - Markdown files are the canonical source of truth for product, workflow, architecture, and feature decisions.
 - PDF files are human-readable exports only. Do not treat a PDF as the canonical source when a Markdown equivalent exists.
+
+## Skills, MCP and external documentation
+
+- Accepted ADRs and architecture documents remain the source of truth for implementation decisions.
+- Approved skills may guide implementation, but they must not override project decisions.
+- MCP usage must be approved, and read-only documentation MCPs are preferred.
+- For technology-specific work, Codex should consult current official documentation when available.
+- PRs should mention which skills, docs, and MCPs were used when relevant.

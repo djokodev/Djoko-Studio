@@ -39,7 +39,20 @@ When the implementation is complete, Codex must report:
 
 ## Operational reminder
 
-At the end of a Codex implementation task, Codex should:
+At the start of an implementation task, Codex should check whether the task mentions:
+
+- recommended skills
+- official docs to consult
+- MCP / resource usage
+
+At the end of a Codex implementation task, Codex should report:
+
+- skills used
+- docs consulted
+- MCP / resources used
+- checks run
+
+Codex should also:
 
 - update the current feature to `in_review`
 - report that the feature is ready for review

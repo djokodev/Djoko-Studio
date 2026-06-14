@@ -16,6 +16,7 @@
 | DS-004 | v0.1 Recording Core | Initial architecture brief | merged | Merged in PR #5. |
 | DS-005 | v0.1 Recording Core | Define v0.1 technical architecture and stack | merged | Merged in PR #6. |
 | DS-006 | v0.1 Recording Core | Initial ADR structure | merged | Merged in PR #4. |
+| DS-007 | v0.1 Recording Core | Define agent implementation tooling policy | in_review | Define how Codex should use skills, MCP resources and official documentation during implementation. |
 
 ## Allowed Statuses
 
