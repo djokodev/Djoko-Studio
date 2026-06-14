@@ -43,3 +43,11 @@ Use a four-digit ADR number, keep the slug lowercase, and separate words with hy
 | ADR-0005 | Separate raw tracks | Accepted | [ADR-0005-separate-raw-tracks.md](./ADR-0005-separate-raw-tracks.md) |
 | ADR-0006 | Defer concrete technology stack choices | Accepted | [ADR-0006-defer-concrete-technology-stack-choices.md](./ADR-0006-defer-concrete-technology-stack-choices.md) |
 | ADR-0007 | Final export target is 1080p 16:9 | Accepted | [ADR-0007-final-export-1080p-16-9.md](./ADR-0007-final-export-1080p-16-9.md) |
+| ADR-0008 | Polyglot monorepo service architecture | Accepted | [ADR-0008-polyglot-monorepo-service-architecture.md](./ADR-0008-polyglot-monorepo-service-architecture.md) |
+| ADR-0009 | React, TypeScript and Vite for the web studio | Accepted | [ADR-0009-react-typescript-vite-web-studio.md](./ADR-0009-react-typescript-vite-web-studio.md) |
+| ADR-0010 | Go API and signaling services | Accepted | [ADR-0010-go-api-and-signaling-services.md](./ADR-0010-go-api-and-signaling-services.md) |
+| ADR-0011 | Rust upload and media workers | Accepted | [ADR-0011-rust-upload-and-media-workers.md](./ADR-0011-rust-upload-and-media-workers.md) |
+| ADR-0012 | Browser recording and local persistence | Accepted | [ADR-0012-browser-recording-and-local-persistence.md](./ADR-0012-browser-recording-and-local-persistence.md) |
+| ADR-0013 | WebRTC P2P with coturn for live call | Accepted | [ADR-0013-webrtc-p2p-coturn-live-call.md](./ADR-0013-webrtc-p2p-coturn-live-call.md) |
+| ADR-0014 | Storage, queue and rendering stack | Accepted | [ADR-0014-storage-queue-and-rendering-stack.md](./ADR-0014-storage-queue-and-rendering-stack.md) |
+| ADR-0015 | Defer reverse proxy / gateway choice | Accepted | [ADR-0015-defer-reverse-proxy-gateway-choice.md](./ADR-0015-defer-reverse-proxy-gateway-choice.md) |
