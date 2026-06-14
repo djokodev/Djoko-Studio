@@ -14,7 +14,7 @@
 | DS-002 | v0.1 Recording Core | Refine product idea document | merged | Merged in PR #2. |
 | DS-003 | v0.1 Recording Core | Add post-merge tracker sync rule | merged | Merged in PR #3. |
 | DS-004 | v0.1 Recording Core | Initial architecture brief | merged | Merged in PR #5. |
-| DS-005 | v0.1 Recording Core | Define v0.1 technical architecture and stack | in_review | Document the accepted performance-first v0.1 architecture and technology stack. |
+| DS-005 | v0.1 Recording Core | Define v0.1 technical architecture and stack | merged | Merged in PR #6. |
 | DS-006 | v0.1 Recording Core | Initial ADR structure | merged | Merged in PR #4. |
 
 ## Allowed Statuses
