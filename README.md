@@ -25,6 +25,8 @@ Djoko Studio is a resilient interview recording platform built for unstable netw
 
 ## Local development
 
-The local development environment plan is documented in
+The local infrastructure baseline lives in
+[infra/local/docker-compose.yml](infra/local/docker-compose.yml).
+Usage instructions live in [infra/local/README.md](infra/local/README.md).
+The architecture plan is in
 [docs/architecture/local-development-environment.md](docs/architecture/local-development-environment.md).
-The Docker Compose baseline will be added later.

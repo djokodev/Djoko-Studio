@@ -22,7 +22,7 @@ services:
       - djoko-local
 
   minio:
-    image: minio/minio:RELEASE.2025-09-06T17-38-46Z
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     restart: unless-stopped
     ports:
       - "9000:9000"
