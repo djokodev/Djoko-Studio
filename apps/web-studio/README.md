@@ -1,17 +1,41 @@
 # Web Studio
 
-This folder will contain the browser-based studio UI for Djoko Studio.
+`apps/web-studio` is the first frontend scaffold for DNA Studio. It provides a
+minimal React + TypeScript + Vite application shell and a placeholder product
+screen.
 
-Selected stack: React + TypeScript + Vite.
+What is not implemented yet:
 
-Planned responsibilities:
+- recording
+- WebRTC
+- upload
+- auth
+- sessions
+- API integration
 
-- host and guest recording UI
-- camera and microphone permissions
-- WebRTC live call UI
-- local recording state
-- upload progress UI
-- recovery UX
+## Install
 
-No implementation is added yet.
+```bash
+cd apps/web-studio
+npm install
+```
 
+## Run locally
+
+```bash
+cd apps/web-studio
+npm run dev
+```
+
+## Build
+
+```bash
+cd apps/web-studio
+npm run build
+```
+
+## Notes
+
+This app is intentionally limited to the frontend scaffold. It does not yet
+include any recording workflow, live-call logic, resumable upload flow, or
+backend integration.
