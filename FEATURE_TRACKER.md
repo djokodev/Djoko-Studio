@@ -19,7 +19,8 @@
 | DS-007 | v0.1 Recording Core | Define agent implementation tooling policy | merged | Merged in PR #7. |
 | DS-008 | v0.1 Recording Core | Initialize polyglot monorepo structure | merged | Merged in PR #8. |
 | DS-009 | v0.1 Recording Core | Define local development environment plan | merged | Merged in PR #9. |
-| DS-010 | v0.1 Recording Core | Add Docker Compose baseline | in_review | Adds infrastructure-only Compose baseline for PostgreSQL, MinIO, NATS JetStream, and coturn. |
+| DS-010 | v0.1 Recording Core | Add Docker Compose baseline | merged | Merged in PR #10. |
+| DS-011 | v0.1 Recording Core | Scaffold web-studio React/Vite app | in_review | Add the first React + TypeScript + Vite frontend scaffold for Djoko Studio. |
 
 ## Allowed Statuses
 

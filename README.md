@@ -30,3 +30,7 @@ The local infrastructure baseline lives in
 Usage instructions live in [infra/local/README.md](infra/local/README.md).
 The architecture plan is in
 [docs/architecture/local-development-environment.md](docs/architecture/local-development-environment.md).
+
+The first frontend app scaffold lives in
+[`apps/web-studio`](apps/web-studio), and it can be run independently from that
+folder.

@@ -1,0 +1,152 @@
+:root {
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #eef2ff;
+  background:
+    radial-gradient(circle at top left, rgba(72, 153, 255, 0.28), transparent 32%),
+    radial-gradient(circle at top right, rgba(43, 212, 177, 0.2), transparent 30%),
+    linear-gradient(180deg, #08111d 0%, #0d1728 45%, #08111d 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.panel {
+  position: relative;
+  width: min(760px, 100%);
+  overflow: hidden;
+  padding: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 28px;
+  background: rgba(8, 15, 26, 0.76);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 36%);
+  pointer-events: none;
+}
+
+.eyebrow,
+.section-label {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.76rem;
+  color: #8fc9ff;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  margin-top: 14px;
+  font-size: clamp(2.8rem, 7vw, 4.8rem);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+.promise {
+  margin-top: 18px;
+  max-width: 42rem;
+  font-size: clamp(1.12rem, 2.3vw, 1.45rem);
+  color: #d8e2f1;
+}
+
+.notice {
+  margin-top: 18px;
+  max-width: 44rem;
+  padding: 14px 16px;
+  border: 1px solid rgba(143, 201, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(143, 201, 255, 0.08);
+  color: #c9d7ea;
+}
+
+.section {
+  margin-top: 30px;
+}
+
+.section-heading h2 {
+  margin-top: 8px;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+
+.capability-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0;
+  margin: 20px 0 0;
+}
+
+.capability-card {
+  display: flex;
+  align-items: center;
+  min-height: 76px;
+  padding: 18px 18px 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f3f7ff;
+  text-transform: capitalize;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 20px;
+  }
+
+  .panel {
+    padding: 28px 22px;
+    border-radius: 22px;
+  }
+
+  .capability-list {
+    grid-template-columns: 1fr;
+  }
+}
