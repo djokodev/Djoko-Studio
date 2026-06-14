@@ -4,6 +4,13 @@
 
 ## Scope
 
+## Agent tooling
+
+- [ ] Skills used are listed, or none were used.
+- [ ] Official docs consulted are listed when relevant.
+- [ ] MCP/resources used are listed, or none were used.
+- [ ] No skill or external tool overrode accepted ADRs or architecture docs.
+
 ## Files Changed
 
 ## Tests / Checks Run

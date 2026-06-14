@@ -23,6 +23,15 @@
 13. GPT must never merge without Djoko's explicit approval.
 14. Merge only after approval.
 
+## Technology-specific implementation guidance
+
+Before implementing a technology-specific feature, Codex should:
+
+- read the relevant project documents first
+- use approved skills if the task requests them
+- consult current official documentation when available
+- report which skills, docs, and MCPs were used in the PR summary
+
 ## Post-merge tracker sync
 
 - Before a PR is opened, Codex should mark the current feature as `in_review`.
