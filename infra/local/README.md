@@ -16,4 +16,7 @@ Planned local infrastructure dependencies:
 - NATS JetStream
 - coturn
 
-No `docker-compose.yml` exists yet in DS-009.
+Implemented local infrastructure baseline:
+
+- `docker-compose.yml`
+- `.env.example`
