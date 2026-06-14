@@ -22,3 +22,18 @@
 12. Djoko gives explicit final approval before merge.
 13. GPT must never merge without Djoko's explicit approval.
 14. Merge only after approval.
+
+## Post-merge tracker sync
+
+- Before a PR is opened, Codex should mark the current feature as `in_review`.
+- Codex must not mark its own feature as `merged` before the PR is actually merged.
+- After a PR is merged, the person or tool that performed the merge is responsible for ensuring `FEATURE_TRACKER.md` is updated.
+- The merged feature must be marked as `merged`.
+- The tracker update must happen immediately after merge or before starting the next feature.
+- GPT must not merge a PR without Djoko's explicit approval.
+- Codex must never push directly to `main`.
+
+Controlled exception:
+
+- If GPT performs the merge and has write access, GPT may perform a limited post-merge tracker sync directly on `main`, but only after Djoko explicitly approved the merge, only for `FEATURE_TRACKER.md`, only to mark the merged feature as `merged`, with a clear commit message, and with no application code changes.
+- If GPT cannot write directly to `main`, Djoko performs the tracker sync manually.

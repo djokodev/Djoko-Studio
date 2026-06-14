@@ -36,3 +36,12 @@ When the implementation is complete, Codex must report:
 - risks / limitations
 - tracker update
 - PR link
+
+## Operational reminder
+
+At the end of a Codex implementation task, Codex should:
+
+- update the current feature to `in_review`
+- report that the feature is ready for review
+- not mark the feature as `merged`
+- not push directly to `main`
