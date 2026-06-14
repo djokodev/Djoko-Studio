@@ -2,12 +2,18 @@
 
 This folder is the future home of local and development environment files.
 
-Expected future Docker Compose baseline:
+The local development environment plan is documented in
+[docs/architecture/local-development-environment.md](../../docs/architecture/local-development-environment.md).
+
+The future Docker Compose baseline will live here or be referenced from here.
+
+DS-010 will add the first infrastructure-only Docker Compose baseline.
+
+Planned local infrastructure dependencies:
 
 - PostgreSQL
 - MinIO
 - NATS JetStream
 - coturn
 
-No Docker Compose file is added yet unless one already exists.
-
+No `docker-compose.yml` exists yet in DS-009.

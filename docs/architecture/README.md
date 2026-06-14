@@ -19,3 +19,4 @@ Current documents:
 - [Initial Architecture Brief](./initial-architecture-brief.md)
 - [V0.1 Technical Stack](./v0.1-technical-stack.md)
 - [Monorepo Structure](./monorepo-structure.md)
+- [Local Development Environment](./local-development-environment.md)
