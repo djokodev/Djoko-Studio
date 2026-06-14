@@ -14,3 +14,11 @@ Djoko Studio is a resilient interview recording platform built for unstable netw
 - `docs/product/project_idea.md` is the canonical product idea document.
 - `docs/product/assets/djoko_studio_project_idea.pdf` is a human-readable PDF export only.
 - Do not use the PDF as the source of truth when the Markdown version exists.
+
+## Repository structure
+
+- `apps/` browser applications
+- `services/` backend and worker services
+- `packages/` shared contracts and generated/shared types
+- `infra/` local and deployment infrastructure
+- `docs/` product, architecture and ADR documentation
