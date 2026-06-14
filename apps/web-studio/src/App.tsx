@@ -1,11 +1,4 @@
-import type { CSSProperties } from 'react';
-
-const navItems = [
-  { label: 'Product', href: '#product' },
-  { label: 'Workflow', href: '#workflow' },
-  { label: 'Reliability', href: '#reliability' },
-  { label: 'Roadmap', href: '#roadmap' },
-];
+const navItems = ['Product', 'Workflow', 'Reliability', 'Roadmap'];
 
 const featureChips = [
   'Remote interviews',
@@ -16,35 +9,33 @@ const featureChips = [
   'Recovery-first workflow',
 ];
 
-const highlightCards = [
+const focusItems = [
   {
-    id: 'workflow',
-    eyebrow: 'Workflow',
-    title: 'Built for recoverable sessions',
-    body:
-      'The temporary home page sets the tone for a browser-first workflow that will later guide recording, upload, and recovery flows.',
+    title: 'Recording foundation',
+    body: 'The first release starts with a browser-first shell for resilient interview capture.',
   },
   {
-    id: 'reliability',
-    eyebrow: 'Reliability',
-    title: 'Local-first by default',
-    body:
-      'The product story centers on resilient sessions, preserved media, and future upload recovery without depending on a stable call.',
+    title: 'Recovery-minded',
+    body: 'Everything below the hero stays intentionally minimal while the workflow matures.',
   },
   {
-    id: 'roadmap',
-    eyebrow: 'Roadmap',
-    title: 'v0.1 foundation only',
-    body:
-      'This scaffold intentionally stops before recording logic, WebRTC, auth, sessions, or API integration so the first experience stays focused.',
+    title: 'Future upload',
+    body: 'Upload, auth, sessions, and API integration remain out of scope for this scaffold.',
   },
 ];
 
 export default function App() {
   return (
     <div className="page-shell">
-      <div className="page-glow page-glow--left" aria-hidden="true" />
-      <div className="page-glow page-glow--right" aria-hidden="true" />
+      <div className="hero-backdrop" aria-hidden="true">
+        <span className="hero-backdrop__orb hero-backdrop__orb--purple" />
+        <span className="hero-backdrop__orb hero-backdrop__orb--amber" />
+        <span className="hero-backdrop__orb hero-backdrop__orb--blue" />
+        <span className="hero-backdrop__column" />
+        <span className="hero-backdrop__mic" />
+        <span className="hero-backdrop__light" />
+        <span className="hero-backdrop__stage" />
+      </div>
 
       <header className="topbar">
         <a className="brand" href="#product" aria-label="DJOKO STUDIO home">
@@ -56,14 +47,14 @@ export default function App() {
 
         <nav className="nav-links" aria-label="Primary">
           {navItems.map((item) => (
-            <a key={item.label} href={item.href}>
-              {item.label}
+            <a key={item} href={`#${item.toLowerCase()}`}>
+              {item}
             </a>
           ))}
         </nav>
 
         <div className="nav-actions">
-          <a className="nav-link nav-link--muted" href="#roadmap">
+          <a className="nav-link" href="#roadmap">
             Login
           </a>
           <a className="button button--ghost" href="#roadmap">
@@ -76,88 +67,42 @@ export default function App() {
         <section className="hero" id="product" aria-labelledby="hero-title">
           <div className="hero-copy">
             <p className="eyebrow">Temporary home page</p>
-            <h1 id="hero-title">Record remote interviews with confidence.</h1>
+            <h1 id="hero-title">
+              <span className="headline-line">Record remote interviews</span>
+              <span className="headline-line">with confidence.</span>
+            </h1>
             <p className="subtitle">
               Djoko Studio helps creators capture resilient, recoverable interview
               recordings, even when the live connection is unstable.
             </p>
 
-            <div className="cta-row" aria-label="Primary actions">
-              <a className="button button--primary" href="#roadmap">
-                Start a Session
-              </a>
-              <a className="button button--secondary" href="#workflow">
-                View Recording Plan
-              </a>
-            </div>
-
-            <p className="supporting-note">
-              Local-first recording foundation. Upload and recovery features coming
-              soon.
-            </p>
-
             <ul className="chip-list" aria-label="Planned capabilities">
               {featureChips.map((chip) => (
                 <li key={chip} className="chip">
-                  {chip}
+                  <span className="chip-icon" aria-hidden="true" />
+                  <span>{chip}</span>
                 </li>
               ))}
             </ul>
-          </div>
 
-          <div className="hero-visual" aria-hidden="true">
-            <div className="visual-backdrop visual-backdrop--one" />
-            <div className="visual-backdrop visual-backdrop--two" />
-
-            <article className="studio-card">
-              <div className="studio-card__topline">
-                <span className="rec-badge">REC</span>
-                <span className="studio-timer">00:12:48</span>
-              </div>
-
-              <div className="studio-preview">
-                <div className="preview-tile preview-tile--host">
-                  <span className="preview-label">Host</span>
-                  <div className="avatar avatar--host" />
-                </div>
-                <div className="preview-tile preview-tile--guest">
-                  <span className="preview-label">Guest</span>
-                  <div className="avatar avatar--guest" />
-                </div>
-                <div className="preview-tile preview-tile--notes">
-                  <span className="preview-label">Session health</span>
-                  <div className="health-lines">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                </div>
-              </div>
-
-              <div className="waveform" aria-hidden="true">
-                {Array.from({ length: 18 }, (_, index) => (
-                  <span
-                    key={index}
-                    style={{ '--bar-height': `${34 + ((index * 17) % 56)}%` } as CSSProperties}
-                  />
-                ))}
-              </div>
-
-              <div className="control-strip">
-                <span className="control-pill control-pill--active">Tracking</span>
-                <span className="control-pill">Local cache</span>
-                <span className="control-pill">Upload queue</span>
-              </div>
-            </article>
+            <div className="cta-stack">
+              <a className="button button--primary" href="#roadmap">
+                Start a Session
+              </a>
+              <p className="supporting-note">
+                Local-first recording foundation. Upload and recovery features coming
+                soon.
+              </p>
+            </div>
           </div>
         </section>
 
-        <section className="highlight-grid" aria-label="Supporting product sections">
-          {highlightCards.map((card) => (
-            <article key={card.id} className="info-card" id={card.id}>
-              <p className="eyebrow">{card.eyebrow}</p>
-              <h2>{card.title}</h2>
-              <p>{card.body}</p>
+        <section className="focus-strip" aria-label="v0.1 focus">
+          {focusItems.map((item) => (
+            <article key={item.title} className="focus-item" id={item.title.toLowerCase().replace(/\s+/g, '-')}>
+              <p className="focus-item__eyebrow">v0.1 focus</p>
+              <h2>{item.title}</h2>
+              <p>{item.body}</p>
             </article>
           ))}
         </section>
