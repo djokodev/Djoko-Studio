@@ -18,7 +18,7 @@
 | DS-006 | v0.1 Recording Core | Initial ADR structure | merged | Merged in PR #4. |
 | DS-007 | v0.1 Recording Core | Define agent implementation tooling policy | merged | Merged in PR #7. |
 | DS-008 | v0.1 Recording Core | Initialize polyglot monorepo structure | merged | Merged in PR #8. |
-| DS-009 | v0.1 Recording Core | Define local development environment plan | in_review | Draft architecture plan for local development; DS-010 will add the Docker Compose baseline. |
+| DS-009 | v0.1 Recording Core | Define local development environment plan | merged | Merged in PR #9. |
 
 ## Allowed Statuses
 
