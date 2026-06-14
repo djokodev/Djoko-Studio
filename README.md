@@ -22,3 +22,9 @@ Djoko Studio is a resilient interview recording platform built for unstable netw
 - `packages/` shared contracts and generated/shared types
 - `infra/` local and deployment infrastructure
 - `docs/` product, architecture and ADR documentation
+
+## Local development
+
+The local development environment plan is documented in
+[docs/architecture/local-development-environment.md](docs/architecture/local-development-environment.md).
+The Docker Compose baseline will be added later.
