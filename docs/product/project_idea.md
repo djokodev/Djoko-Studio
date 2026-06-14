@@ -281,3 +281,9 @@ These decisions should be handled later through ADRs:
 - Should the first WebRTC version be peer-to-peer?
 - When would an SFU become necessary?
 - Which database should store metadata?
+- Which storage should hold media files?
+- Which queue/worker system should process videos?
+- Which upload protocol should support resumable chunks?
+- How should local browser storage work?
+- How should migrations be handled safely?
+- How should deployment be structured?
