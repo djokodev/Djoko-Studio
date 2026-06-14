@@ -15,7 +15,7 @@
 | DS-003 | v0.1 Recording Core | Add post-merge tracker sync rule | merged | Merged in PR #3. |
 | DS-004 | v0.1 Recording Core | Initial architecture brief | planned | Placeholder architecture documentation structure. |
 | DS-005 | v0.1 Recording Core | Technology decision process | planned | Defines how major technical choices are proposed and approved. |
-| DS-006 | v0.1 Recording Core | Initial ADR structure | in_review | Create initial Architecture Decision Records for core project decisions. |
+| DS-006 | v0.1 Recording Core | Initial ADR structure | merged | Merged in PR #4. |
 
 ## Allowed Statuses
 
