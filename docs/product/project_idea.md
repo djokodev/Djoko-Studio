@@ -2,6 +2,12 @@
 
 Djoko Studio is a web-based interview recording platform designed to stay reliable when network conditions are unstable.
 
+## Source of truth
+
+- `docs/product/project_idea.md` is the canonical product idea document.
+- `docs/product/assets/djoko_studio_project_idea.pdf` is a human-readable PDF export only.
+- Do not treat the PDF as the authoritative source for product requirements.
+
 ## Vision
 
 Build a local-first interview studio for creators who need a dependable way to record remote conversations, keep the raw media safe, and produce a clean final video even when connectivity is poor.
