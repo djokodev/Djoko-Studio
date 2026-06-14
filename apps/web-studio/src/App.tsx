@@ -66,7 +66,6 @@ export default function App() {
       <main className="page-content">
         <section className="hero" id="product" aria-labelledby="hero-title">
           <div className="hero-copy">
-            <p className="eyebrow">Temporary home page</p>
             <h1 id="hero-title">
               <span className="headline-line">Record remote interviews</span>
               <span className="headline-line">with confidence.</span>
