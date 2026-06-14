@@ -13,3 +13,7 @@ Future scope includes:
 
 No infrastructure implementation yet.
 
+Monorepo rule:
+
+- infra must not contain application runtime code
+- infra should stay focused on environment, orchestration, and operational support files
