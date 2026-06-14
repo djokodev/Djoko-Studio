@@ -1,6 +1,6 @@
 # Web Studio
 
-`apps/web-studio` is the first frontend scaffold for Djoko Studio. It provides a
+`apps/web-studio` is the first frontend scaffold for DNA Studio. It provides a
 minimal React + TypeScript + Vite application shell and a placeholder product
 screen.
 

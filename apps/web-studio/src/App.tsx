@@ -38,11 +38,11 @@ export default function App() {
       </div>
 
       <header className="topbar">
-        <a className="brand" href="#product" aria-label="DJOKO STUDIO home">
+        <a className="brand" href="#product" aria-label="DNA STUDIO home">
           <span className="brand-mark" aria-hidden="true">
             D
           </span>
-          <span className="brand-text">DJOKO STUDIO</span>
+          <span className="brand-text">DNA STUDIO</span>
         </a>
 
         <nav className="nav-links" aria-label="Primary">
@@ -72,7 +72,7 @@ export default function App() {
               <span className="headline-line">with confidence.</span>
             </h1>
             <p className="subtitle">
-              Djoko Studio helps creators capture resilient, recoverable interview
+              DNA Studio helps creators capture resilient, recoverable interview
               recordings, even when the live connection is unstable.
             </p>
 
