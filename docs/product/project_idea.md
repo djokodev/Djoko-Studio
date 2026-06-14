@@ -1,252 +1,283 @@
 # Djoko Studio Project Idea
 
-Djoko Studio is a web-based interview recording platform designed to stay reliable when network conditions are unstable.
+Djoko Studio is a resilient web-based interview recording platform.
 
-## Source of truth
+## Source of Truth
 
 - `docs/product/project_idea.md` is the canonical product idea document.
-- `docs/product/assets/djoko_studio_project_idea.pdf` is a human-readable PDF export only.
-- Do not treat the PDF as the authoritative source for product requirements.
+- `docs/product/assets/djoko_studio_project_idea.pdf` is only a human-readable export.
+- When this Markdown file and the PDF differ, the Markdown file wins.
 
-## Vision
+## Product Vision
 
-Build a local-first interview studio for creators who need a dependable way to record remote conversations, keep the raw media safe, and produce a clean final video even when connectivity is poor.
+Djoko Studio is not just a video call tool.
 
-## Problem
+It is a local-first remote interview recording studio designed to protect the final recording against unstable network conditions.
 
-Existing interview and meeting tools work well when the network is stable, but they can fail badly in difficult conditions:
+The live call may adapt to network quality, but the final recording must remain safe, recoverable, and high quality.
 
-- calls may drop unexpectedly
-- participants may be removed from the session
-- recordings can be lost or incomplete
-- uploads can fail or stall
-- the host may not know whether the guest finished uploading
-- final quality can depend too much on live connection quality
+## Problem Statement
 
-Djoko Studio solves a focused problem:
+Remote interview tools often assume stable connectivity. In real-world conditions, that assumption breaks down:
+
+- the call may drop unexpectedly
+- uploads may stall or fail
+- a browser refresh can interrupt the session
+- a participant may close the page too early
+- the host may not know whether the guest upload is complete
+- live quality can degrade enough to hurt the final result
+
+Djoko Studio exists to answer a simple question:
 
 How can a creator reliably record a remote interview even when the network is unstable?
 
 ## Positioning
 
-Djoko Studio is not trying to be a full clone of Riverside or Zoom.
-Its initial position is narrower and sharper:
+Djoko Studio is not trying to be a full Riverside clone or a general-purpose meeting app.
+
+It is positioned as a focused product with a narrower promise:
 
 - desktop web first
 - local-first recording
-- 1 host + 1 guest for the MVP
+- 1 host + 1 guest in the early MVP
 - guest joins without an account
-- separate audio and video tracks
-- chunked upload with resume
+- chunked, resumable uploads
 - automatic recovery after network failure
-- 1080p YouTube-ready export
+- final 1080p export ready for YouTube-style publishing
 
-The product differentiates itself by being strong on reliability rather than breadth of features.
+The differentiation is reliability first, feature breadth second.
 
 ## Target Users
 
-Initial users include:
+The initial users are people who record spoken or visual content remotely:
 
-- content creators
+- creators
+- entrepreneurs
 - podcasters
 - interviewers
-- entrepreneurs
 - trainers
 - independent journalists
-- African creators working with remote guests
-- people recording solo videos or interviews without relying on restrictive free tiers
+- solo video makers
 
-The MVP supports two main use cases:
+These users care about completing the recording safely, not only about the live call quality.
 
-1. Remote interview
-   - 1 host with an account
-   - 1 guest joining by invitation link
-2. Solo recording
-   - the host records alone
-   - useful for intros, short videos, training content, and personal messages
+## Main Use Cases
+
+### Remote Interview
+
+- 1 host with an account
+- 1 guest joining without an account through an invitation link
+- desktop web first
+- live video call
+- local recording on both sides
+- upload progress tracking
+- final 1080p export
+
+### Solo Recording
+
+- the host records alone
+- useful for intros, personal videos, YouTube capsules, trainings, or tests
 
 ## Product Principles
 
-### Local-first recording
+### Local-First Recording
 
-Recording must not depend entirely on the server. Each participant records locally in the browser, and the files are uploaded progressively later.
+Recording should not depend entirely on the server. Media should be captured locally in the browser first, then uploaded progressively.
 
-### Resilience over convenience
+### Reliability Before Polish
 
-The system should handle:
+The system should prioritize protecting the recording over maximizing live-call polish.
 
-- temporary network loss
-- interrupted uploads
-- automatic reconnects
-- page refreshes
-- accidental page closes
-- slow networks
-- resumed uploads later in the same session
+### Separate Media Tracks
 
-The priority is protecting the recorded data.
+Audio and video should be separated by participant so post-production stays flexible and recovery stays practical.
 
-### Separate tracks
+### Simple User Flow
 
-Each participant should have separate audio and video tracks so that post-production stays flexible and recovery is easier.
-
-### Simplicity of use
-
-The user experience should stay simple:
+The product should feel straightforward:
 
 1. create a studio
-2. invite a guest
-3. start recording
-4. end the session
-5. let synchronization finish
-6. edit later through transcription
-7. download the final video or the raw tracks
+2. invite a guest or start solo
+3. record locally
+4. upload progressively
+5. recover automatically if something fails
+6. edit later when available
+7. export the final result
 
-### Technical ambition
+### Preserve the Raw Source
 
-The project is intentionally ambitious so it can serve as a real learning ground for:
+Raw media should remain available and preserved even after edits and exports.
 
-- software architecture
-- system design
-- WebRTC
-- database design
-- media storage
-- resilient upload flows
-- background workers
-- video processing
-- transcription
-- deployment
-- observability
-- migrations
-- scalability
+## MVP Global Overview
 
-## MVP v0.1 Recording Core
+The MVP is organized in three steps:
+
+1. v0.1 proves the recording reliability core.
+2. v0.2 adds transcription-based editing.
+3. v0.3 adds screen sharing for richer interviews and demos.
+
+The overall product direction is to build confidence in the final media artifact first, then expand editing and presentation features.
+
+## v0.1 - Recording Core
 
 ### Goal
 
-Deliver the core promise of the product: a reliable remote interview recording flow with local recording, progressive upload, automatic resume, separate tracks, and a stable 1080p export.
+Prove the core reliability promise: a remote interview recording flow that survives unstable networks without losing the recording in normal failure scenarios.
 
-### In scope
+### Features
 
 - host account
 - personal studio space
 - recording sessions
-- invitation link for the guest
-- live call with 1 host and 1 guest
+- guest invitation link
+- guest joins without an account
+- desktop web first
+- 1 host + 1 guest only
 - solo recording mode
+- live video call
 - local recording in the browser
-- separate audio and video tracks
+- separate tracks for host audio, host video, guest audio, and guest video
 - chunked upload
 - local persistence before upload
 - automatic upload retry
-- recovery screen for unfinished uploads
-- automatic reconnect
-- visible recording and upload indicators
+- automatic recovery after network failure
+- upload resume after refresh or temporary connection loss
 - host visibility into guest upload progress
-- warning before closing the page
+- warning before page close if upload is incomplete
 - host dashboard
-- final 1080p YouTube-ready export
-- download of raw tracks
 - private-by-default recordings
+- raw tracks download
+- final 1080p YouTube-ready export
 
-### Out of scope
+### Notes
 
-- multi-guest sessions
-- mobile-first support
-- livestreaming
-- chat
-- transcript editing
-- screen share
-- payments
-- publishing integrations
+This version is about proving the recording path, the upload path, and the recovery path before adding richer editing or collaboration features.
 
-## MVP v0.2 Editing Core
+## v0.2 - Editing Core
 
 ### Goal
 
-Add transcription-based editing so the host can cut video by editing text.
+Add transcription-based editing so the host can work from text instead of only a timeline.
 
-### In scope
+### Features
 
 - automatic transcription
-- automatic subtitles
+- subtitles export
 - text-based editing
-- logical editing timeline
+- logical cut timeline
+- non-destructive editing
 - final edited video render
-- transcript and subtitle export
+- transcript export
 
-### Out of scope
+### Notes
 
-- advanced clip generation
-- silence removal
-- advanced audio cleanup
-- direct publishing
-- vertical formats
-- stylized captions
+Original files must remain preserved. Editing should create derived outputs without destroying the source media or transcript history.
 
-## MVP v0.3 Screen Share Core
+## v0.3 - Screen Share Core
 
 ### Goal
 
-Add screen sharing so interviews can include demos, products, presentations, and documents.
+Add screen sharing for interviews involving demos, products, presentations, documents, and software walkthroughs.
 
-### In scope
+### Features
 
 - screen sharing during the call
-- live visibility for the other participant
-- screen share in the final video
-- layout switching based on screen share state
+- screen visible live to the other participant
+- screen share integrated into the final video
+- automatic layout switching
 - screen share start and stop segments
 
-### Out of scope
+### Notes
 
-- separate raw screen-share track
-- live annotation
-- remote control
-- multi-screen support
-- advanced slide presentation features
+A separate raw screen-share track is out of scope for v0.3.
+
+## Out-of-Scope Items
+
+The early MVP does not include:
+
+- mobile app
+- multi-guest sessions
+- livestreaming
+- chat
+- teleprompter
+- media board
+- Magic Clips
+- vertical social clips
+- direct YouTube/TikTok/LinkedIn publishing
+- team workspaces
+- billing implementation
+- full Riverside clone
 
 ## Quality Constraints
 
-- target final export: 1080p stable
-- YouTube-friendly 16:9 layout
-- local quality should be higher than live quality
-- live call should adapt to network conditions
+- final export target: 1080p stable
+- YouTube 16:9 format
 - recording reliability has priority over live polish
-- the system must be resilient to network interruptions, refreshes, partial uploads, and worker failures
+- live quality may adapt to network conditions
+- the final local recording should remain higher quality than the live stream when possible
+- no recorded data should be lost in normal unstable-network scenarios
+- uploads must be resumable
+- raw media should be preserved
+- Markdown is the canonical source of truth
+
+## Reliability Goals
+
+The system should be designed to survive:
+
+- temporary network loss
+- interrupted upload
+- browser refresh
+- user trying to close the page before upload is complete
+- guest upload not yet completed
+- slow connection
+- worker failure during processing
+
+The goal is to avoid data loss in normal unstable-network scenarios.
+
+This is not a claim of perfect safety under every possible failure mode.
 
 ## Business Ambition
 
-Djoko Studio can start as a personal product and grow into a SaaS offering.
+Djoko Studio can start as a personal tool and later evolve into a SaaS product for individual creators.
 
-Possible future packaging:
+Possible pricing direction:
 
-- Free: limited hours, limited storage, limited exports
-- Starter: more hours, no watermark, 1080p exports, limited transcription
-- Pro: more storage, more hours, advanced transcription, text editing, screen share
+- free tier with limits
+- starter plan around 5 USD/month
+- pricing informed by real cost drivers such as:
+  - recording hours
+  - media storage
+  - transcription
+  - video processing
+  - exports
 
-Pricing should reflect real costs:
+Billing is out of scope for now.
 
-- recording time
-- media storage
-- transcription
-- video processing
-- exports
+## Why This Project Is Useful for Architecture and System Design Learning
 
-## Why This Project Is Good For Architecture Learning
+Djoko Studio is a strong learning project because it forces careful thinking about:
 
-Djoko Studio is a strong architecture and system design exercise because it requires real production thinking:
-
-- frontend and backend design
-- WebRTC
-- resilient upload flows
-- browser local storage
-- object storage
-- relational data modeling
-- asynchronous workers
-- processing pipelines
+- local-first browser workflows
+- WebRTC tradeoffs
+- resumable uploads
+- media storage and recovery
+- background processing
+- transcript generation
+- non-destructive editing
+- export pipelines
 - observability
-- security
-- migrations
+- failure handling
+- data modeling
 - scalability
 
-It is more than a CRUD app. It forces careful thinking about reliability, media handling, and distributed system tradeoffs.
+It is a good case study for building a product where the user cares most about protecting the final artifact.
+
+## Future Architecture Questions to Answer Later
+
+These decisions should be handled later through ADRs:
+
+- Which frontend technology should be used?
+- Which backend language/framework should be used?
+- Should the first WebRTC version be peer-to-peer?
+- When would an SFU become necessary?
+- Which database should store metadata?
