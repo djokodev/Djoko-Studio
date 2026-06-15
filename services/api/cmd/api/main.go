@@ -35,6 +35,7 @@ func main() {
 	deps := httpserver.Dependencies{}
 	if db.Enabled() {
 		deps.SessionStore = postgres.NewSessionStore(db.Pool())
+		deps.ParticipantStore = postgres.NewParticipantStore(db.Pool())
 	}
 
 	server := httpserver.New(cfg.Port, logger, deps)

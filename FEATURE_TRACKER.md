@@ -36,6 +36,7 @@
 | DS-024 | v0.1 Recording Core | Add API storage layer foundation | merged | Merged in PR #24. |
 | DS-025 | v0.1 Recording Core | Add initial session API routes | merged | Merged in PR #25. |
 | DS-026 | v0.1 Recording Core | Add guest invite token generation and lookup | merged | Merged in PR #26. |
+| DS-027 | v0.1 Recording Core | Add guest participant join foundation | in_review | Adds guest participant join API foundation without auth, signaling, or recording behavior. |
 
 ## Allowed Statuses
 

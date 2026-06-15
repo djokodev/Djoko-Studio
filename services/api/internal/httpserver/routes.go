@@ -24,7 +24,8 @@ type errorResponse struct {
 }
 
 type Dependencies struct {
-	SessionStore storage.SessionStore
+	SessionStore     storage.SessionStore
+	ParticipantStore storage.ParticipantStore
 }
 
 type createSessionRequest struct {
@@ -40,6 +41,15 @@ type createSessionResponse struct {
 	GuestInviteToken string          `json:"guest_invite_token"`
 }
 
+type joinGuestSessionRequest struct {
+	DisplayName string `json:"display_name"`
+}
+
+type joinGuestSessionResponse struct {
+	Session     sessionResponse     `json:"session"`
+	Participant participantResponse `json:"participant"`
+}
+
 type sessionResponse struct {
 	ID          string     `json:"id"`
 	StudioID    string     `json:"studio_id"`
@@ -53,12 +63,25 @@ type sessionResponse struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+type participantResponse struct {
+	ID          string     `json:"id"`
+	SessionID   string     `json:"session_id"`
+	Role        string     `json:"role"`
+	DisplayName string     `json:"display_name"`
+	Status      string     `json:"status"`
+	JoinedAt    *time.Time `json:"joined_at,omitempty"`
+	LeftAt      *time.Time `json:"left_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 func newHandler(deps Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", allowOnly(http.MethodGet, healthzHandler))
 	mux.HandleFunc("/readyz", allowOnly(http.MethodGet, readyzHandler))
 	mux.HandleFunc("/v1/sessions", allowOnly(http.MethodPost, createSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}", allowOnly(http.MethodGet, getGuestSessionHandler(deps.SessionStore)))
+	mux.HandleFunc("/v1/guest/sessions/{invite_token}/join", allowOnly(http.MethodPost, joinGuestSessionHandler(deps.SessionStore, deps.ParticipantStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
 	return mux
@@ -189,6 +212,71 @@ func getGuestSessionHandler(store storage.SessionStore) http.HandlerFunc {
 	}
 }
 
+func joinGuestSessionHandler(sessionStore storage.SessionStore, participantStore storage.ParticipantStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(sessionStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		if !participantStoreAvailable(participantStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "participant store unavailable",
+			})
+			return
+		}
+
+		payload, err := decodeJoinGuestSessionRequest(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		inviteToken := strings.TrimSpace(r.PathValue("invite_token"))
+		if inviteToken == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "session not found",
+			})
+			return
+		}
+
+		session, err := sessionStore.GetSessionByInviteTokenHash(r.Context(), invite.HashToken(inviteToken))
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		participant, err := participantStore.JoinGuestParticipant(r.Context(), storage.JoinGuestParticipantParams{
+			SessionID:   session.ID,
+			DisplayName: payload.DisplayName,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to join guest participant",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, joinGuestSessionResponse{
+			Session:     newSessionResponse(session),
+			Participant: newParticipantResponse(participant),
+		})
+	}
+}
+
 func listStudioSessionsHandler(store storage.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !sessionStoreAvailable(store) {
@@ -257,6 +345,31 @@ func decodeCreateSessionRequest(body io.Reader) (createSessionRequest, error) {
 	return payload, nil
 }
 
+func decodeJoinGuestSessionRequest(body io.Reader) (joinGuestSessionRequest, error) {
+	var payload joinGuestSessionRequest
+
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return joinGuestSessionRequest{}, errors.New("unknown json field")
+		}
+
+		return joinGuestSessionRequest{}, errors.New("invalid json body")
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return joinGuestSessionRequest{}, errors.New("invalid json body")
+	}
+
+	payload.DisplayName = strings.TrimSpace(payload.DisplayName)
+	if payload.DisplayName == "" {
+		return joinGuestSessionRequest{}, errors.New("display_name is required")
+	}
+
+	return payload, nil
+}
+
 func normalizeSessionStatus(value string) (domain.SessionStatus, error) {
 	if strings.TrimSpace(value) == "" {
 		return domain.SessionStatusDraft, nil
@@ -286,7 +399,30 @@ func newSessionResponse(session domain.Session) sessionResponse {
 	}
 }
 
+func newParticipantResponse(participant domain.Participant) participantResponse {
+	displayName := ""
+	if participant.DisplayName != nil {
+		displayName = *participant.DisplayName
+	}
+
+	return participantResponse{
+		ID:          participant.ID,
+		SessionID:   participant.SessionID,
+		Role:        string(participant.Role),
+		DisplayName: displayName,
+		Status:      string(participant.Status),
+		JoinedAt:    participant.JoinedAt,
+		LeftAt:      participant.LeftAt,
+		CreatedAt:   participant.CreatedAt,
+		UpdatedAt:   participant.UpdatedAt,
+	}
+}
+
 func sessionStoreAvailable(store storage.SessionStore) bool {
+	return store != nil
+}
+
+func participantStoreAvailable(store storage.ParticipantStore) bool {
 	return store != nil
 }
 
