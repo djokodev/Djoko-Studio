@@ -19,8 +19,9 @@
 | DS-007 | v0.1 Recording Core | Define agent implementation tooling policy | merged | Merged in PR #7. |
 | DS-008 | v0.1 Recording Core | Initialize polyglot monorepo structure | merged | Merged in PR #8. |
 | DS-009 | v0.1 Recording Core | Define local development environment plan | merged | Merged in PR #9. |
-| DS-010 | v0.1 Recording Core | Add Docker Compose baseline | in_review | Adds infrastructure-only Compose baseline for PostgreSQL, MinIO, NATS JetStream, and coturn. |
+| DS-010 | v0.1 Recording Core | Add Docker Compose baseline | merged | Merged in PR #10. |
 | DS-011 | v0.1 Recording Core | Scaffold web-studio React/Vite app | merged | Merged in PR #11. |
+| DS-012 | v0.1 Recording Core | Scaffold Go API service | in_review | PR open for minimal Go API service scaffold. |
 
 ## Allowed Statuses
 
