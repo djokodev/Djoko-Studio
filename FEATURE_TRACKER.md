@@ -33,7 +33,7 @@
 | DS-021 | v0.1 Recording Core | Define v0.1 API domain model and database schema plan | merged | Merged in PR #21. |
 | DS-022 | v0.1 Recording Core | Add API database migration tooling baseline | merged | Merged in PR #22. |
 | DS-023 | v0.1 Recording Core | Add initial API PostgreSQL schema migrations | merged | Merged in PR #23. |
-| DS-024 | v0.1 Recording Core | Add API storage layer foundation | in_review | Adds Go domain and storage foundations for future session API routes without changing runtime behavior. |
+| DS-024 | v0.1 Recording Core | Add API storage layer foundation | merged | Merged in PR #24. |
 
 ## Allowed Statuses
 
