@@ -23,6 +23,7 @@
 | DS-011 | v0.1 Recording Core | Scaffold web-studio React/Vite app | merged | Merged in PR #11. |
 | DS-012 | v0.1 Recording Core | Scaffold Go API service | merged | Merged in PR #12. |
 | DS-013 | v0.1 Recording Core | Scaffold Go signaling service | merged | Merged in PR #13. |
+| DS-014 | v0.1 Recording Core | Scaffold Rust upload service | in_review | Minimal Axum/Tokio scaffold for health and readiness endpoints. |
 
 ## Allowed Statuses
 
