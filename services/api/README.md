@@ -10,8 +10,9 @@ It currently provides only the technical scaffold needed for future API work.
 - HTTP server with a small internal routing package
 - `GET /healthz`
 - `GET /readyz`
+- optional PostgreSQL connection foundation behind `DATABASE_URL`
 - graceful shutdown on interrupt or termination signals
-- tests for the basic routes and 404 behavior
+- tests for the basic routes, 404 behavior, and database foundation
 
 ## What is intentionally not implemented yet
 
@@ -25,7 +26,7 @@ It currently provides only the technical scaffold needed for future API work.
 - dashboard data
 - quotas
 - authentication
-- database access
+- database models, queries, and migrations
 - Docker configuration
 - external service integration
 
@@ -51,9 +52,11 @@ The API reads the following environment variables:
 
 - `PORT` controls the local API port and defaults to `8080`
 - `APP_ENV` controls runtime context for configuration and logging and defaults to `development`
-- `DATABASE_URL` is reserved for future database integration, is stored in config for now, and is not used to connect yet
+- `DATABASE_URL` optionally opens a PostgreSQL connection pool during startup and may be left empty for local development or CI
+- a useful local `DATABASE_URL` example is `postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable`
 
-Database access will be added in a later task.
+When `DATABASE_URL` is empty, the API starts without a database connection. `GET /readyz` does not check the database yet.
+PostgreSQL migrations, schema, and product entities will be added in later tasks.
 
 ## Test
 
