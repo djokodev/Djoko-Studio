@@ -45,6 +45,16 @@ PORT=8081 go run ./cmd/api
 
 The default port is `8080`.
 
+## Configuration
+
+The API reads the following environment variables:
+
+- `PORT` controls the local API port and defaults to `8080`
+- `APP_ENV` controls runtime context for configuration and logging and defaults to `development`
+- `DATABASE_URL` is reserved for future database integration, is stored in config for now, and is not used to connect yet
+
+Database access will be added in a later task.
+
 ## Test
 
 ```bash
