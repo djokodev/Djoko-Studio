@@ -29,7 +29,7 @@
 | DS-017 | v0.1 Recording Core | Add repository-wide validation script | merged | Merged in PR #17. |
 | DS-018 | v0.1 Recording Core | Add GitHub Actions validation workflow | merged | Merged in PR #18. |
 | DS-019 | v0.1 Recording Core | Add API runtime configuration foundation | merged | Merged in PR #19. |
-| DS-020 | v0.1 Recording Core | Add API PostgreSQL connection foundation | in_review | Optional `pgxpool` foundation for `services/api`; does not wire `/readyz` to the database yet. |
+| DS-020 | v0.1 Recording Core | Add API PostgreSQL connection foundation | merged | Merged in PR #20. |
 
 ## Allowed Statuses
 
