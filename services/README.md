@@ -21,3 +21,9 @@ Media worker status:
 - `services/media-worker` is scaffolded in Rust as a long-running worker
 - it does not expose HTTP endpoints
 - media job processing is still deferred
+
+Export worker status:
+
+- `services/export-worker` is scaffolded in Rust as a long-running worker
+- it does not expose HTTP endpoints
+- export rendering logic is still deferred
