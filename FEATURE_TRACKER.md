@@ -27,6 +27,7 @@
 | DS-015 | v0.1 Recording Core | Scaffold Rust media-worker service | merged | Merged in PR #15. |
 | DS-016 | v0.1 Recording Core | Scaffold Rust export-worker service | merged | Merged in PR #16. |
 | DS-017 | v0.1 Recording Core | Add repository-wide validation script | merged | Merged in PR #17. |
+| DS-018 | v0.1 Recording Core | Add GitHub Actions validation workflow | in_review | Runs `./scripts/validate.sh` on pull requests and pushes to `main`. |
 
 ## Allowed Statuses
 

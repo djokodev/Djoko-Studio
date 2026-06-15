@@ -26,3 +26,5 @@ If `cargo clippy` is available locally, the script also runs:
 For the current scaffolded frontend, lint and test scripts are skipped because they are not defined in `apps/web-studio/package.json`.
 
 The validator expects the relevant toolchains to be available on `PATH` and stops with a clear message if `Node.js`, `npm`, `go`, or `cargo` is missing.
+
+A minimal GitHub Actions workflow at [`.github/workflows/validate.yml`](../.github/workflows/validate.yml) runs this same script on pull requests and pushes to `main`. It is validation only and does not handle deployment or release automation.
