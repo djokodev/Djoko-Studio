@@ -21,7 +21,7 @@
 | DS-009 | v0.1 Recording Core | Define local development environment plan | merged | Merged in PR #9. |
 | DS-010 | v0.1 Recording Core | Add Docker Compose baseline | merged | Merged in PR #10. |
 | DS-011 | v0.1 Recording Core | Scaffold web-studio React/Vite app | merged | Merged in PR #11. |
-| DS-012 | v0.1 Recording Core | Scaffold Go API service | in_review | PR open for minimal Go API service scaffold. |
+| DS-012 | v0.1 Recording Core | Scaffold Go API service | merged | Merged in PR #12. |
 
 ## Allowed Statuses
 
