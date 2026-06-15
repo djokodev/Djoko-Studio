@@ -61,9 +61,12 @@ When `DATABASE_URL` is empty, the API starts without a database connection. `GET
 
 Migration tooling is in place for `services/api`, but migrations are still manual for now.
 
+- the initial schema migration is `services/api/migrations/00001_create_v0_1_core_tables.sql`
+- it creates the `users`, `studios`, `sessions`, `participants`, `recordings`, `recording_tracks`, `uploads`, and `exports` tables
 - app startup does not run migrations
 - `./scripts/validate.sh` does not require PostgreSQL
 - `DATABASE_URL` is required only when running migration commands
+- use `./services/api/scripts/migrate.sh status`, `up`, and `down` to manage Goose migrations manually
 - use the local PostgreSQL example below when testing migrations manually:
 
 ```text
@@ -76,6 +79,8 @@ Example commands:
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/migrate.sh status
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/migrate.sh up
 ```
+
+DS-024 or later will add repository and storage-layer code that reads and writes these tables.
 
 ## Test
 
