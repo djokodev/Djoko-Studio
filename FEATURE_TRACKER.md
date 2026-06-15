@@ -31,7 +31,7 @@
 | DS-019 | v0.1 Recording Core | Add API runtime configuration foundation | merged | Merged in PR #19. |
 | DS-020 | v0.1 Recording Core | Add API PostgreSQL connection foundation | merged | Merged in PR #20. |
 | DS-021 | v0.1 Recording Core | Define v0.1 API domain model and database schema plan | merged | Merged in PR #21. |
-| DS-022 | v0.1 Recording Core | Add API database migration tooling baseline | in_review | Adds manual PostgreSQL migration tooling and documentation without creating product tables. |
+| DS-022 | v0.1 Recording Core | Add API database migration tooling baseline | merged | Merged in PR #22. |
 
 ## Allowed Statuses
 
