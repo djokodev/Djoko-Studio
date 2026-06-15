@@ -10,15 +10,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/djokodev/Djoko-Studio/services/api/internal/config"
 	"github.com/djokodev/Djoko-Studio/services/api/internal/httpserver"
 )
 
 func main() {
+	cfg := config.Load(os.Getenv)
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
-	}))
+	})).With("app_env", cfg.Environment)
 
-	server := httpserver.New(os.Getenv("PORT"), logger)
+	server := httpserver.New(cfg.Port, logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
