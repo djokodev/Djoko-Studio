@@ -1,15 +1,21 @@
 # Signaling Service
 
-This service will be implemented in Go.
+Minimal Go scaffold for Djoko Studio WebRTC signaling.
 
-Planned responsibility:
+## Endpoints
 
-- WebSocket signaling
-- rooms
-- presence
-- WebRTC offer and answer exchange
-- ICE candidates
-- reconnect coordination
+- `GET /healthz`
+- `GET /readyz`
+- `GET /ws`
 
-No implementation yet.
+## Run
 
+```bash
+PORT=8081 go run ./cmd/signaling
+```
+
+## Validate
+
+```bash
+go test ./...
+```
