@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/djokodev/Djoko-Studio/services/api/internal/config"
+	"github.com/djokodev/Djoko-Studio/services/api/internal/database"
 	"github.com/djokodev/Djoko-Studio/services/api/internal/httpserver"
 )
 
@@ -20,6 +21,15 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})).With("app_env", cfg.Environment)
+
+	db, err := database.Open(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("database initialization failed", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	logger = logger.With("database_enabled", db.Enabled())
 
 	server := httpserver.New(cfg.Port, logger)
 
