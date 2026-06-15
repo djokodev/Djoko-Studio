@@ -199,6 +199,27 @@ func TestPostSessionsRejectsMalformedJSON(t *testing.T) {
 	assertErrorResponse(t, recorder.Result(), http.StatusBadRequest, "invalid json body")
 }
 
+func TestPostSessionsRejectsUnknownJSONField(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(Dependencies{
+		SessionStore: fakeSessionStore{
+			createSessionFunc: func(ctx context.Context, params storage.CreateSessionParams) (domain.Session, error) {
+				t.Fatal("expected create session not to be called")
+				return domain.Session{}, nil
+			},
+		},
+	})
+
+	body := `{"studio_id":"2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d","host_user_id":"3c9abfe7-3133-4924-b159-f62277dfce7c","title":"Interview with guest","invite_token_hash":"client-controlled-hash"}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions", strings.NewReader(body))
+
+	handler.ServeHTTP(recorder, request)
+
+	assertErrorResponse(t, recorder.Result(), http.StatusBadRequest, "unknown json field")
+}
+
 func TestGetSessionByIDReturnsSession(t *testing.T) {
 	t.Parallel()
 

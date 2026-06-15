@@ -233,7 +233,12 @@ func decodeCreateSessionRequest(body io.Reader) (createSessionRequest, error) {
 	var payload createSessionRequest
 
 	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&payload); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return createSessionRequest{}, errors.New("unknown json field")
+		}
+
 		return createSessionRequest{}, errors.New("invalid json body")
 	}
 
