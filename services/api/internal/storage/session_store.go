@@ -25,3 +25,12 @@ type SessionStore interface {
 	GetSessionByInviteTokenHash(ctx context.Context, inviteTokenHash string) (domain.Session, error)
 	ListSessionsByStudio(ctx context.Context, studioID string) ([]domain.Session, error)
 }
+
+type JoinGuestParticipantParams struct {
+	SessionID   string
+	DisplayName string
+}
+
+type ParticipantStore interface {
+	JoinGuestParticipant(ctx context.Context, params JoinGuestParticipantParams) (domain.Participant, error)
+}
