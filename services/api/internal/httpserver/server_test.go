@@ -15,7 +15,7 @@ func TestHealthzReturnsOKJSON(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 
-	newHandler().ServeHTTP(recorder, request)
+	newHandler(Dependencies{}).ServeHTTP(recorder, request)
 
 	assertStatusResponse(t, recorder.Result(), http.StatusOK)
 }
@@ -26,7 +26,7 @@ func TestReadyzReturnsOKJSON(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 
-	newHandler().ServeHTTP(recorder, request)
+	newHandler(Dependencies{}).ServeHTTP(recorder, request)
 
 	assertStatusResponse(t, recorder.Result(), http.StatusOK)
 }
@@ -37,7 +37,7 @@ func TestUnknownRouteReturnsNotFound(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/unknown", nil)
 
-	newHandler().ServeHTTP(recorder, request)
+	newHandler(Dependencies{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
@@ -50,7 +50,7 @@ func TestHealthzRejectsNonGetMethods(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/healthz", nil)
 
-	newHandler().ServeHTTP(recorder, request)
+	newHandler(Dependencies{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)
@@ -67,7 +67,7 @@ func TestReadyzRejectsNonGetMethods(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/readyz", nil)
 
-	newHandler().ServeHTTP(recorder, request)
+	newHandler(Dependencies{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)

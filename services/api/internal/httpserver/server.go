@@ -15,7 +15,7 @@ type Server struct {
 	httpServer *http.Server
 }
 
-func New(port string, logger *slog.Logger) *Server {
+func New(port string, logger *slog.Logger, deps Dependencies) *Server {
 	if port == "" {
 		port = defaultPort
 	}
@@ -30,7 +30,7 @@ func New(port string, logger *slog.Logger) *Server {
 	}
 	srv.httpServer = &http.Server{
 		Addr:              srv.addr,
-		Handler:           newHandler(),
+		Handler:           newHandler(deps),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

@@ -3,7 +3,14 @@ package httpserver
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"strings"
+	"time"
+
+	"github.com/djokodev/Djoko-Studio/services/api/internal/domain"
+	"github.com/djokodev/Djoko-Studio/services/api/internal/storage"
 )
 
 type statusResponse struct {
@@ -15,10 +22,39 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func newHandler() http.Handler {
+type Dependencies struct {
+	SessionStore storage.SessionStore
+}
+
+type createSessionRequest struct {
+	StudioID        string     `json:"studio_id"`
+	HostUserID      string     `json:"host_user_id"`
+	Title           string     `json:"title"`
+	Status          string     `json:"status"`
+	ScheduledAt     *time.Time `json:"scheduled_at"`
+	InviteTokenHash string     `json:"invite_token_hash"`
+}
+
+type sessionResponse struct {
+	ID          string     `json:"id"`
+	StudioID    string     `json:"studio_id"`
+	HostUserID  string     `json:"host_user_id"`
+	Title       string     `json:"title"`
+	Status      string     `json:"status"`
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+func newHandler(deps Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", allowOnly(http.MethodGet, healthzHandler))
 	mux.HandleFunc("/readyz", allowOnly(http.MethodGet, readyzHandler))
+	mux.HandleFunc("/v1/sessions", allowOnly(http.MethodPost, createSessionHandler(deps.SessionStore)))
+	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
+	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
 	return mux
 }
 
@@ -36,6 +72,104 @@ func readyzHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func createSessionHandler(store storage.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		payload, err := decodeCreateSessionRequest(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		status, err := normalizeSessionStatus(payload.Status)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		session, err := store.CreateSession(r.Context(), storage.CreateSessionParams{
+			StudioID:        payload.StudioID,
+			HostUserID:      payload.HostUserID,
+			InviteTokenHash: payload.InviteTokenHash,
+			Title:           payload.Title,
+			Status:          status,
+			ScheduledAt:     payload.ScheduledAt,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to create session",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, newSessionResponse(session))
+	}
+}
+
+func getSessionHandler(store storage.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		session, err := store.GetSession(r.Context(), r.PathValue("id"))
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, newSessionResponse(session))
+	}
+}
+
+func listStudioSessionsHandler(store storage.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		sessions, err := store.ListSessionsByStudio(r.Context(), r.PathValue("studio_id"))
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to list sessions",
+			})
+			return
+		}
+
+		payload := make([]sessionResponse, 0, len(sessions))
+		for _, session := range sessions {
+			payload = append(payload, newSessionResponse(session))
+		}
+
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
 func allowOnly(method string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != method {
@@ -48,6 +182,66 @@ func allowOnly(method string, next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
+}
+
+func decodeCreateSessionRequest(body io.Reader) (createSessionRequest, error) {
+	var payload createSessionRequest
+
+	decoder := json.NewDecoder(body)
+	if err := decoder.Decode(&payload); err != nil {
+		return createSessionRequest{}, errors.New("invalid json body")
+	}
+
+	if strings.TrimSpace(payload.StudioID) == "" {
+		return createSessionRequest{}, errors.New("studio_id is required")
+	}
+
+	if strings.TrimSpace(payload.HostUserID) == "" {
+		return createSessionRequest{}, errors.New("host_user_id is required")
+	}
+
+	if strings.TrimSpace(payload.Title) == "" {
+		return createSessionRequest{}, errors.New("title is required")
+	}
+
+	if strings.TrimSpace(payload.InviteTokenHash) == "" {
+		return createSessionRequest{}, errors.New("invite_token_hash is required")
+	}
+
+	return payload, nil
+}
+
+func normalizeSessionStatus(value string) (domain.SessionStatus, error) {
+	if strings.TrimSpace(value) == "" {
+		return domain.SessionStatusDraft, nil
+	}
+
+	status := domain.SessionStatus(value)
+	switch status {
+	case domain.SessionStatusDraft, domain.SessionStatusWaiting, domain.SessionStatusLive, domain.SessionStatusEnded, domain.SessionStatusCancelled:
+		return status, nil
+	default:
+		return "", errors.New("status is invalid")
+	}
+}
+
+func newSessionResponse(session domain.Session) sessionResponse {
+	return sessionResponse{
+		ID:          session.ID,
+		StudioID:    session.StudioID,
+		HostUserID:  session.HostUserID,
+		Title:       session.Title,
+		Status:      string(session.Status),
+		ScheduledAt: session.ScheduledAt,
+		StartedAt:   session.StartedAt,
+		EndedAt:     session.EndedAt,
+		CreatedAt:   session.CreatedAt,
+		UpdatedAt:   session.UpdatedAt,
+	}
+}
+
+func sessionStoreAvailable(store storage.SessionStore) bool {
+	return store != nil
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
