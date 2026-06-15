@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 const defaultPort = "8080"
@@ -28,8 +29,12 @@ func New(port string, logger *slog.Logger) *Server {
 		logger: logger,
 	}
 	srv.httpServer = &http.Server{
-		Addr:    srv.addr,
-		Handler: newHandler(),
+		Addr:              srv.addr,
+		Handler:           newHandler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	return srv
