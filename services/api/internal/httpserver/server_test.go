@@ -61,6 +61,23 @@ func TestHealthzRejectsNonGetMethods(t *testing.T) {
 	}
 }
 
+func TestReadyzRejectsNonGetMethods(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/readyz", nil)
+
+	newHandler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)
+	}
+
+	if got := recorder.Header().Get("Allow"); got != http.MethodGet {
+		t.Fatalf("expected Allow header %q, got %q", http.MethodGet, got)
+	}
+}
+
 func assertStatusResponse(t *testing.T, response *http.Response, expectedStatus int) {
 	t.Helper()
 	defer response.Body.Close()
