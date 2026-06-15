@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -32,9 +34,18 @@ func TestOpenWithEmptyDatabaseURLReturnsDisabledDB(t *testing.T) {
 func TestOpenWithInvalidDatabaseURLReturnsError(t *testing.T) {
 	t.Parallel()
 
-	db, err := Open(context.Background(), "://invalid")
+	invalidURL := "://invalid"
+	db, err := Open(context.Background(), invalidURL)
 	if err == nil {
 		db.Close()
 		t.Fatal("expected error for invalid database url")
+	}
+
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("expected error %v, got %v", ErrInvalidConfig, err)
+	}
+
+	if strings.Contains(err.Error(), invalidURL) {
+		t.Fatalf("expected sanitized error, got %q", err.Error())
 	}
 }

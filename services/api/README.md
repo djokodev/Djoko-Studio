@@ -53,8 +53,10 @@ The API reads the following environment variables:
 - `PORT` controls the local API port and defaults to `8080`
 - `APP_ENV` controls runtime context for configuration and logging and defaults to `development`
 - `DATABASE_URL` optionally opens a PostgreSQL connection pool during startup and may be left empty for local development or CI
+- a useful local `DATABASE_URL` example is `postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable`
 
 When `DATABASE_URL` is empty, the API starts without a database connection. `GET /readyz` does not check the database yet.
+PostgreSQL migrations, schema, and product entities will be added in later tasks.
 
 ## Test
 
