@@ -11,22 +11,25 @@ It currently provides only the technical scaffold needed for future API work.
 - `GET /healthz`
 - `GET /readyz`
 - optional PostgreSQL connection foundation behind `DATABASE_URL`
+- session-oriented domain and storage interfaces under `services/api/internal`
+- a PostgreSQL-backed session store foundation targeting the `sessions` table
 - graceful shutdown on interrupt or termination signals
-- tests for the basic routes, 404 behavior, and database foundation
+- tests for the basic routes, 404 behavior, database foundation, and storage helpers
 
 ## What is intentionally not implemented yet
 
 - product logic
 - users
 - studios
-- sessions
+- session HTTP routes
 - participants
 - recordings
 - permissions
 - dashboard data
 - quotas
 - authentication
-- database models, queries, and product migrations
+- repository coverage beyond the initial sessions store
+- additional product migrations
 - Docker configuration
 - external service integration
 
@@ -80,7 +83,18 @@ DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/migrate.sh up
 ```
 
-DS-024 or later will add repository and storage-layer code that reads and writes these tables.
+DS-024 adds the first repository and storage-layer foundation that reads and writes the `sessions` table without changing app startup behavior.
+
+## Storage layer foundation
+
+DS-024 adds the first Go storage foundation for the API service.
+
+- the new domain and storage packages live under `services/api/internal`
+- the first PostgreSQL implementation targets the `sessions` table only
+- no HTTP routes are added in DS-024
+- application startup behavior is unchanged
+- migrations remain manual
+- DS-025 is expected to wire this foundation into initial session API routes
 
 ## Test
 
