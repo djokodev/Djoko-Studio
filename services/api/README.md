@@ -11,11 +11,13 @@ It currently provides only the technical scaffold needed for future API work.
 - `GET /healthz`
 - `GET /readyz`
 - `POST /v1/sessions`
+- `GET /v1/guest/sessions/{invite_token}`
 - `GET /v1/sessions/{id}`
 - `GET /v1/studios/{studio_id}/sessions`
 - optional PostgreSQL connection foundation behind `DATABASE_URL`
 - session-oriented domain and storage interfaces under `services/api/internal`
 - a PostgreSQL-backed session store foundation targeting the `sessions` table
+- server-side guest invite token generation with hash-only storage
 - graceful shutdown on interrupt or termination signals
 - tests for the health routes, initial session routes, 404 behavior, database foundation, and storage helpers
 
@@ -102,13 +104,16 @@ DS-024 adds the first Go storage foundation for the API service.
 
 ## Session routes
 
-DS-025 wires the initial session route surface to the `storage.SessionStore` seam.
+DS-025 and DS-026 wire the initial session route surface to the `storage.SessionStore` seam.
 
-- `POST /v1/sessions` creates a session from JSON input
+- `POST /v1/sessions` creates a session from JSON input and returns a raw guest invite token once
+- `GET /v1/guest/sessions/{invite_token}` looks up one session by hashed guest invite token
 - `GET /v1/sessions/{id}` fetches a single session
 - `GET /v1/studios/{studio_id}/sessions` lists sessions for one studio
 - handlers return JSON error payloads like `{"error":"message"}`
 - handlers are unit-tested with a fake store and do not require PostgreSQL
+- `invite_token_hash` is not accepted from public JSON and is never returned in API responses
+- the API stores only a SHA-256 hex hash of the generated guest invite token
 - request validation currently covers malformed JSON, required fields, and allowed session statuses
 
 Example create request:
@@ -119,8 +124,25 @@ Example create request:
   "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
   "title": "Interview with guest",
   "status": "draft",
-  "scheduled_at": "2026-01-15T10:00:00Z",
-  "invite_token_hash": "temporary-token-hash"
+  "scheduled_at": "2026-01-15T10:00:00Z"
+}
+```
+
+Example create response:
+
+```json
+{
+  "session": {
+    "id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "studio_id": "2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d",
+    "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
+    "title": "Interview with guest",
+    "status": "draft",
+    "scheduled_at": "2026-01-15T10:00:00Z",
+    "created_at": "2026-06-15T20:00:00Z",
+    "updated_at": "2026-06-15T20:02:00Z"
+  },
+  "guest_invite_token": "raw-token-returned-once"
 }
 ```
 

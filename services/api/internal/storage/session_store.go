@@ -22,5 +22,6 @@ type CreateSessionParams struct {
 type SessionStore interface {
 	CreateSession(ctx context.Context, params CreateSessionParams) (domain.Session, error)
 	GetSession(ctx context.Context, id string) (domain.Session, error)
+	GetSessionByInviteTokenHash(ctx context.Context, inviteTokenHash string) (domain.Session, error)
 	ListSessionsByStudio(ctx context.Context, studioID string) ([]domain.Session, error)
 }

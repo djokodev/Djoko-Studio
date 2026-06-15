@@ -16,7 +16,6 @@ const sessionColumnList = `
   id::text,
   studio_id::text,
   host_user_id::text,
-  invite_token_hash,
   title,
   status,
   scheduled_at,
@@ -50,6 +49,13 @@ SELECT
 ` + sessionColumnList + `
 FROM sessions
 WHERE id = $1::uuid
+`
+
+const getSessionByInviteTokenHashQuery = `
+SELECT
+` + sessionColumnList + `
+FROM sessions
+WHERE invite_token_hash = $1
 `
 
 const listSessionsByStudioQuery = `
@@ -101,6 +107,10 @@ func (s *SessionStore) GetSession(ctx context.Context, id string) (domain.Sessio
 	return scanSession(s.db.QueryRow(ctx, getSessionQuery, id))
 }
 
+func (s *SessionStore) GetSessionByInviteTokenHash(ctx context.Context, inviteTokenHash string) (domain.Session, error) {
+	return scanSession(s.db.QueryRow(ctx, getSessionByInviteTokenHashQuery, inviteTokenHash))
+}
+
 func (s *SessionStore) ListSessionsByStudio(ctx context.Context, studioID string) ([]domain.Session, error) {
 	rows, err := s.db.Query(ctx, listSessionsByStudioQuery, studioID)
 	if err != nil {
@@ -138,7 +148,6 @@ func scanSession(scanner rowScanner) (domain.Session, error) {
 		&session.ID,
 		&session.StudioID,
 		&session.HostUserID,
-		&session.InviteTokenHash,
 		&session.Title,
 		&status,
 		&scheduledAt,

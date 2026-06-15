@@ -47,17 +47,16 @@ type Studio struct {
 }
 
 type Session struct {
-	ID              string
-	StudioID        string
-	HostUserID      string
-	InviteTokenHash string
-	Title           string
-	Status          SessionStatus
-	ScheduledAt     *time.Time
-	StartedAt       *time.Time
-	EndedAt         *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID          string
+	StudioID    string
+	HostUserID  string
+	Title       string
+	Status      SessionStatus
+	ScheduledAt *time.Time
+	StartedAt   *time.Time
+	EndedAt     *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Participant struct {
