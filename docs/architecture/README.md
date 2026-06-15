@@ -18,5 +18,6 @@ Current documents:
 
 - [Initial Architecture Brief](./initial-architecture-brief.md)
 - [V0.1 Technical Stack](./v0.1-technical-stack.md)
+- [V0.1 API Domain Model](./v0.1-api-domain-model.md)
 - [Monorepo Structure](./monorepo-structure.md)
 - [Local Development Environment](./local-development-environment.md)

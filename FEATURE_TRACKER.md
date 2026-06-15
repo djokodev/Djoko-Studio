@@ -30,6 +30,7 @@
 | DS-018 | v0.1 Recording Core | Add GitHub Actions validation workflow | merged | Merged in PR #18. |
 | DS-019 | v0.1 Recording Core | Add API runtime configuration foundation | merged | Merged in PR #19. |
 | DS-020 | v0.1 Recording Core | Add API PostgreSQL connection foundation | merged | Merged in PR #20. |
+| DS-021 | v0.1 Recording Core | Define v0.1 API domain model and database schema plan | in_review | Documentation-only domain model and schema plan for future migrations and API work. |
 
 ## Allowed Statuses
 
