@@ -15,3 +15,9 @@ Upload service status:
 - `services/upload` is scaffolded in Rust with Axum and Tokio
 - it currently exposes only health and readiness endpoints
 - upload, storage, and media pipeline logic are still deferred
+
+Media worker status:
+
+- `services/media-worker` is scaffolded in Rust as a long-running worker
+- it does not expose HTTP endpoints
+- media job processing is still deferred

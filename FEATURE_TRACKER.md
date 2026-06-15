@@ -24,6 +24,7 @@
 | DS-012 | v0.1 Recording Core | Scaffold Go API service | merged | Merged in PR #12. |
 | DS-013 | v0.1 Recording Core | Scaffold Go signaling service | merged | Merged in PR #13. |
 | DS-014 | v0.1 Recording Core | Scaffold Rust upload service | merged | Merged in PR #14. |
+| DS-015 | v0.1 Recording Core | Scaffold Rust media-worker service | in_review | PR open for minimal Rust media-worker service scaffold. |
 
 ## Allowed Statuses
 
