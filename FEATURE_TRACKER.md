@@ -22,6 +22,7 @@
 | DS-010 | v0.1 Recording Core | Add Docker Compose baseline | merged | Merged in PR #10. |
 | DS-011 | v0.1 Recording Core | Scaffold web-studio React/Vite app | merged | Merged in PR #11. |
 | DS-012 | v0.1 Recording Core | Scaffold Go API service | merged | Merged in PR #12. |
+| DS-013 | v0.1 Recording Core | Scaffold Go signaling service | in_review | Minimal buildable Go signaling service with health, readiness, and WebSocket echo foundation. |
 
 ## Allowed Statuses
 
