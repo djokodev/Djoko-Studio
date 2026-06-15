@@ -44,14 +44,13 @@ func TestScanSessionMapsDatabaseRowToDomainSession(t *testing.T) {
 			*(dest[0].(*string)) = "session-1"
 			*(dest[1].(*string)) = "studio-1"
 			*(dest[2].(*string)) = "user-1"
-			*(dest[3].(*string)) = "invite-hash"
-			*(dest[4].(*string)) = "Launch recording"
-			*(dest[5].(*string)) = "waiting"
-			*(dest[6].(*sql.NullTime)) = sql.NullTime{Time: scheduledAt, Valid: true}
+			*(dest[3].(*string)) = "Launch recording"
+			*(dest[4].(*string)) = "waiting"
+			*(dest[5].(*sql.NullTime)) = sql.NullTime{Time: scheduledAt, Valid: true}
+			*(dest[6].(*sql.NullTime)) = sql.NullTime{}
 			*(dest[7].(*sql.NullTime)) = sql.NullTime{}
-			*(dest[8].(*sql.NullTime)) = sql.NullTime{}
-			*(dest[9].(*time.Time)) = createdAt
-			*(dest[10].(*time.Time)) = updatedAt
+			*(dest[8].(*time.Time)) = createdAt
+			*(dest[9].(*time.Time)) = updatedAt
 			return nil
 		},
 	})

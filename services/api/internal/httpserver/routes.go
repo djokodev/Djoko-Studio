@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/djokodev/Djoko-Studio/services/api/internal/domain"
+	"github.com/djokodev/Djoko-Studio/services/api/internal/invite"
 	"github.com/djokodev/Djoko-Studio/services/api/internal/storage"
 )
 
@@ -27,12 +28,16 @@ type Dependencies struct {
 }
 
 type createSessionRequest struct {
-	StudioID        string     `json:"studio_id"`
-	HostUserID      string     `json:"host_user_id"`
-	Title           string     `json:"title"`
-	Status          string     `json:"status"`
-	ScheduledAt     *time.Time `json:"scheduled_at"`
-	InviteTokenHash string     `json:"invite_token_hash"`
+	StudioID    string     `json:"studio_id"`
+	HostUserID  string     `json:"host_user_id"`
+	Title       string     `json:"title"`
+	Status      string     `json:"status"`
+	ScheduledAt *time.Time `json:"scheduled_at"`
+}
+
+type createSessionResponse struct {
+	Session          sessionResponse `json:"session"`
+	GuestInviteToken string          `json:"guest_invite_token"`
 }
 
 type sessionResponse struct {
@@ -53,6 +58,7 @@ func newHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/healthz", allowOnly(http.MethodGet, healthzHandler))
 	mux.HandleFunc("/readyz", allowOnly(http.MethodGet, readyzHandler))
 	mux.HandleFunc("/v1/sessions", allowOnly(http.MethodPost, createSessionHandler(deps.SessionStore)))
+	mux.HandleFunc("/v1/guest/sessions/{invite_token}", allowOnly(http.MethodGet, getGuestSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
 	return mux
@@ -97,10 +103,18 @@ func createSessionHandler(store storage.SessionStore) http.HandlerFunc {
 			return
 		}
 
+		rawInviteToken, err := invite.GenerateToken()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to generate invite token",
+			})
+			return
+		}
+
 		session, err := store.CreateSession(r.Context(), storage.CreateSessionParams{
 			StudioID:        payload.StudioID,
 			HostUserID:      payload.HostUserID,
-			InviteTokenHash: payload.InviteTokenHash,
+			InviteTokenHash: invite.HashToken(rawInviteToken),
 			Title:           payload.Title,
 			Status:          status,
 			ScheduledAt:     payload.ScheduledAt,
@@ -112,7 +126,10 @@ func createSessionHandler(store storage.SessionStore) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, newSessionResponse(session))
+		writeJSON(w, http.StatusCreated, createSessionResponse{
+			Session:          newSessionResponse(session),
+			GuestInviteToken: rawInviteToken,
+		})
 	}
 }
 
@@ -126,6 +143,34 @@ func getSessionHandler(store storage.SessionStore) http.HandlerFunc {
 		}
 
 		session, err := store.GetSession(r.Context(), r.PathValue("id"))
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, newSessionResponse(session))
+	}
+}
+
+func getGuestSessionHandler(store storage.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		session, err := store.GetSessionByInviteTokenHash(r.Context(), invite.HashToken(r.PathValue("invite_token")))
 		if err != nil {
 			if errors.Is(err, storage.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errorResponse{
@@ -188,7 +233,12 @@ func decodeCreateSessionRequest(body io.Reader) (createSessionRequest, error) {
 	var payload createSessionRequest
 
 	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&payload); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return createSessionRequest{}, errors.New("unknown json field")
+		}
+
 		return createSessionRequest{}, errors.New("invalid json body")
 	}
 
@@ -202,10 +252,6 @@ func decodeCreateSessionRequest(body io.Reader) (createSessionRequest, error) {
 
 	if strings.TrimSpace(payload.Title) == "" {
 		return createSessionRequest{}, errors.New("title is required")
-	}
-
-	if strings.TrimSpace(payload.InviteTokenHash) == "" {
-		return createSessionRequest{}, errors.New("invite_token_hash is required")
 	}
 
 	return payload, nil

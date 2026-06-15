@@ -35,6 +35,7 @@
 | DS-023 | v0.1 Recording Core | Add initial API PostgreSQL schema migrations | merged | Merged in PR #23. |
 | DS-024 | v0.1 Recording Core | Add API storage layer foundation | merged | Merged in PR #24. |
 | DS-025 | v0.1 Recording Core | Add initial session API routes | merged | Merged in PR #25. |
+| DS-026 | v0.1 Recording Core | Add guest invite token generation and lookup | in_review | Generates guest invite tokens server-side and adds guest session lookup without auth or join behavior. |
 
 ## Allowed Statuses
 
