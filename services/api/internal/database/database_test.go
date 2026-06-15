@@ -23,6 +23,10 @@ func TestOpenWithEmptyDatabaseURLReturnsDisabledDB(t *testing.T) {
 		t.Fatal("expected disabled db")
 	}
 
+	if db.Pool() != nil {
+		t.Fatal("expected disabled db to have nil pool")
+	}
+
 	if err := db.Ping(context.Background()); err != nil {
 		t.Fatalf("expected disabled db ping to be a no-op, got %v", err)
 	}

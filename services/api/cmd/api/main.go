@@ -13,6 +13,7 @@ import (
 	"github.com/djokodev/Djoko-Studio/services/api/internal/config"
 	"github.com/djokodev/Djoko-Studio/services/api/internal/database"
 	"github.com/djokodev/Djoko-Studio/services/api/internal/httpserver"
+	"github.com/djokodev/Djoko-Studio/services/api/internal/storage/postgres"
 )
 
 func main() {
@@ -31,7 +32,12 @@ func main() {
 
 	logger = logger.With("database_enabled", db.Enabled())
 
-	server := httpserver.New(cfg.Port, logger)
+	deps := httpserver.Dependencies{}
+	if db.Enabled() {
+		deps.SessionStore = postgres.NewSessionStore(db.Pool())
+	}
+
+	server := httpserver.New(cfg.Port, logger, deps)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

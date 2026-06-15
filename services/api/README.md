@@ -10,18 +10,20 @@ It currently provides only the technical scaffold needed for future API work.
 - HTTP server with a small internal routing package
 - `GET /healthz`
 - `GET /readyz`
+- `POST /v1/sessions`
+- `GET /v1/sessions/{id}`
+- `GET /v1/studios/{studio_id}/sessions`
 - optional PostgreSQL connection foundation behind `DATABASE_URL`
 - session-oriented domain and storage interfaces under `services/api/internal`
 - a PostgreSQL-backed session store foundation targeting the `sessions` table
 - graceful shutdown on interrupt or termination signals
-- tests for the basic routes, 404 behavior, database foundation, and storage helpers
+- tests for the health routes, initial session routes, 404 behavior, database foundation, and storage helpers
 
 ## What is intentionally not implemented yet
 
 - product logic
 - users
 - studios
-- session HTTP routes
 - participants
 - recordings
 - permissions
@@ -60,6 +62,8 @@ The API reads the following environment variables:
 
 When `DATABASE_URL` is empty, the API starts without a database connection. `GET /readyz` does not check the database yet.
 
+Session routes are still registered when `DATABASE_URL` is empty, but they return `503 Service Unavailable` with a small JSON error payload because no session store is configured.
+
 ## Database migrations
 
 Migration tooling is in place for `services/api`, but migrations are still manual for now.
@@ -95,6 +99,30 @@ DS-024 adds the first Go storage foundation for the API service.
 - application startup behavior is unchanged
 - migrations remain manual
 - DS-025 is expected to wire this foundation into initial session API routes
+
+## Session routes
+
+DS-025 wires the initial session route surface to the `storage.SessionStore` seam.
+
+- `POST /v1/sessions` creates a session from JSON input
+- `GET /v1/sessions/{id}` fetches a single session
+- `GET /v1/studios/{studio_id}/sessions` lists sessions for one studio
+- handlers return JSON error payloads like `{"error":"message"}`
+- handlers are unit-tested with a fake store and do not require PostgreSQL
+- request validation currently covers malformed JSON, required fields, and allowed session statuses
+
+Example create request:
+
+```json
+{
+  "studio_id": "2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d",
+  "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
+  "title": "Interview with guest",
+  "status": "draft",
+  "scheduled_at": "2026-01-15T10:00:00Z",
+  "invite_token_hash": "temporary-token-hash"
+}
+```
 
 ## Test
 
