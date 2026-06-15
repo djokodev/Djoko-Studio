@@ -34,7 +34,7 @@
 | DS-022 | v0.1 Recording Core | Add API database migration tooling baseline | merged | Merged in PR #22. |
 | DS-023 | v0.1 Recording Core | Add initial API PostgreSQL schema migrations | merged | Merged in PR #23. |
 | DS-024 | v0.1 Recording Core | Add API storage layer foundation | merged | Merged in PR #24. |
-| DS-025 | v0.1 Recording Core | Add initial session API routes | in_review | Initial session HTTP routes are ready for review. |
+| DS-025 | v0.1 Recording Core | Add initial session API routes | in_review | Ready for review in PR #25. |
 
 ## Allowed Statuses
 
