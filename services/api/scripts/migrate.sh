@@ -2,8 +2,8 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/../../" && pwd)"
-migrations_dir="$repo_root/services/api/migrations"
+api_dir="$(cd "$script_dir/.." && pwd)"
+migrations_dir="$api_dir/migrations"
 goose_version="v3.27.1"
 go_binary="${GO_BINARY:-go}"
 
@@ -14,6 +14,11 @@ fi
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required before running API migration commands." >&2
+  exit 1
+fi
+
+if [[ ! -d "$migrations_dir" ]]; then
+  echo "Migrations directory not found: $migrations_dir" >&2
   exit 1
 fi
 
