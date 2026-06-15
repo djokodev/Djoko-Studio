@@ -28,7 +28,7 @@
 | DS-016 | v0.1 Recording Core | Scaffold Rust export-worker service | merged | Merged in PR #16. |
 | DS-017 | v0.1 Recording Core | Add repository-wide validation script | merged | Merged in PR #17. |
 | DS-018 | v0.1 Recording Core | Add GitHub Actions validation workflow | merged | Merged in PR #18. |
-| DS-019 | v0.1 Recording Core | Add API runtime configuration foundation | in_review | Adds tested API runtime configuration loading without database access. |
+| DS-019 | v0.1 Recording Core | Add API runtime configuration foundation | merged | Merged in PR #19. |
 
 ## Allowed Statuses
 
