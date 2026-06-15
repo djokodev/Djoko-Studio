@@ -26,6 +26,7 @@
 | DS-014 | v0.1 Recording Core | Scaffold Rust upload service | merged | Merged in PR #14. |
 | DS-015 | v0.1 Recording Core | Scaffold Rust media-worker service | merged | Merged in PR #15. |
 | DS-016 | v0.1 Recording Core | Scaffold Rust export-worker service | merged | Merged in PR #16. |
+| DS-017 | v0.1 Recording Core | Add repository-wide validation script | in_review | Adds a documented repo-level validation entrypoint for current scaffolded services. |
 
 ## Allowed Statuses
 
