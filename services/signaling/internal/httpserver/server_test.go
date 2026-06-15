@@ -94,6 +94,10 @@ func TestWSRejectsNonGetMethods(t *testing.T) {
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)
 	}
+
+	if got := recorder.Header().Get("Allow"); got != http.MethodGet {
+		t.Fatalf("expected Allow header %q, got %q", http.MethodGet, got)
+	}
 }
 
 func TestWSAcceptsConnectionAndEchoesMessages(t *testing.T) {
