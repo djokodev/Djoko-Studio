@@ -50,6 +50,16 @@ type joinGuestSessionResponse struct {
 	Participant participantResponse `json:"participant"`
 }
 
+type joinHostSessionRequest struct {
+	HostUserID  string `json:"host_user_id"`
+	DisplayName string `json:"display_name"`
+}
+
+type joinHostSessionResponse struct {
+	Session     sessionResponse     `json:"session"`
+	Participant participantResponse `json:"participant"`
+}
+
 type sessionResponse struct {
 	ID          string     `json:"id"`
 	StudioID    string     `json:"studio_id"`
@@ -82,6 +92,7 @@ func newHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/v1/sessions", allowOnly(http.MethodPost, createSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}", allowOnly(http.MethodGet, getGuestSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}/join", allowOnly(http.MethodPost, joinGuestSessionHandler(deps.SessionStore, deps.ParticipantStore)))
+	mux.HandleFunc("/v1/sessions/{session_id}/host/join", allowOnly(http.MethodPost, joinHostSessionHandler(deps.SessionStore, deps.ParticipantStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
 	return mux
@@ -277,6 +288,80 @@ func joinGuestSessionHandler(sessionStore storage.SessionStore, participantStore
 	}
 }
 
+func joinHostSessionHandler(sessionStore storage.SessionStore, participantStore storage.ParticipantStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(sessionStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		if !participantStoreAvailable(participantStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "participant store unavailable",
+			})
+			return
+		}
+
+		payload, err := decodeJoinHostSessionRequest(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		sessionID := strings.TrimSpace(r.PathValue("session_id"))
+		if sessionID == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "session not found",
+			})
+			return
+		}
+
+		session, err := sessionStore.GetSession(r.Context(), sessionID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		hostUserID := strings.TrimSpace(payload.HostUserID)
+		if hostUserID != session.HostUserID {
+			writeJSON(w, http.StatusForbidden, errorResponse{
+				Error: "host_user_id does not match session host_user_id",
+			})
+			return
+		}
+
+		participant, err := participantStore.JoinHostParticipant(r.Context(), storage.JoinHostParticipantParams{
+			SessionID:   session.ID,
+			HostUserID:  hostUserID,
+			DisplayName: payload.DisplayName,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to join host participant",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, joinHostSessionResponse{
+			Session:     newSessionResponse(session),
+			Participant: newParticipantResponse(participant),
+		})
+	}
+}
+
 func listStudioSessionsHandler(store storage.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !sessionStoreAvailable(store) {
@@ -365,6 +450,36 @@ func decodeJoinGuestSessionRequest(body io.Reader) (joinGuestSessionRequest, err
 	payload.DisplayName = strings.TrimSpace(payload.DisplayName)
 	if payload.DisplayName == "" {
 		return joinGuestSessionRequest{}, errors.New("display_name is required")
+	}
+
+	return payload, nil
+}
+
+func decodeJoinHostSessionRequest(body io.Reader) (joinHostSessionRequest, error) {
+	var payload joinHostSessionRequest
+
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return joinHostSessionRequest{}, errors.New("unknown json field")
+		}
+
+		return joinHostSessionRequest{}, errors.New("invalid json body")
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return joinHostSessionRequest{}, errors.New("invalid json body")
+	}
+
+	payload.HostUserID = strings.TrimSpace(payload.HostUserID)
+	if payload.HostUserID == "" {
+		return joinHostSessionRequest{}, errors.New("host_user_id is required")
+	}
+
+	payload.DisplayName = strings.TrimSpace(payload.DisplayName)
+	if payload.DisplayName == "" {
+		return joinHostSessionRequest{}, errors.New("display_name is required")
 	}
 
 	return payload, nil

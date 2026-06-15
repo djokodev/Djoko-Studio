@@ -13,6 +13,7 @@ It currently provides only the technical scaffold needed for future API work.
 - `POST /v1/sessions`
 - `GET /v1/guest/sessions/{invite_token}`
 - `POST /v1/guest/sessions/{invite_token}/join`
+- `POST /v1/sessions/{session_id}/host/join`
 - `GET /v1/sessions/{id}`
 - `GET /v1/studios/{studio_id}/sessions`
 - optional PostgreSQL connection foundation behind `DATABASE_URL`
@@ -67,7 +68,7 @@ The API reads the following environment variables:
 
 When `DATABASE_URL` is empty, the API starts without a database connection. `GET /readyz` does not check the database yet.
 
-Session and guest join routes are still registered when `DATABASE_URL` is empty, but they return `503 Service Unavailable` with a small JSON error payload because the required stores are not configured.
+Session and join routes are still registered when `DATABASE_URL` is empty, but they return `503 Service Unavailable` with a small JSON error payload because the required stores are not configured.
 
 ## Database migrations
 
@@ -107,11 +108,12 @@ DS-024 adds the first Go storage foundation for the API service.
 
 ## Session routes
 
-DS-025, DS-026, and DS-027 wire the initial session and guest route surface to the storage seams.
+DS-025, DS-026, DS-027, and DS-028 wire the initial session and participant route surface to the storage seams.
 
 - `POST /v1/sessions` creates a session from JSON input and returns a raw guest invite token once
 - `GET /v1/guest/sessions/{invite_token}` looks up one session by hashed guest invite token
 - `POST /v1/guest/sessions/{invite_token}/join` hashes the raw invite token, fetches the session, and creates or updates the single guest participant as `joined`
+- `POST /v1/sessions/{session_id}/host/join` fetches the session by ID, verifies that `host_user_id` matches the session host, and creates or updates the host participant as `joined`
 - `GET /v1/sessions/{id}` fetches a single session
 - `GET /v1/studios/{studio_id}/sessions` lists sessions for one studio
 - handlers return JSON error payloads like `{"error":"message"}`
@@ -119,12 +121,50 @@ DS-025, DS-026, and DS-027 wire the initial session and guest route surface to t
 - `invite_token_hash` is not accepted from public JSON and is never returned in API responses
 - the API stores only a SHA-256 hex hash of the generated guest invite token
 - request validation currently covers malformed JSON, required fields, unknown JSON fields, and allowed session statuses
-- no authentication or authorization is enforced yet for guest join
-- guest join does not add WebRTC, signaling, recording, upload, or export behavior
+- no authentication or full authorization is enforced yet for host or guest join
+- host join does not add WebRTC, signaling, recording, upload, or export behavior
+- host join does not create any new account or auth flow
+- `host_user_id` must match the session host user ID or the API returns `403`
 - guest invite token expiry and revocation are not implemented yet
 - a missing route segment for `{invite_token}` returns `404`; a whitespace-only token path value is also treated as `404`
 - guest join returns `503` when the session store or participant store is unavailable
-- migrations remain manual and DS-027 does not change the schema
+- host join returns `503` when the session store or participant store is unavailable
+- migrations remain manual and DS-027/DS-028 do not change the schema
+
+Example host join request:
+
+```json
+{
+  "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
+  "display_name": "Host Name"
+}
+```
+
+Example host join response:
+
+```json
+{
+  "session": {
+    "id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "studio_id": "2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d",
+    "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
+    "title": "Interview with guest",
+    "status": "draft",
+    "created_at": "2026-06-15T20:00:00Z",
+    "updated_at": "2026-06-15T20:02:00Z"
+  },
+  "participant": {
+    "id": "5d0cf5cb-b436-4e48-af38-df557dc519fe",
+    "session_id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "role": "host",
+    "display_name": "Host Name",
+    "status": "joined",
+    "joined_at": "2026-06-15T20:03:00Z",
+    "created_at": "2026-06-15T20:00:00Z",
+    "updated_at": "2026-06-15T20:02:00Z"
+  }
+}
+```
 
 Example create request:
 
