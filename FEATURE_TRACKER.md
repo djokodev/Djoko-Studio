@@ -49,7 +49,7 @@
 | DS-037 | v0.1 Web Studio Core | Add local WebRTC manual test seed tooling | merged | Merged in PR #37. |
 | DS-038 | v0.1 Web Studio Core | Add camera/micro preview foundation | merged | Merged in PR #38. |
 | DS-039 | v0.1 Web Studio Core | Add WebRTC media track attachment and remote preview foundation | merged | Merged in PR #39. |
-| DS-040 | v0.1 Web Studio Core | Add remote media playback controls foundation | in_review | Draft PR opened. |
+| DS-040 | v0.1 Web Studio Core | Add remote media playback controls foundation | merged | Merged in PR #40. |
 
 ## Allowed Statuses
 
