@@ -469,6 +469,18 @@ func TestSessionRoutesReturnServiceUnavailableWithoutStore(t *testing.T) {
 			target: "/v1/guest/sessions/guest-token-for-lookup",
 		},
 		{
+			name:   "guest leave",
+			method: http.MethodPost,
+			target: "/v1/guest/sessions/guest-token-for-leave/leave",
+			body:   "",
+		},
+		{
+			name:   "host leave",
+			method: http.MethodPost,
+			target: "/v1/sessions/0f1ecf7c-5444-492d-a7a1-31172609a4fa/host/leave",
+			body:   `{"host_user_id":"3c9abfe7-3133-4924-b159-f62277dfce7c"}`,
+		},
+		{
 			name:   "list sessions",
 			method: http.MethodGet,
 			target: "/v1/studios/2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d/sessions",
@@ -575,6 +587,18 @@ func TestSessionRoutesRejectUnsupportedMethods(t *testing.T) {
 			method:      http.MethodPost,
 			target:      "/v1/guest/sessions/guest-token-for-lookup",
 			allowHeader: http.MethodGet,
+		},
+		{
+			name:        "guest leave wrong method",
+			method:      http.MethodGet,
+			target:      "/v1/guest/sessions/guest-token-for-leave/leave",
+			allowHeader: http.MethodPost,
+		},
+		{
+			name:        "host leave wrong method",
+			method:      http.MethodGet,
+			target:      "/v1/sessions/0f1ecf7c-5444-492d-a7a1-31172609a4fa/host/leave",
+			allowHeader: http.MethodPost,
 		},
 		{
 			name:        "list sessions wrong method",

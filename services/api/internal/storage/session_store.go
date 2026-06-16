@@ -47,7 +47,18 @@ type JoinHostParticipantParams struct {
 	DisplayName string
 }
 
+type LeaveGuestParticipantParams struct {
+	SessionID string
+}
+
+type LeaveHostParticipantParams struct {
+	SessionID  string
+	HostUserID string
+}
+
 type ParticipantStore interface {
 	JoinGuestParticipant(ctx context.Context, params JoinGuestParticipantParams) (domain.Participant, error)
 	JoinHostParticipant(ctx context.Context, params JoinHostParticipantParams) (domain.Participant, error)
+	LeaveGuestParticipant(ctx context.Context, params LeaveGuestParticipantParams) (domain.Participant, error)
+	LeaveHostParticipant(ctx context.Context, params LeaveHostParticipantParams) (domain.Participant, error)
 }

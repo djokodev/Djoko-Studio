@@ -13,7 +13,9 @@ It currently provides only the technical scaffold needed for future API work.
 - `POST /v1/sessions`
 - `GET /v1/guest/sessions/{invite_token}`
 - `POST /v1/guest/sessions/{invite_token}/join`
+- `POST /v1/guest/sessions/{invite_token}/leave`
 - `POST /v1/sessions/{session_id}/host/join`
+- `POST /v1/sessions/{session_id}/host/leave`
 - `POST /v1/sessions/{session_id}/start`
 - `POST /v1/sessions/{session_id}/end`
 - `GET /v1/sessions/{id}`
@@ -72,6 +74,7 @@ When `DATABASE_URL` is empty, the API starts without a database connection. `GET
 
 Session and join routes are still registered when `DATABASE_URL` is empty, but they return `503 Service Unavailable` with a small JSON error payload because the required stores are not configured.
 Session lifecycle routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` for the same reason.
+Guest leave and host leave routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` when the required stores are not configured.
 
 ## Database migrations
 
@@ -116,7 +119,9 @@ DS-025, DS-026, DS-027, DS-028, and DS-029 wire the initial session and particip
 - `POST /v1/sessions` creates a session from JSON input and returns a raw guest invite token once
 - `GET /v1/guest/sessions/{invite_token}` looks up one session by hashed guest invite token
 - `POST /v1/guest/sessions/{invite_token}/join` hashes the raw invite token, fetches the session, and creates or updates the single guest participant as `joined`
+- `POST /v1/guest/sessions/{invite_token}/leave` hashes the raw invite token, fetches the session, and marks the single guest participant as `left`
 - `POST /v1/sessions/{session_id}/host/join` fetches the session by ID, verifies that `host_user_id` matches the session host, and creates or updates the host participant as `joined`
+- `POST /v1/sessions/{session_id}/host/leave` fetches the session by ID, verifies that `host_user_id` matches the session host, and marks the host participant as `left`
 - `POST /v1/sessions/{session_id}/start` fetches the session by ID, verifies that `host_user_id` matches the session host, transitions the session to `live`, and sets `started_at` if needed
 - `POST /v1/sessions/{session_id}/end` fetches the session by ID, verifies that `host_user_id` matches the session host, transitions the session to `ended`, and sets `ended_at` if needed
 - `GET /v1/sessions/{id}` fetches a single session
@@ -132,10 +137,15 @@ DS-025, DS-026, DS-027, DS-028, and DS-029 wire the initial session and particip
 - host join does not create any new account or auth flow
 - `host_user_id` must match the session host user ID or the API returns `403`
 - lifecycle routes also require `host_user_id` to match the session host user ID or the API returns `403`
+- host leave also requires `host_user_id` to match the session host user ID or the API returns `403`
+- no authentication or full authorization is enforced yet for guest leave or host leave
+- guest leave and host leave do not add WebRTC, signaling, recording, upload, or export behavior
 - guest invite token expiry and revocation are not implemented yet
 - a missing route segment for `{invite_token}` returns `404`; a whitespace-only token path value is also treated as `404`
 - guest join returns `503` when the session store or participant store is unavailable
+- guest leave returns `503` when the session store or participant store is unavailable
 - host join returns `503` when the session store or participant store is unavailable
+- host leave returns `503` when the session store or participant store is unavailable
 - lifecycle routes return `503` when the session store is unavailable
 - migrations remain manual and DS-027/DS-028/DS-029 do not change the schema
 
@@ -221,6 +231,72 @@ Example host join response:
     "joined_at": "2026-06-15T20:03:00Z",
     "created_at": "2026-06-15T20:00:00Z",
     "updated_at": "2026-06-15T20:02:00Z"
+  }
+}
+```
+
+Example guest leave request:
+
+```json
+{}
+```
+
+Example guest leave response:
+
+```json
+{
+  "session": {
+    "id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "studio_id": "2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d",
+    "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
+    "title": "Interview with guest",
+    "status": "live",
+    "created_at": "2026-06-15T20:00:00Z",
+    "updated_at": "2026-06-15T20:08:00Z"
+  },
+  "participant": {
+    "id": "5d0cf5cb-b436-4e48-af38-df557dc519fe",
+    "session_id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "role": "guest",
+    "display_name": "Guest Name",
+    "status": "left",
+    "left_at": "2026-06-15T20:07:00Z",
+    "created_at": "2026-06-15T20:03:00Z",
+    "updated_at": "2026-06-15T20:08:00Z"
+  }
+}
+```
+
+Example host leave request:
+
+```json
+{
+  "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c"
+}
+```
+
+Example host leave response:
+
+```json
+{
+  "session": {
+    "id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "studio_id": "2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d",
+    "host_user_id": "3c9abfe7-3133-4924-b159-f62277dfce7c",
+    "title": "Interview with guest",
+    "status": "live",
+    "created_at": "2026-06-15T20:00:00Z",
+    "updated_at": "2026-06-15T20:08:00Z"
+  },
+  "participant": {
+    "id": "5d0cf5cb-b436-4e48-af38-df557dc519fe",
+    "session_id": "0f1ecf7c-5444-492d-a7a1-31172609a4fa",
+    "role": "host",
+    "display_name": "Host Name",
+    "status": "left",
+    "left_at": "2026-06-15T20:08:00Z",
+    "created_at": "2026-06-15T20:03:00Z",
+    "updated_at": "2026-06-15T20:08:00Z"
   }
 }
 ```

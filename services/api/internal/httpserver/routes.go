@@ -100,7 +100,9 @@ func newHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/v1/sessions", allowOnly(http.MethodPost, createSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}", allowOnly(http.MethodGet, getGuestSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}/join", allowOnly(http.MethodPost, joinGuestSessionHandler(deps.SessionStore, deps.ParticipantStore)))
+	mux.HandleFunc("/v1/guest/sessions/{invite_token}/leave", allowOnly(http.MethodPost, leaveGuestSessionHandler(deps.SessionStore, deps.ParticipantStore)))
 	mux.HandleFunc("/v1/sessions/{session_id}/host/join", allowOnly(http.MethodPost, joinHostSessionHandler(deps.SessionStore, deps.ParticipantStore)))
+	mux.HandleFunc("/v1/sessions/{session_id}/host/leave", allowOnly(http.MethodPost, leaveHostSessionHandler(deps.SessionStore, deps.ParticipantStore)))
 	mux.HandleFunc("/v1/sessions/{session_id}/start", allowOnly(http.MethodPost, startSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/sessions/{session_id}/end", allowOnly(http.MethodPost, endSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
@@ -361,6 +363,149 @@ func joinHostSessionHandler(sessionStore storage.SessionStore, participantStore 
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{
 				Error: "failed to join host participant",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, joinHostSessionResponse{
+			Session:     newSessionResponse(session),
+			Participant: newParticipantResponse(participant),
+		})
+	}
+}
+
+func leaveGuestSessionHandler(sessionStore storage.SessionStore, participantStore storage.ParticipantStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(sessionStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		if !participantStoreAvailable(participantStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "participant store unavailable",
+			})
+			return
+		}
+
+		inviteToken := strings.TrimSpace(r.PathValue("invite_token"))
+		if inviteToken == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "session not found",
+			})
+			return
+		}
+
+		session, err := sessionStore.GetSessionByInviteTokenHash(r.Context(), invite.HashToken(inviteToken))
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		participant, err := participantStore.LeaveGuestParticipant(r.Context(), storage.LeaveGuestParticipantParams{
+			SessionID: session.ID,
+		})
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "participant not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to leave guest participant",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, joinGuestSessionResponse{
+			Session:     newSessionResponse(session),
+			Participant: newParticipantResponse(participant),
+		})
+	}
+}
+
+func leaveHostSessionHandler(sessionStore storage.SessionStore, participantStore storage.ParticipantStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(sessionStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		if !participantStoreAvailable(participantStore) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "participant store unavailable",
+			})
+			return
+		}
+
+		payload, err := decodeSessionLifecycleRequest(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		sessionID := strings.TrimSpace(r.PathValue("session_id"))
+		if sessionID == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "session not found",
+			})
+			return
+		}
+
+		session, err := sessionStore.GetSession(r.Context(), sessionID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		hostUserID := strings.TrimSpace(payload.HostUserID)
+		if hostUserID != session.HostUserID {
+			writeJSON(w, http.StatusForbidden, errorResponse{
+				Error: "host_user_id does not match session host_user_id",
+			})
+			return
+		}
+
+		participant, err := participantStore.LeaveHostParticipant(r.Context(), storage.LeaveHostParticipantParams{
+			SessionID:  session.ID,
+			HostUserID: hostUserID,
+		})
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "participant not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to leave host participant",
 			})
 			return
 		}

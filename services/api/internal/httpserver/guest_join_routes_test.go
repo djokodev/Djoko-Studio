@@ -16,8 +16,10 @@ import (
 )
 
 type fakeParticipantStore struct {
-	joinGuestParticipantFunc func(ctx context.Context, params storage.JoinGuestParticipantParams) (domain.Participant, error)
-	joinHostParticipantFunc  func(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error)
+	joinGuestParticipantFunc  func(ctx context.Context, params storage.JoinGuestParticipantParams) (domain.Participant, error)
+	joinHostParticipantFunc   func(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error)
+	leaveGuestParticipantFunc func(ctx context.Context, params storage.LeaveGuestParticipantParams) (domain.Participant, error)
+	leaveHostParticipantFunc  func(ctx context.Context, params storage.LeaveHostParticipantParams) (domain.Participant, error)
 }
 
 func (f fakeParticipantStore) JoinGuestParticipant(ctx context.Context, params storage.JoinGuestParticipantParams) (domain.Participant, error) {
@@ -26,6 +28,22 @@ func (f fakeParticipantStore) JoinGuestParticipant(ctx context.Context, params s
 
 func (f fakeParticipantStore) JoinHostParticipant(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error) {
 	return f.joinHostParticipantFunc(ctx, params)
+}
+
+func (f fakeParticipantStore) LeaveGuestParticipant(ctx context.Context, params storage.LeaveGuestParticipantParams) (domain.Participant, error) {
+	if f.leaveGuestParticipantFunc == nil {
+		return domain.Participant{}, errors.New("unexpected leave guest participant call")
+	}
+
+	return f.leaveGuestParticipantFunc(ctx, params)
+}
+
+func (f fakeParticipantStore) LeaveHostParticipant(ctx context.Context, params storage.LeaveHostParticipantParams) (domain.Participant, error) {
+	if f.leaveHostParticipantFunc == nil {
+		return domain.Participant{}, errors.New("unexpected leave host participant call")
+	}
+
+	return f.leaveHostParticipantFunc(ctx, params)
 }
 
 func TestPostGuestSessionJoinReturnsSessionAndParticipant(t *testing.T) {
