@@ -186,15 +186,22 @@ This browser-only flow starts after the services are already running.
 
 1. Open `http://localhost:5173` in one browser window.
 2. Fill in the host form and create a session.
-3. On the host page, open the signaling panel and click `Connect signaling`.
-4. Keep the host page open.
-5. Open the guest invite URL from the host session summary in a second browser window or private window.
-6. Join the guest session.
-7. On the guest page, click `Connect signaling`.
-8. On the host page, click `Create peer connection / Start WebRTC test`.
-9. Watch the host and guest logs for the offer, answer, and ICE exchange.
-10. When the data channel opens, send a test message from the host.
-11. If both sides show an open data channel, send a message from the guest too.
+3. On the host page, click `Start preview` and grant camera/microphone permission if the browser asks.
+4. On the host page, open the signaling panel and click `Connect signaling`.
+5. Keep the host page open.
+6. Open the guest invite URL from the host session summary in a second browser window or private window.
+7. Join the guest session.
+8. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
+9. On the guest page, click `Connect signaling`.
+10. On the host page, click `Create peer connection / Start WebRTC test`.
+11. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
+12. Confirm the remote preview area appears when remote tracks arrive.
+13. When the data channel opens, send a test message from the host.
+14. If both sides show an open data channel, send a message from the guest too.
+
+If you want media tracks attached, both sides must start local preview before the initial WebRTC offer/answer negotiation. In DS-039, the host attaches tracks during peer-connection setup, and the guest attaches tracks while handling the incoming offer and creating the answer.
+
+If either side skips local preview before negotiation, the data channel can still work, but media tracks are not attached in DS-039. Renegotiation after preview start/stop remains out of scope.
 
 ## Expected Success States
 
@@ -205,9 +212,13 @@ On a successful run, you should see:
 - `iceConnectionState` move into a connected or completed state
 - `signalingState` return to `stable`
 - `dataChannelState` change to `open`
+- local preview active on both sides if media is being tested
 - `Peer connection exists` show `yes`
 - `Local description` show `set`
 - `Remote description` show `set`
+- `Local tracks attached` shows `yes` on both sides when preview was started before negotiation
+- remote stream available shows `yes` when remote tracks arrive
+- remote video/audio track counts update
 - logs for offer creation, offer send, answer creation, answer send, ICE generation, ICE send, data channel open, and test message delivery
 
 ## Common Failure Cases
@@ -231,5 +242,6 @@ On a successful run, you should see:
 
 This guide now covers the initial WebRTC media-attachment foundation as well as the
 data-channel path.
-The local camera and microphone preview exists for manual browser checks, but
-renegotiation after preview changes is intentionally deferred to a later task.
+The local camera and microphone preview exists for manual browser checks, but it
+must be started before the first negotiation if you want tracks attached in DS-039.
+Renegotiation after preview changes is intentionally deferred to a later task.
