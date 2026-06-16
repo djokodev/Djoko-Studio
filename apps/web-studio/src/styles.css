@@ -94,6 +94,14 @@ a {
     linear-gradient(180deg, rgba(10, 18, 32, 0.96), rgba(7, 11, 20, 0.92));
 }
 
+.summary-block {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 .panel__header {
   display: flex;
   align-items: flex-start;
@@ -111,7 +119,8 @@ a {
 }
 
 h1,
-h2 {
+h2,
+h3 {
   margin: 0;
   line-height: 1.05;
   letter-spacing: -0.04em;
@@ -124,6 +133,10 @@ h1 {
 
 h2 {
   font-size: 1.45rem;
+}
+
+h3 {
+  font-size: 1.12rem;
 }
 
 .lede {
@@ -169,6 +182,10 @@ h2 {
 .session-form {
   display: grid;
   gap: 14px;
+}
+
+.session-form--spaced {
+  margin-top: 16px;
 }
 
 .field {
