@@ -76,6 +76,26 @@ SET
 RETURNING
 ` + participantColumnList
 
+const leaveGuestParticipantQuery = `
+UPDATE participants
+SET
+  status = 'left',
+  left_at = COALESCE(left_at, now()),
+  updated_at = now()
+WHERE session_id = $1::uuid AND role = 'guest'
+RETURNING
+` + participantColumnList
+
+const leaveHostParticipantQuery = `
+UPDATE participants
+SET
+  status = 'left',
+  left_at = COALESCE(left_at, now()),
+  updated_at = now()
+WHERE session_id = $1::uuid AND role = 'host' AND user_id = $2::uuid
+RETURNING
+` + participantColumnList
+
 type ParticipantStore struct {
 	db queryer
 }
@@ -92,6 +112,14 @@ func (s *ParticipantStore) JoinGuestParticipant(ctx context.Context, params stor
 
 func (s *ParticipantStore) JoinHostParticipant(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error) {
 	return scanParticipant(s.db.QueryRow(ctx, joinHostParticipantQuery, params.SessionID, params.HostUserID, params.DisplayName))
+}
+
+func (s *ParticipantStore) LeaveGuestParticipant(ctx context.Context, params storage.LeaveGuestParticipantParams) (domain.Participant, error) {
+	return scanParticipant(s.db.QueryRow(ctx, leaveGuestParticipantQuery, params.SessionID))
+}
+
+func (s *ParticipantStore) LeaveHostParticipant(ctx context.Context, params storage.LeaveHostParticipantParams) (domain.Participant, error) {
+	return scanParticipant(s.db.QueryRow(ctx, leaveHostParticipantQuery, params.SessionID, params.HostUserID))
 }
 
 func scanParticipant(scanner rowScanner) (domain.Participant, error) {

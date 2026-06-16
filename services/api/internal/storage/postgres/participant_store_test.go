@@ -171,6 +171,143 @@ func TestJoinHostParticipantUpsertsHostParticipant(t *testing.T) {
 	}
 }
 
+func TestLeaveGuestParticipantUpdatesGuestParticipant(t *testing.T) {
+	t.Parallel()
+
+	leftAt := time.Date(2026, time.June, 15, 22, 0, 0, 0, time.UTC)
+	createdAt := time.Date(2026, time.June, 15, 20, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(2 * time.Hour)
+
+	var gotSQL string
+	var gotArgs []any
+
+	store := &ParticipantStore{
+		db: stubQueryer{
+			queryRow: func(ctx context.Context, query string, args ...any) pgx.Row {
+				gotSQL = query
+				gotArgs = append([]any(nil), args...)
+
+				return stubRowScanner{
+					scan: func(dest ...any) error {
+						*(dest[0].(*string)) = "participant-1"
+						*(dest[1].(*string)) = "session-1"
+						*(dest[2].(*sql.NullString)) = sql.NullString{}
+						*(dest[3].(*string)) = "guest"
+						*(dest[4].(*sql.NullString)) = sql.NullString{String: "Guest Name", Valid: true}
+						*(dest[5].(*sql.NullString)) = sql.NullString{}
+						*(dest[6].(*string)) = "left"
+						*(dest[7].(*sql.NullTime)) = sql.NullTime{}
+						*(dest[8].(*sql.NullTime)) = sql.NullTime{Time: leftAt, Valid: true}
+						*(dest[9].(*time.Time)) = createdAt
+						*(dest[10].(*time.Time)) = updatedAt
+						return nil
+					},
+				}
+			},
+		},
+	}
+
+	participant, err := store.LeaveGuestParticipant(context.Background(), storage.LeaveGuestParticipantParams{
+		SessionID: "session-1",
+	})
+	if err != nil {
+		t.Fatalf("leave guest participant: %v", err)
+	}
+
+	if gotSQL != leaveGuestParticipantQuery {
+		t.Fatalf("expected guest leave query to be used")
+	}
+
+	if len(gotArgs) != 1 || gotArgs[0] != "session-1" {
+		t.Fatalf("expected session id arg %q, got %v", "session-1", gotArgs)
+	}
+
+	if participant.Role != domain.ParticipantRoleGuest {
+		t.Fatalf("expected guest role %q, got %q", domain.ParticipantRoleGuest, participant.Role)
+	}
+
+	if participant.Status != domain.ParticipantStatusLeft {
+		t.Fatalf("expected left status %q, got %q", domain.ParticipantStatusLeft, participant.Status)
+	}
+
+	if participant.LeftAt == nil || !participant.LeftAt.Equal(leftAt) {
+		t.Fatalf("expected left time %v, got %v", leftAt, participant.LeftAt)
+	}
+}
+
+func TestLeaveHostParticipantUpdatesHostParticipant(t *testing.T) {
+	t.Parallel()
+
+	leftAt := time.Date(2026, time.June, 15, 22, 30, 0, 0, time.UTC)
+	createdAt := time.Date(2026, time.June, 15, 20, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(2*time.Hour + 30*time.Minute)
+
+	var gotSQL string
+	var gotArgs []any
+
+	store := &ParticipantStore{
+		db: stubQueryer{
+			queryRow: func(ctx context.Context, query string, args ...any) pgx.Row {
+				gotSQL = query
+				gotArgs = append([]any(nil), args...)
+
+				return stubRowScanner{
+					scan: func(dest ...any) error {
+						*(dest[0].(*string)) = "participant-1"
+						*(dest[1].(*string)) = "session-1"
+						*(dest[2].(*sql.NullString)) = sql.NullString{String: "host-user-1", Valid: true}
+						*(dest[3].(*string)) = "host"
+						*(dest[4].(*sql.NullString)) = sql.NullString{String: "Host Name", Valid: true}
+						*(dest[5].(*sql.NullString)) = sql.NullString{}
+						*(dest[6].(*string)) = "left"
+						*(dest[7].(*sql.NullTime)) = sql.NullTime{}
+						*(dest[8].(*sql.NullTime)) = sql.NullTime{Time: leftAt, Valid: true}
+						*(dest[9].(*time.Time)) = createdAt
+						*(dest[10].(*time.Time)) = updatedAt
+						return nil
+					},
+				}
+			},
+		},
+	}
+
+	participant, err := store.LeaveHostParticipant(context.Background(), storage.LeaveHostParticipantParams{
+		SessionID:  "session-1",
+		HostUserID: "host-user-1",
+	})
+	if err != nil {
+		t.Fatalf("leave host participant: %v", err)
+	}
+
+	if gotSQL != leaveHostParticipantQuery {
+		t.Fatalf("expected host leave query to be used")
+	}
+
+	if len(gotArgs) != 2 {
+		t.Fatalf("expected 2 query args, got %d", len(gotArgs))
+	}
+
+	if gotArgs[0] != "session-1" {
+		t.Fatalf("expected session id arg %q, got %v", "session-1", gotArgs[0])
+	}
+
+	if gotArgs[1] != "host-user-1" {
+		t.Fatalf("expected host user id arg %q, got %v", "host-user-1", gotArgs[1])
+	}
+
+	if participant.Role != domain.ParticipantRoleHost {
+		t.Fatalf("expected host role %q, got %q", domain.ParticipantRoleHost, participant.Role)
+	}
+
+	if participant.Status != domain.ParticipantStatusLeft {
+		t.Fatalf("expected left status %q, got %q", domain.ParticipantStatusLeft, participant.Status)
+	}
+
+	if participant.LeftAt == nil || !participant.LeftAt.Equal(leftAt) {
+		t.Fatalf("expected left time %v, got %v", leftAt, participant.LeftAt)
+	}
+}
+
 func TestNullableStringPtr(t *testing.T) {
 	t.Parallel()
 
