@@ -9,6 +9,10 @@ import {
   type LocalMediaDiagnostics,
   type LocalMediaPreviewStatus,
 } from '../media/localMedia';
+import {
+  getRecordingCapabilityReport,
+  type RecordingCapabilityReport,
+} from '../recording/recordingCapabilities';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -165,6 +169,11 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
         toggle MediaStreamTrack.enabled on the live tracks, so already attached WebRTC
         senders see the change without renegotiation.
       </p>
+      <p className="api-note media-preview__note">
+        Recording capability diagnostics are read-only. They inspect browser support
+        and the current preview stream, but they do not create a recording, prompt for
+        permissions, or persist any media.
+      </p>
 
       <div className="media-preview__actions" aria-label="Local media preview actions">
         <button
@@ -251,6 +260,8 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
         </div>
       </dl>
 
+      <RecordingCapabilityDiagnostics stream={stream} />
+
       {diagnostics.errorMessage ? (
         <div className="message message--error" role="alert">
           {diagnostics.errorMessage}
@@ -286,4 +297,89 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
     setLocalMediaTracksEnabled(activeStream, 'video', !videoTrack.enabled);
     refreshDiagnostics();
   }
+}
+
+function RecordingCapabilityDiagnostics({ stream }: { stream: MediaStream | null }) {
+  const report = getRecordingCapabilityReport(stream);
+
+  return (
+    <section
+      className="recording-diagnostics"
+      aria-labelledby="recording-capability-diagnostics-title"
+    >
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Recording diagnostics</p>
+          <h3 id="recording-capability-diagnostics-title">Recording capability diagnostics</h3>
+        </div>
+        <span className="status-pill">
+          {report.canAttemptAudioVideoRecording ? 'Prototype-ready' : 'Diagnostics only'}
+        </span>
+      </div>
+
+      <p className="api-note recording-diagnostics__note">
+        This section only inspects browser capability and the active local preview
+        stream. No MediaRecorder instance is created here.
+      </p>
+
+      <dl className="details-grid recording-diagnostics__details">
+        <div className="detail-card">
+          <dt>MediaRecorder available</dt>
+          <dd>{report.mediaRecorderAvailable ? 'Yes' : 'No'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>isTypeSupported available</dt>
+          <dd>{report.isTypeSupportedAvailable ? 'Yes' : 'No'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Supported MIME types</dt>
+          <dd>{formatMimeTypeList(report.supportedMimeTypes)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Preferred MIME type</dt>
+          <dd className="mono">{report.preferredMimeType ?? '—'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Local stream available</dt>
+          <dd>{report.localStreamAvailable ? 'Yes' : 'No'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Audio track count</dt>
+          <dd>{report.audioTrackCount}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Video track count</dt>
+          <dd>{report.videoTrackCount}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Future prototype ready</dt>
+          <dd>{report.canAttemptAudioVideoRecording ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+
+      {report.warnings.length > 0 ? (
+        <div className="message recording-diagnostics__warnings" role="status">
+          <p className="recording-diagnostics__warnings-title">Current notes</p>
+          <ul className="recording-diagnostics__warnings-list">
+            {report.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="message recording-diagnostics__ready" role="status">
+          The browser and current preview stream look ready for a future local recording
+          prototype.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatMimeTypeList(mimeTypes: RecordingCapabilityReport['supportedMimeTypes']): string {
+  if (mimeTypes.length === 0) {
+    return '—';
+  }
+
+  return mimeTypes.join(', ');
 }

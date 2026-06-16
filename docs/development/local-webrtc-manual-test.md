@@ -15,7 +15,9 @@ negotiation. If WebRTC starts without local preview, the data channel still work
 but media tracks are not attached in this PR. Renegotiation after preview start/stop
 is intentionally out of scope. Remote video stays muted by default for autoplay
 safety, and browsers require a user gesture before remote audio can be enabled.
-Recording, upload, and export remain inactive.
+DS-043 adds browser recording capability diagnostics that report MediaRecorder
+support and MIME type readiness without starting recording. Recording, upload,
+and export remain inactive.
 
 The test is meant to verify the full local path:
 
@@ -49,6 +51,22 @@ This test does not include:
 - upload
 - export
 - auth
+
+## Recording Capability Diagnostics
+
+The local media preview panel now includes a recording capability diagnostics
+section for the current browser and active preview stream.
+
+- it checks whether `MediaRecorder` exists
+- it checks whether `MediaRecorder.isTypeSupported` exists
+- it reports the supported MIME types from the candidate list
+- it reports the preferred MIME type when one is supported
+- it shows whether a local preview stream is active
+- it shows the current audio and video track counts
+- it shows whether the browser and stream look ready for a future local recording prototype
+
+Because the diagnostics are read-only, they should not trigger a browser permission
+prompt by themselves. No recording file is created yet.
 
 ## Local Services
 
@@ -194,21 +212,26 @@ This browser-only flow starts after the services are already running.
 3. On the host page, click `Start preview` and grant camera/microphone permission if the browser asks.
 4. On the host page, click `Mute microphone` and `Disable camera` if you want to
    confirm the local controls before signaling starts.
-5. On the host page, open the signaling panel and click `Connect signaling`.
-6. Keep the host page open.
-7. Open the guest invite URL from the host session summary in a second browser window or private window.
-8. Join the guest session.
-9. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
-10. On the guest page, click `Mute microphone` / `Unmute microphone` and
+5. On the host page, inspect the `Recording capability diagnostics` section and
+   confirm it shows `Local stream available` as `Yes`, the audio/video track counts,
+   and a supported MIME type summary.
+6. On the host page, open the signaling panel and click `Connect signaling`.
+7. Keep the host page open.
+8. Open the guest invite URL from the host session summary in a second browser window or private window.
+9. Join the guest session.
+10. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
+11. On the guest page, inspect the `Recording capability diagnostics` section and
+    confirm it reflects the guest preview stream.
+12. On the guest page, click `Mute microphone` / `Unmute microphone` and
     `Disable camera` / `Enable camera` to confirm the local controls while preview is active.
-11. On the guest page, click `Connect signaling`.
-12. On the host page, click `Create peer connection / Start WebRTC test`.
-13. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
-14. Confirm the remote preview area appears when remote tracks arrive.
-15. Click `Enable remote audio` on the side where you want to hear the remote stream.
-16. Confirm the remote playback diagnostics switch to an enabled state after the click.
-17. When the data channel opens, send a test message from the host.
-18. If both sides show an open data channel, send a message from the guest too.
+13. On the guest page, click `Connect signaling`.
+14. On the host page, click `Create peer connection / Start WebRTC test`.
+15. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
+16. Confirm the remote preview area appears when remote tracks arrive.
+17. Click `Enable remote audio` on the side where you want to hear the remote stream.
+18. Confirm the remote playback diagnostics switch to an enabled state after the click.
+19. When the data channel opens, send a test message from the host.
+20. If both sides show an open data channel, send a message from the guest too.
 
 If you want media tracks attached, both sides must start local preview before the initial WebRTC offer/answer negotiation. In DS-039, the host attaches tracks during peer-connection setup, and the guest attaches tracks while handling the incoming offer and creating the answer.
 
@@ -226,6 +249,7 @@ On a successful run, you should see:
 - `signalingState` return to `stable`
 - `dataChannelState` change to `open`
 - local preview active on both sides if media is being tested
+- recording diagnostics show `No` until the browser and stream are ready
 - `Peer connection exists` show `yes`
 - `Local description` show `set`
 - `Remote description` show `set`
