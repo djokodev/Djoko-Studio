@@ -42,7 +42,7 @@
 | DS-030 | v0.1 Recording Core | Add participant leave foundation | merged | Merged in PR #30. |
 | DS-031 | v0.1 Signaling Core | Add signaling room protocol foundation | merged | Merged in PR #31. |
 | DS-032 | v0.1 Web Studio Core | Add host session creation foundation | merged | Merged in PR #32. |
-| DS-033 | v0.1 Web Studio Core | Add guest session join foundation | in_review | Adds a minimal Web Studio guest invite lookup and join flow without auth, WebRTC media, camera, microphone, or recording behavior. |
+| DS-033 | v0.1 Web Studio Core | Add guest session join foundation | merged | Merged in PR #33. |
 
 ## Allowed Statuses
 
