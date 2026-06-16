@@ -41,6 +41,7 @@
 | DS-029 | v0.1 Recording Core | Add session lifecycle transition foundation | merged | Merged in PR #29. |
 | DS-030 | v0.1 Recording Core | Add participant leave foundation | merged | Merged in PR #30. |
 | DS-031 | v0.1 Signaling Core | Add signaling room protocol foundation | merged | Merged in PR #31. |
+| DS-032 | v0.1 Web Studio Core | Add host session creation foundation | in_review | Adds a minimal Web Studio host session creation flow that calls the API and displays guest invite details without auth, WebRTC media, or recording behavior. |
 
 ## Allowed Statuses
 
