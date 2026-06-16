@@ -55,7 +55,7 @@
 | DS-043 | v0.1 Recording Core | Add browser recording capability diagnostics | merged | Merged in PR #43. |
 | DS-044 | v0.1 Recording Core | Add local recording state machine foundation | merged | Merged in PR #44. |
 | DS-045 | v0.1 Recording Core | Add local MediaRecorder in-memory prototype | merged | Merged in PR #45. |
-| DS-046 | v0.1 Recording Core | Add local recording playback preview | in_review | Draft PR opened. |
+| DS-046 | v0.1 Recording Core | Add local recording playback preview | merged | Merged in PR #46. |
 
 ## Allowed Statuses
 
