@@ -5,7 +5,19 @@ export const localRecordingSourceKind = 'local_preview_audio_video' as const;
 export type LocalRecordingSourceKind = typeof localRecordingSourceKind;
 export type LocalRecordingManifestStatus = RecordingState;
 export type LocalRecordingUploadStatusPlaceholder = 'local_only';
-export type LocalRecordingIntegrationStatus = 'not_implemented';
+export type LocalRecordingPersistenceSupportStatus =
+  | 'not_checked'
+  | 'supported'
+  | 'unavailable'
+  | 'failed';
+export type LocalRecordingPersistenceStatus =
+  | 'not_checked'
+  | 'unsupported'
+  | 'available'
+  | 'persisting'
+  | 'persisted'
+  | 'failed';
+export type LocalRecordingUploadStatus = 'not_implemented';
 
 export interface LocalRecordingChunkManifestEntry {
   chunkId: string;
@@ -47,8 +59,20 @@ export interface LocalRecordingSummary {
   approximateDurationMs: number | null;
   previewAvailable: boolean;
   previewBlobSizeBytes: number;
-  persistenceStatus: LocalRecordingIntegrationStatus;
-  uploadStatus: LocalRecordingIntegrationStatus;
+  persistenceSupportStatus: LocalRecordingPersistenceSupportStatus;
+  persistenceStatus: LocalRecordingPersistenceStatus;
+  persistenceErrorMessage: string | null;
+  persistedRecordingCount: number;
+  currentRecordingPersisted: boolean;
+  uploadStatus: LocalRecordingUploadStatus;
+}
+
+export interface LocalRecordingPersistenceSummary {
+  supportStatus: LocalRecordingPersistenceSupportStatus;
+  status: LocalRecordingPersistenceStatus;
+  errorMessage: string | null;
+  persistedRecordingCount: number;
+  currentRecordingPersisted: boolean;
 }
 
 export interface LocalRecordingPreviewSnapshot {
@@ -174,6 +198,13 @@ export function buildLocalRecordingSummary(
   manifest: LocalRecordingManifest | null,
   preview: LocalRecordingPreviewSnapshot,
   fallbackStatus: LocalRecordingManifestStatus,
+  persistence: LocalRecordingPersistenceSummary = {
+    supportStatus: 'not_checked',
+    status: 'not_checked',
+    errorMessage: null,
+    persistedRecordingCount: 0,
+    currentRecordingPersisted: false,
+  },
 ): LocalRecordingSummary {
   const latestChunk = manifest?.chunks.at(-1) ?? null;
 
@@ -192,7 +223,11 @@ export function buildLocalRecordingSummary(
     approximateDurationMs: manifest?.approximateDurationMs ?? null,
     previewAvailable: preview.previewAvailable,
     previewBlobSizeBytes: preview.previewBlobSizeBytes,
-    persistenceStatus: 'not_implemented',
+    persistenceSupportStatus: persistence.supportStatus,
+    persistenceStatus: persistence.status,
+    persistenceErrorMessage: persistence.errorMessage,
+    persistedRecordingCount: persistence.persistedRecordingCount,
+    currentRecordingPersisted: persistence.currentRecordingPersisted,
     uploadStatus: 'not_implemented',
   };
 }

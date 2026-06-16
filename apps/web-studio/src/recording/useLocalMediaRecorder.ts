@@ -8,9 +8,20 @@ import {
   localRecordingSourceKind,
   markLocalRecordingManifestFailed,
   transitionLocalRecordingManifestStatus,
+  type LocalRecordingChunkManifestEntry,
+  type LocalRecordingPersistenceStatus,
+  type LocalRecordingPersistenceSupportStatus,
   type LocalRecordingManifest,
   type LocalRecordingSummary,
 } from './recordingManifest';
+import {
+  deletePersistedLocalRecording,
+  getLocalRecordingPersistenceSupport,
+  listPersistedLocalRecordings,
+  saveLocalRecordingChunk,
+  saveLocalRecordingManifest,
+  type PersistedLocalRecordingRecord,
+} from './recordingPersistence';
 import {
   canTransitionRecordingState,
   createInitialRecordingSnapshot,
@@ -27,11 +38,27 @@ interface LocalRecordingPlaybackPreviewMetadata {
   previewMimeType: string | null;
 }
 
+interface LocalRecordingPersistenceState {
+  supportStatus: LocalRecordingPersistenceSupportStatus;
+  status: LocalRecordingPersistenceStatus;
+  errorMessage: string | null;
+  persistedRecordings: PersistedLocalRecordingRecord[];
+  currentRecordingPersisted: boolean;
+}
+
 const initialRecordingPlaybackPreviewMetadata: LocalRecordingPlaybackPreviewMetadata = {
   previewAvailable: false,
   previewUrl: null,
   previewBlobSizeBytes: 0,
   previewMimeType: null,
+};
+
+const initialPersistenceState: LocalRecordingPersistenceState = {
+  supportStatus: 'not_checked',
+  status: 'not_checked',
+  errorMessage: null,
+  persistedRecordings: [],
+  currentRecordingPersisted: false,
 };
 
 export interface LocalMediaRecorderController {
@@ -40,6 +67,10 @@ export interface LocalMediaRecorderController {
   summary: LocalRecordingSummary;
   previewUrl: string | null;
   previewMimeType: string | null;
+  persistenceSupportStatus: LocalRecordingPersistenceSupportStatus;
+  persistenceErrorMessage: string | null;
+  persistedRecordings: PersistedLocalRecordingRecord[];
+  discardPersistedRecording: (recordingId: string) => Promise<boolean>;
   startRecording: (stream: MediaStream | null, preferredMimeType?: string | null) => boolean;
   stopRecording: () => boolean;
   resetRecording: () => boolean;
@@ -56,7 +87,12 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const currentRecordingIdRef = useRef<string | null>(null);
+  const persistenceQueueRef = useRef(Promise.resolve());
   const isMountedRef = useRef(true);
+  const [persistenceState, setPersistenceState] = useState<LocalRecordingPersistenceState>(
+    initialPersistenceState,
+  );
   const [, setDurationTick] = useState(0);
 
   useEffect(() => {
@@ -69,12 +105,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
   useEffect(() => {
     isMountedRef.current = true;
+    void initializePersistenceSupport();
 
     return () => {
       isMountedRef.current = false;
       disposePreviewObjectUrl();
       stopAndDisposeRecorder();
       clearRecordingChunks();
+      currentRecordingIdRef.current = null;
       setManifest(null);
       setPreview(initialRecordingPlaybackPreviewMetadata);
     };
@@ -95,7 +133,13 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     };
   }, [snapshot.state]);
 
-  const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state);
+  const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
+    supportStatus: persistenceState.supportStatus,
+    status: persistenceState.status,
+    errorMessage: persistenceState.errorMessage,
+    persistedRecordingCount: persistenceState.persistedRecordings.length,
+    currentRecordingPersisted: persistenceState.currentRecordingPersisted,
+  });
 
   function commitSnapshot(nextSnapshot: RecordingStateSnapshot) {
     snapshotRef.current = nextSnapshot;
@@ -109,6 +153,265 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
   function commitPreview(nextPreview: LocalRecordingPlaybackPreviewMetadata) {
     setPreview(nextPreview);
+  }
+
+  function commitPersistenceState(
+    nextPersistenceState: Partial<LocalRecordingPersistenceState>,
+  ) {
+    setPersistenceState((currentPersistenceState) => ({
+      ...currentPersistenceState,
+      ...nextPersistenceState,
+    }));
+  }
+
+  function getIdlePersistenceStatus(
+    supportStatus: LocalRecordingPersistenceSupportStatus,
+  ): LocalRecordingPersistenceStatus {
+    if (supportStatus === 'supported') {
+      return 'available';
+    }
+
+    if (supportStatus === 'unavailable') {
+      return 'unsupported';
+    }
+
+    if (supportStatus === 'failed') {
+      return 'failed';
+    }
+
+    return 'not_checked';
+  }
+
+  function refreshPersistedRecordingList(activeRecordingId = currentRecordingIdRef.current) {
+    if (persistenceState.supportStatus === 'unavailable') {
+      return Promise.resolve();
+    }
+
+    return listPersistedLocalRecordings()
+      .then((records) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        const currentRecordingPersisted =
+          activeRecordingId !== null
+            ? records.some((record) => record.recordingId === activeRecordingId)
+            : false;
+
+        commitPersistenceState({
+          supportStatus: 'supported',
+          persistedRecordings: records,
+          currentRecordingPersisted,
+          status: currentRecordingPersisted ? 'persisted' : 'available',
+          errorMessage: null,
+        });
+      })
+      .catch((error) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        commitPersistenceState({
+          supportStatus: 'failed',
+          errorMessage: getRecorderErrorMessage(
+            error,
+            'IndexedDB persistence is available but the local recordings list could not be read.',
+          ),
+          status: 'failed',
+        });
+      });
+  }
+
+  async function initializePersistenceSupport() {
+    const support = await getLocalRecordingPersistenceSupport();
+
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    if (support.state === 'supported') {
+      commitPersistenceState({
+        supportStatus: 'supported',
+        status: 'available',
+        errorMessage: null,
+      });
+      await refreshPersistedRecordingList();
+      return;
+    }
+
+    if (support.state === 'unavailable') {
+      commitPersistenceState({
+        supportStatus: 'unavailable',
+        status: 'unsupported',
+        errorMessage: null,
+        persistedRecordings: [],
+        currentRecordingPersisted: false,
+      });
+      return;
+    }
+
+    commitPersistenceState({
+      supportStatus: 'failed',
+      status: 'failed',
+      errorMessage: support.errorMessage,
+      persistedRecordings: [],
+      currentRecordingPersisted: false,
+    });
+  }
+
+  function enqueuePersistenceTask(task: () => Promise<void>) {
+    const nextTask = persistenceQueueRef.current.then(task);
+    persistenceQueueRef.current = nextTask.catch(() => undefined);
+
+    return nextTask;
+  }
+
+  function persistCurrentManifestState(
+    nextManifest: LocalRecordingManifest,
+    recordingId = nextManifest.recordingId,
+  ) {
+    if (persistenceState.supportStatus === 'unavailable') {
+      commitPersistenceState({
+        status: getIdlePersistenceStatus(persistenceState.supportStatus),
+        currentRecordingPersisted: false,
+      });
+      return;
+    }
+
+    commitPersistenceState({
+      status: 'persisting',
+      errorMessage: null,
+      currentRecordingPersisted: false,
+    });
+
+    void enqueuePersistenceTask(async () => {
+      try {
+        await saveLocalRecordingManifest(nextManifest);
+        if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
+          return;
+        }
+
+        await refreshPersistedRecordingList(recordingId);
+      } catch (error) {
+        if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
+          return;
+        }
+
+        commitPersistenceState({
+          status: 'failed',
+          errorMessage: getRecorderErrorMessage(
+            error,
+            'Unable to save the local recording manifest to IndexedDB.',
+          ),
+        });
+      }
+    });
+  }
+
+  function persistLocalRecordingChunk(
+    recordingId: string,
+    chunkEntry: LocalRecordingChunkManifestEntry,
+    blob: Blob,
+    nextManifest: LocalRecordingManifest,
+  ) {
+    if (persistenceState.supportStatus === 'unavailable') {
+      commitPersistenceState({
+        status: getIdlePersistenceStatus(persistenceState.supportStatus),
+        currentRecordingPersisted: false,
+      });
+      return;
+    }
+
+    commitPersistenceState({
+      status: 'persisting',
+      errorMessage: null,
+      currentRecordingPersisted: false,
+    });
+
+    void enqueuePersistenceTask(async () => {
+      let chunkSaveError: unknown = null;
+      let manifestSaveError: unknown = null;
+
+      try {
+        await saveLocalRecordingChunk(recordingId, chunkEntry, blob);
+      } catch (error) {
+        chunkSaveError = error;
+      }
+
+      try {
+        await saveLocalRecordingManifest(nextManifest);
+      } catch (error) {
+        manifestSaveError = error;
+      }
+
+      if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
+        return;
+      }
+
+      if (chunkSaveError === null && manifestSaveError === null) {
+        await refreshPersistedRecordingList(recordingId);
+        return;
+      }
+
+      commitPersistenceState({
+        status: 'failed',
+        errorMessage: getRecorderErrorMessage(
+          chunkSaveError ?? manifestSaveError,
+          'Unable to save the local recording chunk to IndexedDB.',
+        ),
+      });
+
+      await refreshPersistedRecordingList(recordingId);
+    });
+  }
+
+  function discardPersistedRecording(recordingId: string): Promise<boolean> {
+    if (recordingId.trim() === '') {
+      return Promise.resolve(false);
+    }
+
+    if (persistenceState.supportStatus === 'unavailable') {
+      return Promise.resolve(false);
+    }
+
+    commitPersistenceState({
+      status: 'persisting',
+      errorMessage: null,
+    });
+
+    return enqueuePersistenceTask(async () => {
+      try {
+        await deletePersistedLocalRecording(recordingId);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        if (currentRecordingIdRef.current === recordingId) {
+          currentRecordingIdRef.current = null;
+        }
+
+        await refreshPersistedRecordingList();
+        commitPersistenceState({
+          status: getIdlePersistenceStatus(persistenceState.supportStatus),
+          currentRecordingPersisted: false,
+        });
+      } catch (error) {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        commitPersistenceState({
+          status: 'failed',
+          errorMessage: getRecorderErrorMessage(
+            error,
+            'Unable to discard the persisted local recording.',
+          ),
+        });
+      }
+    })
+      .then(() => true)
+      .catch(() => false);
   }
 
   function clearRecordingChunks() {
@@ -140,6 +443,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     clearRecordingChunks();
     resetPreview();
     commitManifest(null);
+    currentRecordingIdRef.current = null;
+    commitPersistenceState({
+      currentRecordingPersisted: false,
+    });
   }
 
   function createPlaybackPreview() {
@@ -212,7 +519,12 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       blob,
       Date.now(),
     );
+    const chunkEntry = nextManifest.chunks.at(-1) ?? null;
     commitManifest(nextManifest);
+
+    if (chunkEntry !== null) {
+      persistLocalRecordingChunk(nextManifest.recordingId, chunkEntry, blob, nextManifest);
+    }
   }
 
   function handleRecorderStop() {
@@ -227,7 +539,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     detachRecorderEventHandlers(recorder);
 
     if (currentManifest !== null) {
-      commitManifest(finalizeLocalRecordingManifest(currentManifest, stoppedAt));
+      const finalizedManifest = finalizeLocalRecordingManifest(currentManifest, stoppedAt);
+      commitManifest(finalizedManifest);
+      persistCurrentManifestState(finalizedManifest, finalizedManifest.recordingId);
     }
 
     commitSnapshot(transitionRecordingState(snapshotRef.current, 'stopped').snapshot);
@@ -249,7 +563,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     detachRecorderEventHandlers(recorder);
 
     if (currentManifest !== null) {
-      commitManifest(markLocalRecordingManifestFailed(currentManifest, Date.now()));
+      const failedManifest = markLocalRecordingManifestFailed(currentManifest, Date.now());
+      commitManifest(failedManifest);
+      persistCurrentManifestState(failedManifest, failedManifest.recordingId);
     }
 
     commitSnapshot(
@@ -305,7 +621,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         sourceKind: localRecordingSourceKind,
       });
 
+      currentRecordingIdRef.current = recordingId;
       commitManifest(nextManifest);
+      persistCurrentManifestState(nextManifest, recordingId);
       commitSnapshot(transitionRecordingState(snapshotRef.current, 'start').snapshot);
       return true;
     } catch (error) {
@@ -336,9 +654,13 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
     const currentManifest = manifestRef.current;
     if (currentManifest !== null) {
-      commitManifest(
-        transitionLocalRecordingManifestStatus(currentManifest, 'stopping', Date.now()),
+      const stoppingManifest = transitionLocalRecordingManifestStatus(
+        currentManifest,
+        'stopping',
+        Date.now(),
       );
+      commitManifest(stoppingManifest);
+      persistCurrentManifestState(stoppingManifest, stoppingManifest.recordingId);
     }
 
     try {
@@ -359,9 +681,16 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return false;
     }
 
+    const recordingIdToDiscard = currentRecordingIdRef.current ?? manifestRef.current?.recordingId ?? null;
+
     stopAndDisposeRecorder();
     clearRecordingArtifacts();
     commitSnapshot(transitionRecordingState(snapshotRef.current, 'reset').snapshot);
+
+    if (recordingIdToDiscard !== null) {
+      void discardPersistedRecording(recordingIdToDiscard);
+    }
+
     return true;
   }
 
@@ -385,7 +714,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
     const currentManifest = manifestRef.current;
     if (currentManifest !== null) {
-      commitManifest(markLocalRecordingManifestFailed(currentManifest, Date.now()));
+      const failedManifest = markLocalRecordingManifestFailed(currentManifest, Date.now());
+      commitManifest(failedManifest);
+      persistCurrentManifestState(failedManifest, failedManifest.recordingId);
     }
   }
 
@@ -407,6 +738,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     summary,
     previewUrl: preview.previewUrl,
     previewMimeType: preview.previewMimeType,
+    persistenceSupportStatus: persistenceState.supportStatus,
+    persistenceErrorMessage: persistenceState.errorMessage,
+    persistedRecordings: persistenceState.persistedRecordings,
+    discardPersistedRecording,
     startRecording,
     stopRecording,
     resetRecording,

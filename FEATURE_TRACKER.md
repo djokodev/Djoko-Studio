@@ -57,6 +57,7 @@
 | DS-045 | v0.1 Recording Core | Add local MediaRecorder in-memory prototype | merged | Merged in PR #45. |
 | DS-046 | v0.1 Recording Core | Add local recording playback preview | merged | Merged in PR #46. |
 | DS-047 | v0.1 Recording Core | Add local recording manifest, session summary, and lifecycle diagnostics | merged | Merged in PR #47. |
+| DS-048 | v0.1 Recording Core | Add IndexedDB local recording persistence foundation and recovery detection | in_review | Local-only persistence foundation with recovery detection and discard. |
 
 ## Allowed Statuses
 
