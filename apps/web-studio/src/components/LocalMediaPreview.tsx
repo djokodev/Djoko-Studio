@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useReducer, useRef, useState, type MouseEvent } from 'react';
 import {
-  createIdleLocalMediaDiagnostics,
   describeLocalMediaStream,
   getLocalMediaErrorMessage,
   getLocalMediaStatusLabel,
   requestLocalMediaStream,
+  setLocalMediaTracksEnabled,
   stopMediaStream,
   type LocalMediaDiagnostics,
   type LocalMediaPreviewStatus,
@@ -14,12 +14,11 @@ interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
 }
 
-const idleDiagnostics = createIdleLocalMediaDiagnostics();
-
 export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
   const [status, setStatus] = useState<LocalMediaPreviewStatus>('idle');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [, refreshDiagnostics] = useReducer((value: number) => value + 1, 0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const onStreamChangeRef = useRef(onStreamChange);
@@ -123,9 +122,25 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
     setErrorMessage('');
   }
 
-  const diagnostics: LocalMediaDiagnostics = stream
-    ? describeLocalMediaStream(stream, status, errorMessage)
-    : { ...idleDiagnostics, previewStatus: status, errorMessage };
+  const diagnostics: LocalMediaDiagnostics = describeLocalMediaStream(stream, status, errorMessage);
+  const audioTrack = stream?.getAudioTracks()[0] ?? null;
+  const videoTrack = stream?.getVideoTracks()[0] ?? null;
+  const microphoneToggleDisabled =
+    status !== 'active' || audioTrack === null || audioTrack.readyState !== 'live';
+  const cameraToggleDisabled =
+    status !== 'active' || videoTrack === null || videoTrack.readyState !== 'live';
+  const microphoneToggleLabel =
+    diagnostics.audioTrackEnabledState === 'muted'
+      ? 'Unmute microphone'
+      : diagnostics.audioTrackEnabledState === 'enabled'
+        ? 'Mute microphone'
+        : 'Microphone unavailable';
+  const cameraToggleLabel =
+    diagnostics.videoTrackEnabledState === 'disabled'
+      ? 'Enable camera'
+      : diagnostics.videoTrackEnabledState === 'enabled'
+        ? 'Disable camera'
+        : 'Camera unavailable';
 
   const startDisabled = status === 'requesting' || status === 'active';
   const stopDisabled = status !== 'requesting' && stream === null;
@@ -146,8 +161,9 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
       </div>
 
       <p className="api-note media-preview__note">
-        This preview stays local to the browser. When WebRTC starts while it is active,
-        its tracks can be attached during the initial negotiation in this release.
+        This preview stays local to the browser. The microphone and camera buttons
+        toggle MediaStreamTrack.enabled on the live tracks, so already attached WebRTC
+        senders see the change without renegotiation.
       </p>
 
       <div className="media-preview__actions" aria-label="Local media preview actions">
@@ -166,6 +182,22 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
           disabled={stopDisabled}
         >
           Stop preview
+        </button>
+        <button
+          className="submit-button signaling-button"
+          type="button"
+          onClick={handleToggleMicrophone}
+          disabled={microphoneToggleDisabled}
+        >
+          {microphoneToggleLabel}
+        </button>
+        <button
+          className="submit-button signaling-button signaling-button--secondary"
+          type="button"
+          onClick={handleToggleCamera}
+          disabled={cameraToggleDisabled}
+        >
+          {cameraToggleLabel}
         </button>
       </div>
 
@@ -194,20 +226,28 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
           <dd>{diagnostics.hasStream ? 'Yes' : 'No'}</dd>
         </div>
         <div className="detail-card">
-          <dt>Video track count</dt>
-          <dd>{diagnostics.videoTrackCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Audio track count</dt>
+          <dt>Microphone track count</dt>
           <dd>{diagnostics.audioTrackCount}</dd>
         </div>
         <div className="detail-card">
-          <dt>Video track readyState</dt>
-          <dd>{diagnostics.videoTrackReadyState}</dd>
+          <dt>Camera track count</dt>
+          <dd>{diagnostics.videoTrackCount}</dd>
         </div>
         <div className="detail-card">
-          <dt>Audio track readyState</dt>
+          <dt>Microphone state</dt>
+          <dd>{diagnostics.audioTrackEnabledState}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Camera state</dt>
+          <dd>{diagnostics.videoTrackEnabledState}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Microphone readyState</dt>
           <dd>{diagnostics.audioTrackReadyState}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Camera readyState</dt>
+          <dd>{diagnostics.videoTrackReadyState}</dd>
         </div>
       </dl>
 
@@ -221,5 +261,29 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
 
   function notifyStreamChange(nextStream: MediaStream | null) {
     onStreamChangeRef.current?.(nextStream);
+  }
+
+  function handleToggleMicrophone() {
+    const activeStream = streamRef.current;
+    const audioTrack = activeStream?.getAudioTracks()[0];
+
+    if (activeStream === null || audioTrack === undefined || audioTrack.readyState !== 'live') {
+      return;
+    }
+
+    setLocalMediaTracksEnabled(activeStream, 'audio', !audioTrack.enabled);
+    refreshDiagnostics();
+  }
+
+  function handleToggleCamera() {
+    const activeStream = streamRef.current;
+    const videoTrack = activeStream?.getVideoTracks()[0];
+
+    if (activeStream === null || videoTrack === undefined || videoTrack.readyState !== 'live') {
+      return;
+    }
+
+    setLocalMediaTracksEnabled(activeStream, 'video', !videoTrack.enabled);
+    refreshDiagnostics();
   }
 }

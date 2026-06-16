@@ -2,11 +2,15 @@ export type LocalMediaPreviewStatus = 'idle' | 'requesting' | 'active' | 'error'
 
 export type TrackReadyState = MediaStreamTrack['readyState'] | 'unavailable';
 
+export type LocalMediaTrackEnabledState = 'enabled' | 'muted' | 'disabled' | 'unavailable';
+
 export interface LocalMediaDiagnostics {
   previewStatus: LocalMediaPreviewStatus;
   hasStream: boolean;
   videoTrackCount: number;
   audioTrackCount: number;
+  videoTrackEnabledState: LocalMediaTrackEnabledState;
+  audioTrackEnabledState: LocalMediaTrackEnabledState;
   videoTrackReadyState: TrackReadyState;
   audioTrackReadyState: TrackReadyState;
   errorMessage: string;
@@ -23,6 +27,8 @@ export function createIdleLocalMediaDiagnostics(): LocalMediaDiagnostics {
     hasStream: false,
     videoTrackCount: 0,
     audioTrackCount: 0,
+    videoTrackEnabledState: 'unavailable',
+    audioTrackEnabledState: 'unavailable',
     videoTrackReadyState: 'unavailable',
     audioTrackReadyState: 'unavailable',
     errorMessage: '',
@@ -34,15 +40,35 @@ export function describeLocalMediaStream(
   previewStatus: LocalMediaPreviewStatus,
   errorMessage = '',
 ): LocalMediaDiagnostics {
+  const videoTracks = stream?.getVideoTracks() ?? [];
+  const audioTracks = stream?.getAudioTracks() ?? [];
+
   return {
     previewStatus,
     hasStream: stream !== null,
-    videoTrackCount: stream?.getVideoTracks().length ?? 0,
-    audioTrackCount: stream?.getAudioTracks().length ?? 0,
-    videoTrackReadyState: getTrackReadyState(stream?.getVideoTracks() ?? []),
-    audioTrackReadyState: getTrackReadyState(stream?.getAudioTracks() ?? []),
+    videoTrackCount: videoTracks.length,
+    audioTrackCount: audioTracks.length,
+    videoTrackEnabledState: describeTrackEnabledState(videoTracks, 'disabled'),
+    audioTrackEnabledState: describeTrackEnabledState(audioTracks, 'muted'),
+    videoTrackReadyState: getTrackReadyState(videoTracks),
+    audioTrackReadyState: getTrackReadyState(audioTracks),
     errorMessage,
   };
+}
+
+export function setLocalMediaTracksEnabled(
+  stream: MediaStream | null,
+  kind: 'audio' | 'video',
+  enabled: boolean,
+): void {
+  if (stream === null) {
+    return;
+  }
+
+  const tracks = kind === 'audio' ? stream.getAudioTracks() : stream.getVideoTracks();
+  for (const track of tracks) {
+    track.enabled = enabled;
+  }
 }
 
 export function stopMediaStream(stream: MediaStream | null): void {
@@ -89,4 +115,16 @@ export function getLocalMediaErrorMessage(error: unknown, fallback: string): str
 function getTrackReadyState(tracks: MediaStreamTrack[]): TrackReadyState {
   const track = tracks[0];
   return track?.readyState ?? 'unavailable';
+}
+
+function describeTrackEnabledState(
+  tracks: MediaStreamTrack[],
+  disabledLabel: 'muted' | 'disabled',
+): LocalMediaTrackEnabledState {
+  const track = tracks[0];
+  if (track === undefined || track.readyState !== 'live') {
+    return 'unavailable';
+  }
+
+  return track.enabled ? 'enabled' : disabledLabel;
 }
