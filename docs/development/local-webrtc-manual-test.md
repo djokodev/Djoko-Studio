@@ -6,14 +6,16 @@ This guide documents the local end-to-end manual check for the DS-035 WebRTC fou
 DS-038 adds a browser-only local camera/microphone preview on the host and guest
 pages, but that preview is still not attached to the peer connection yet.
 
-DS-039 adds initial media track attachment and a remote preview foundation. Start
-local preview on both host and guest before starting WebRTC if you want tracks to
-attach during the first negotiation. If WebRTC starts without local preview, the
-data channel still works, but media tracks are not attached in this PR. Renegotiation
-after preview start/stop is intentionally out of scope. Recording, upload, and
-export remain inactive.
+DS-039 adds initial media track attachment and a remote preview foundation.
+DS-040 adds manual remote audio playback controls. Start local preview on both host
+and guest before starting WebRTC if you want tracks to attach during the first
+negotiation. If WebRTC starts without local preview, the data channel still works,
+but media tracks are not attached in this PR. Renegotiation after preview start/stop
+is intentionally out of scope. Remote video stays muted by default for autoplay
+safety, and browsers require a user gesture before remote audio can be enabled.
+Recording, upload, and export remain inactive.
 
-The test is intentionally data-channel-only. It is meant to verify the full local path:
+The test is meant to verify the full local path:
 
 - host session creation
 - guest session join
@@ -21,6 +23,7 @@ The test is intentionally data-channel-only. It is meant to verify the full loca
 - signaling WebSocket connection
 - WebRTC offer/answer exchange
 - ICE candidate exchange
+- remote preview arrival and manual remote audio playback
 - test data channel open and message delivery
 
 ## What DS-035 Already Supports
@@ -196,12 +199,16 @@ This browser-only flow starts after the services are already running.
 10. On the host page, click `Create peer connection / Start WebRTC test`.
 11. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
 12. Confirm the remote preview area appears when remote tracks arrive.
-13. When the data channel opens, send a test message from the host.
-14. If both sides show an open data channel, send a message from the guest too.
+13. Click `Enable remote audio` on the side where you want to hear the remote stream.
+14. Confirm the remote playback diagnostics switch to an enabled state after the click.
+15. When the data channel opens, send a test message from the host.
+16. If both sides show an open data channel, send a message from the guest too.
 
 If you want media tracks attached, both sides must start local preview before the initial WebRTC offer/answer negotiation. In DS-039, the host attaches tracks during peer-connection setup, and the guest attaches tracks while handling the incoming offer and creating the answer.
 
 If either side skips local preview before negotiation, the data channel can still work, but media tracks are not attached in DS-039. Renegotiation after preview start/stop remains out of scope.
+
+The remote preview video stays muted until you explicitly enable audio. If playback fails, the panel shows a browser diagnostic message instead of silently unmuting.
 
 ## Expected Success States
 
@@ -218,7 +225,9 @@ On a successful run, you should see:
 - `Remote description` show `set`
 - `Local tracks attached` shows `yes` on both sides when preview was started before negotiation
 - remote stream available shows `yes` when remote tracks arrive
+- remote audio enabled shows `yes` after `Enable remote audio` is clicked
 - remote video/audio track counts update
+- remote playback status and playback error diagnostics update when the user enables or mutes audio
 - logs for offer creation, offer send, answer creation, answer send, ICE generation, ICE send, data channel open, and test message delivery
 
 ## Common Failure Cases

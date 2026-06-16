@@ -60,6 +60,11 @@ const idleWebRtcState: WebRtcPeerConnectionState = {
   remoteAudioTrackCount: 0,
 };
 
+const remoteStreamUnavailableMessage = 'Remote stream is not available yet.';
+const remoteStreamAvailableMessage = 'Remote stream is available. Click "Enable remote audio" to hear it.';
+const remoteAudioEnabledMessage = 'Remote audio is enabled.';
+const remoteAudioMutedMessage = 'Remote audio is muted.';
+
 function getLocalMediaAttachmentNote(
   localMediaStreamAvailable: boolean,
   hasWebRtcController: boolean,
@@ -97,10 +102,14 @@ export function SignalingPanel({
   const [events, setEvents] = useState<PanelLogEntry[]>([]);
   const [hasWebRtcController, setHasWebRtcController] = useState(false);
   const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
+  const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(false);
+  const [remotePlaybackMessage, setRemotePlaybackMessage] = useState(remoteStreamUnavailableMessage);
+  const [remotePlaybackError, setRemotePlaybackError] = useState<string | null>(null);
   const connectionRef = useRef<SignalingConnection | null>(null);
   const peerConnectionRef = useRef<WebRtcPeerConnectionController | null>(null);
   const localMediaStreamRef = useRef(localMediaStream);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioEnabledRef = useRef(remoteAudioEnabled);
   const isMountedRef = useRef(true);
   const disconnectCauseRef = useRef<'user' | 'system'>('system');
 
@@ -155,6 +164,28 @@ export function SignalingPanel({
   useEffect(() => {
     localMediaStreamRef.current = localMediaStream;
   }, [localMediaStream]);
+
+  useEffect(() => {
+    remoteAudioEnabledRef.current = remoteAudioEnabled;
+  }, [remoteAudioEnabled]);
+
+  useEffect(() => {
+    if (remoteMediaStream === null) {
+      setRemoteAudioEnabled(false);
+      setRemotePlaybackMessage(remoteStreamUnavailableMessage);
+      setRemotePlaybackError(null);
+      return;
+    }
+
+    if (remoteAudioEnabledRef.current) {
+      setRemotePlaybackMessage(remoteAudioEnabledMessage);
+      setRemotePlaybackError(null);
+      return;
+    }
+
+    setRemotePlaybackMessage(remoteStreamAvailableMessage);
+    setRemotePlaybackError(null);
+  }, [remoteMediaStream]);
 
   function appendLog(kind: PanelLogKind, summary: string, details?: string) {
     if (!isMountedRef.current) {
@@ -496,12 +527,60 @@ export function SignalingPanel({
     }
   }
 
+  async function handleEnableRemoteAudio() {
+    const videoElement = remoteVideoRef.current;
+    if (videoElement === null) {
+      const message = 'Remote video element is not ready yet.';
+      setRemotePlaybackError(message);
+      setRemotePlaybackMessage('Remote audio could not be enabled.');
+      appendLog('error', message);
+      return;
+    }
+
+    if (remoteMediaStream === null) {
+      setRemotePlaybackError(remoteStreamUnavailableMessage);
+      setRemotePlaybackMessage(remoteStreamUnavailableMessage);
+      appendLog('error', remoteStreamUnavailableMessage);
+      return;
+    }
+
+    try {
+      videoElement.muted = false;
+      await videoElement.play();
+      setRemoteAudioEnabled(true);
+      setRemotePlaybackError(null);
+      setRemotePlaybackMessage(remoteAudioEnabledMessage);
+      appendLog('info', remoteAudioEnabledMessage);
+    } catch (error) {
+      const playbackError = getErrorMessage(error, 'Unable to enable remote audio playback.');
+      videoElement.muted = true;
+      setRemoteAudioEnabled(false);
+      setRemotePlaybackError(playbackError);
+      setRemotePlaybackMessage('Remote audio stayed muted because playback failed.');
+      appendLog('error', playbackError);
+    }
+  }
+
+  function handleMuteRemoteAudio() {
+    const videoElement = remoteVideoRef.current;
+    if (videoElement !== null) {
+      videoElement.muted = true;
+    }
+
+    setRemoteAudioEnabled(false);
+    setRemotePlaybackError(null);
+    setRemotePlaybackMessage(remoteAudioMutedMessage);
+    appendLog('info', remoteAudioMutedMessage);
+  }
+
   const canConnect = roomError === '' && status !== 'connecting' && status !== 'open' && status !== 'closing';
   const canDisconnect = status === 'connecting' || status === 'open' || status === 'closing';
   const canSendTestSignal = status === 'open' && roomError === '';
   const canStartWebRtc = role === 'host' && status === 'open' && !hasWebRtcController;
   const canCloseWebRtc = hasWebRtcController;
   const canSendWebRtcMessage = hasWebRtcController && webRtcState.dataChannelState === 'open';
+  const canEnableRemoteAudio = remoteMediaStream !== null && !remoteAudioEnabled;
+  const canMuteRemoteAudio = remoteMediaStream !== null && remoteAudioEnabled;
   const localMediaStreamAvailable = localMediaStream !== null;
   const mediaAttachmentNote = getLocalMediaAttachmentNote(
     localMediaStreamAvailable,
@@ -517,9 +596,27 @@ export function SignalingPanel({
 
     videoElement.srcObject = remoteMediaStream;
 
-    if (remoteMediaStream !== null) {
-      void videoElement.play().catch(() => {
-        // Muted autoplay usually succeeds, but browsers can still reject play().
+    if (remoteMediaStream === null) {
+      videoElement.muted = true;
+      return () => {
+        if (videoElement.srcObject === remoteMediaStream) {
+          videoElement.srcObject = null;
+        }
+      };
+    }
+
+    videoElement.muted = !remoteAudioEnabledRef.current;
+
+    if (!remoteAudioEnabledRef.current) {
+      void videoElement.play().catch((error) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        const playbackError = getErrorMessage(error, 'Remote preview playback failed.');
+        setRemotePlaybackError(playbackError);
+        setRemotePlaybackMessage('Remote preview playback failed while muted.');
+        appendLog('error', playbackError);
       });
     }
 
@@ -718,11 +815,30 @@ export function SignalingPanel({
             </span>
           </div>
 
+          <div className="signaling-actions signaling-remote-actions" aria-label="Remote media playback actions">
+            <button
+              className="submit-button signaling-button"
+              type="button"
+              onClick={handleEnableRemoteAudio}
+              disabled={!canEnableRemoteAudio}
+            >
+              Enable remote audio
+            </button>
+            <button
+              className="submit-button signaling-button signaling-button--secondary"
+              type="button"
+              onClick={handleMuteRemoteAudio}
+              disabled={!canMuteRemoteAudio}
+            >
+              Mute remote audio
+            </button>
+          </div>
+
           <div className="media-preview__stage signaling-remote-preview">
             <video
               ref={remoteVideoRef}
               className="media-preview__video"
-              muted
+              muted={!remoteAudioEnabled}
               playsInline
               autoPlay
             />
@@ -733,10 +849,22 @@ export function SignalingPanel({
             )}
           </div>
 
+          <div
+            className={remotePlaybackError === null ? 'message' : 'message message--error'}
+            aria-live={remotePlaybackError === null ? 'polite' : 'assertive'}
+            role={remotePlaybackError === null ? 'status' : 'alert'}
+          >
+            {remotePlaybackMessage}
+          </div>
+
           <dl className="details-grid signaling-details">
             <div className="detail-card">
               <dt>Remote stream available</dt>
               <dd>{webRtcState.remoteMediaStreamAvailable ? 'yes' : 'no'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Remote audio enabled</dt>
+              <dd>{remoteAudioEnabled ? 'yes' : 'no'}</dd>
             </div>
             <div className="detail-card">
               <dt>Remote video track count</dt>
@@ -748,7 +876,11 @@ export function SignalingPanel({
             </div>
             <div className="detail-card">
               <dt>Remote playback</dt>
-              <dd>Muted autoplay foundation is enabled for now.</dd>
+              <dd>{remotePlaybackMessage}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Remote playback error</dt>
+              <dd>{remotePlaybackError ?? 'none'}</dd>
             </div>
           </dl>
         </section>
