@@ -49,9 +49,9 @@ The recording diagnostics are present so the app can report browser support and 
 type readiness before the local recording prototype is used. A separate pure
 recording state machine module models the lifecycle and is surfaced in the UI
 through the local recording prototype controls. The local MediaRecorder prototype
-records only the active local preview stream, keeps chunks in memory for the current
-page session, and does not add persistence, uploads, exports, recovery, or playback
-yet. Refreshing the page drops the chunks.
+records only the active local preview stream, stores actual `Blob` chunks in memory
+for the current page session, and does not add persistence, uploads, exports,
+recovery, or playback yet. Refreshing the page drops the chunks.
 
 ## Signaling
 

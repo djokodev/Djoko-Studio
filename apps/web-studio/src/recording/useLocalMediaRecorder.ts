@@ -44,6 +44,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   );
   const snapshotRef = useRef(snapshot);
   const metadataRef = useRef(metadata);
+  const chunksRef = useRef<Blob[]>([]);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const isMountedRef = useRef(true);
   const [, setDurationTick] = useState(0);
@@ -62,6 +63,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     return () => {
       isMountedRef.current = false;
       stopAndDisposeRecorder();
+      clearRecordingChunks();
     };
   }, []);
 
@@ -99,6 +101,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     commitMetadata(initialRecordingSessionMetadata);
   }
 
+  function clearRecordingChunks() {
+    chunksRef.current = [];
+  }
+
   function detachRecorderEventHandlers(recorder: MediaRecorder | null) {
     if (recorder === null) {
       return;
@@ -133,6 +139,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return;
     }
 
+    chunksRef.current.push(blob);
     updateMetadata({
       chunkCount: metadataRef.current.chunkCount + 1,
       totalBytes: metadataRef.current.totalBytes + blob.size,
@@ -218,6 +225,8 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       recorder.onerror = handleRecorderError;
       recorder.onstop = handleRecorderStop;
       recorderRef.current = recorder;
+      recorder.start(recordingTimesliceMs);
+      clearRecordingChunks();
       updateMetadata({
         chunkCount: 0,
         totalBytes: 0,
@@ -225,7 +234,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         startedAt: Date.now(),
         stoppedAt: null,
       });
-      recorder.start(recordingTimesliceMs);
       commitSnapshot(transitionRecordingState(snapshotRef.current, 'start').snapshot);
       return true;
     } catch (error) {
@@ -273,6 +281,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     }
 
     stopAndDisposeRecorder();
+    clearRecordingChunks();
     resetMetadata();
     commitSnapshot(transitionRecordingState(snapshotRef.current, 'reset').snapshot);
     return true;

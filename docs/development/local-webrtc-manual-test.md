@@ -81,7 +81,7 @@ stream.
 - click `Start local recording`
 - wait a few seconds so the `dataavailable` events can produce chunks
 - click `Stop local recording`
-- confirm the chunk count increases and total bytes go up
+- confirm the chunk count increases, total bytes go up, and actual `Blob` chunks are stored in memory for this page session
 - confirm the start time, stop time, and approximate duration populate
 - click `Discard local recording / Reset`
 - confirm the in-memory chunk count, total bytes, and metadata clear
