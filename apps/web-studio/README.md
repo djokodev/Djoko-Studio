@@ -28,7 +28,7 @@ It also includes a local camera and microphone preview foundation for host and g
 
 - auth
 - full authorization
-- WebRTC media capture
+- WebRTC audio/video media attachment or remote media rendering yet
 - sending local media tracks over `RTCPeerConnection`
 - browser recording
 - upload
@@ -90,7 +90,7 @@ This is signaling relay plus peer connection foundation only.
 
 No auth.
 No full authorization.
-No WebRTC media capture.
+No WebRTC audio/video media attachment or remote media rendering yet.
 No RTCPeerConnection media tracks.
 No browser media tracks are sent over `RTCPeerConnection` yet.
 No browser recording.
@@ -99,6 +99,8 @@ No upload/export behavior.
 ### Local camera and microphone preview
 
 The web app also includes a browser-only local camera and microphone preview for both host and guest pages.
+It uses `getUserMedia({ audio: true, video: true })` only for local browser-side preview.
+Those local tracks are not attached to the peer connection yet.
 
 - click `Start preview` to request `getUserMedia({ audio: true, video: true })`
 - click `Stop preview` to stop every local track and clear the preview
