@@ -359,6 +359,47 @@ dt {
   margin-top: 0;
 }
 
+.recording-diagnostics {
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.recording-diagnostics__details {
+  margin-top: 0;
+}
+
+.recording-diagnostics__note {
+  margin-top: 0;
+}
+
+.recording-diagnostics__warnings {
+  display: grid;
+  gap: 10px;
+}
+
+.recording-diagnostics__warnings-title {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  color: #fde68a;
+}
+
+.recording-diagnostics__warnings-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #fef3c7;
+}
+
+.recording-diagnostics__ready {
+  border-color: rgba(34, 197, 94, 0.2);
+  background: rgba(6, 95, 70, 0.18);
+  color: #d1fae5;
+}
+
 .media-status-pill--idle {
   color: #dbeafe;
 }

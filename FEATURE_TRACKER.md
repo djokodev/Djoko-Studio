@@ -52,6 +52,7 @@
 | DS-040 | v0.1 Web Studio Core | Add remote media playback controls foundation | merged | Merged in PR #40. |
 | DS-041 | v0.1 Web Studio Core | Add local microphone and camera toggle controls foundation | merged | Merged in PR #41. |
 | DS-042 | v0.1 Recording Core | Define browser local recording architecture plan | merged | Merged in PR #42. |
+| DS-043 | v0.1 Recording Core | Add browser recording capability diagnostics | in_review | Draft PR opened. |
 
 ## Allowed Statuses
 
