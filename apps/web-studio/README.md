@@ -3,11 +3,12 @@
 `apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
 a local camera and microphone preview foundation with local mic/camera toggle controls,
+the first local MediaRecorder in-memory prototype for the preview stream,
 initial WebRTC media track attachment during negotiation,
 and a remote preview foundation with manual remote audio playback controls alongside the
 signaling-room connection panel for both roles. It also includes browser recording
-capability diagnostics and a read-only recording state machine foundation for future
-local capture work.
+capability diagnostics and a local MediaRecorder in-memory prototype with DS-044
+state machine diagnostics for future local capture work.
 
 ## What this app does
 
@@ -23,7 +24,8 @@ local capture work.
 - lets the host or guest mute/unmute the microphone and disable/enable the camera while preview is active
 - shows simple local media diagnostics for that preview
 - shows browser recording capability diagnostics for the active browser and preview stream
-- shows a read-only recording state machine diagnostics section with the initial state and allowed next actions
+- shows a local recording prototype that records only the active preview stream with in-memory chunks
+- shows the DS-044 recording state machine through the local prototype controls
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -38,15 +40,18 @@ local capture work.
 
 - auth
 - full authorization
-- browser recording
 - upload
 - export
+- persistence
+- recovery
 
 The recording diagnostics are present so the app can report browser support and MIME
-type readiness before any recording prototype is added. A separate pure recording
-state machine module models the future lifecycle and is surfaced in the UI as read-only
-diagnostics. They do not create MediaRecorder instances, chunks, persistence, uploads,
-or exported files.
+type readiness before the local recording prototype is used. A separate pure
+recording state machine module models the lifecycle and is surfaced in the UI
+through the local recording prototype controls. The local MediaRecorder prototype
+records only the active local preview stream, stores actual `Blob` chunks in memory
+for the current page session, and does not add persistence, uploads, exports,
+recovery, or playback yet. Refreshing the page drops the chunks.
 
 ## Signaling
 
@@ -104,7 +109,6 @@ This is signaling relay plus peer connection foundation only.
 
 No auth.
 No full authorization.
-No browser recording.
 No upload/export behavior.
 
 ### Local camera and microphone preview
@@ -114,9 +118,8 @@ It uses `getUserMedia({ audio: true, video: true })` only for local browser-side
 When the preview is already active before WebRTC negotiation starts, the local tracks can be attached to the peer connection.
 The microphone and camera controls toggle existing `MediaStreamTrack.enabled` values, so already attached WebRTC senders see the change without renegotiation.
 The preview panel also shows recording capability diagnostics for the current browser.
-It also shows a read-only recording state machine foundation that starts in `idle`
-and lists the allowed next actions. Those diagnostics do not trigger recording,
-storage, uploads, or browser prompts on their own.
+The local recording prototype below starts from the DS-044 state machine, instantiates `MediaRecorder` only after you click `Start local recording`, stores chunks in memory only, and falls back to the browser default MIME type when no supported MIME type is reported.
+Those diagnostics do not trigger recording, storage, uploads, or browser prompts on their own.
 
 - click `Start preview` to request `getUserMedia({ audio: true, video: true })`
 - click `Stop preview` to stop every local track and clear the preview
@@ -124,6 +127,16 @@ storage, uploads, or browser prompts on their own.
 - click `Disable camera` / `Enable camera` to toggle the live video track without replacing it
 - the preview video element is muted and uses `playsInline` to avoid autoplay issues
 - if WebRTC starts without an active local preview, the data channel still works but media tracks are not attached in this release
+
+### Local recording prototype
+
+The local recording prototype is intentionally small and browser-only:
+
+- click `Start local recording` to record the active local preview stream
+- click `Stop local recording` to stop the current recorder and keep the in-memory chunks for this page session
+- click `Discard local recording / Reset` to clear the in-memory chunks and metadata
+- no persistence, upload, export, playback, or recovery is implemented yet
+- refreshes clear the chunks because nothing is written to durable browser storage
 
 ### WebRTC peer connection foundation
 
