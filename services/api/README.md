@@ -111,7 +111,7 @@ DS-024 adds the first Go storage foundation for the API service.
 
 ## Session routes
 
-DS-025, DS-026, DS-027, and DS-028 wire the initial session and participant route surface to the storage seams.
+DS-025, DS-026, DS-027, DS-028, and DS-029 wire the initial session and participant route surface to the storage seams.
 
 - `POST /v1/sessions` creates a session from JSON input and returns a raw guest invite token once
 - `GET /v1/guest/sessions/{invite_token}` looks up one session by hashed guest invite token
@@ -137,7 +137,7 @@ DS-025, DS-026, DS-027, and DS-028 wire the initial session and participant rout
 - guest join returns `503` when the session store or participant store is unavailable
 - host join returns `503` when the session store or participant store is unavailable
 - lifecycle routes return `503` when the session store is unavailable
-- migrations remain manual and DS-027/DS-028 do not change the schema
+- migrations remain manual and DS-027/DS-028/DS-029 do not change the schema
 
 Example host join request:
 
