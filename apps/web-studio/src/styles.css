@@ -391,6 +391,26 @@ dt {
   margin-top: 0;
 }
 
+.recording-prototype__preview {
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.recording-prototype__preview-details {
+  margin-top: 0;
+}
+
+.recording-prototype__preview-empty {
+  margin-top: 0;
+}
+
+.recording-prototype__preview-warning {
+  margin-top: 0;
+}
+
 .recording-prototype__actions {
   display: flex;
   flex-wrap: wrap;

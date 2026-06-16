@@ -22,6 +22,8 @@ DS-044 adds a read-only local recording state machine foundation that models the
 future lifecycle without creating a recording.
 DS-045 adds a local MediaRecorder in-memory prototype that records only the active
 local preview stream and keeps chunks in memory for the current page session.
+DS-046 adds a temporary local playback preview that assembles a Blob from those
+in-memory chunks after recording stops and plays it back locally in the browser.
 
 The test is meant to verify the full local path:
 
@@ -83,9 +85,11 @@ stream.
 - click `Stop local recording`
 - confirm the chunk count increases, total bytes go up, and actual `Blob` chunks are stored in memory for this page session
 - confirm the start time, stop time, and approximate duration populate
+- confirm the local playback preview appears after stop
+- press play in the preview video if the browser allows it
 - click `Discard local recording / Reset`
-- confirm the in-memory chunk count, total bytes, and metadata clear
-- no download, playback, upload, export, persistence, or recovery is expected
+- confirm the in-memory chunk count, total bytes, metadata, and preview clear
+- no download, upload, export, persistence, recovery, or backend call is expected
 - no file should be created on disk
 
 ## Local Services
@@ -240,25 +244,27 @@ This browser-only flow starts after the services are already running.
 8. Wait a few seconds so the `dataavailable` events can produce chunks.
 9. Click `Stop local recording`.
 10. Confirm the chunk count increases, total bytes go up, and the start time, stop time, and approximate duration populate.
-11. Click `Discard local recording / Reset`.
-12. Confirm the in-memory chunk count, total bytes, and metadata clear.
-13. On the host page, open the signaling panel and click `Connect signaling`.
-14. Keep the host page open.
-15. Open the guest invite URL from the host session summary in a second browser window or private window.
-16. Join the guest session.
-17. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
-18. On the guest page, inspect the `Recording capability diagnostics` section and
+11. Confirm the local playback preview appears with the recorded blob metadata.
+12. Press play in the preview video if the browser allows it.
+13. Click `Discard local recording / Reset`.
+14. Confirm the in-memory chunk count, total bytes, metadata, and preview clear.
+15. On the host page, open the signaling panel and click `Connect signaling`.
+16. Keep the host page open.
+17. Open the guest invite URL from the host session summary in a second browser window or private window.
+18. Join the guest session.
+19. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
+20. On the guest page, inspect the `Recording capability diagnostics` section and
     confirm it reflects the guest preview stream.
-19. On the guest page, click `Mute microphone` / `Unmute microphone` and
+21. On the guest page, click `Mute microphone` / `Unmute microphone` and
     `Disable camera` / `Enable camera` to confirm the local controls while preview is active.
-20. On the guest page, click `Connect signaling`.
-21. On the host page, click `Create peer connection / Start WebRTC test`.
-22. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
-23. Confirm the remote preview area appears when remote tracks arrive.
-24. Click `Enable remote audio` on the side where you want to hear the remote stream.
-25. Confirm the remote playback diagnostics switch to an enabled state after the click.
-26. When the data channel opens, send a test message from the host.
-27. If both sides show an open data channel, send a message from the guest too.
+22. On the guest page, click `Connect signaling`.
+23. On the host page, click `Create peer connection / Start WebRTC test`.
+24. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
+25. Confirm the remote preview area appears when remote tracks arrive.
+26. Click `Enable remote audio` on the side where you want to hear the remote stream.
+27. Confirm the remote playback diagnostics switch to an enabled state after the click.
+28. When the data channel opens, send a test message from the host.
+29. If both sides show an open data channel, send a message from the guest too.
 
 If you want media tracks attached, both sides must start local preview before the initial WebRTC offer/answer negotiation. In DS-039, the host attaches tracks during peer-connection setup, and the guest attaches tracks while handling the incoming offer and creating the answer.
 
@@ -278,6 +284,7 @@ On a successful run, you should see:
 - local preview active on both sides if media is being tested
 - recording capability diagnostics show the active preview stream and MIME type readiness
 - the local recording prototype shows chunk count, total bytes, and the selected MIME type after a local recording run
+- the local recording playback preview shows the blob metadata and object URL state after recording stops
 - `Peer connection exists` show `yes`
 - `Local description` show `set`
 - `Remote description` show `set`
@@ -290,6 +297,7 @@ On a successful run, you should see:
 - remote playback status and playback error diagnostics update when the user enables or mutes audio
 - logs for offer creation, offer send, answer creation, answer send, ICE generation, ICE send, data channel open, and test message delivery
 - no local recording file is created
+- no local recording preview is downloaded or uploaded
 
 ## Common Failure Cases
 

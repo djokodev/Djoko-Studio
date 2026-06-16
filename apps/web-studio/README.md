@@ -50,8 +50,11 @@ type readiness before the local recording prototype is used. A separate pure
 recording state machine module models the lifecycle and is surfaced in the UI
 through the local recording prototype controls. The local MediaRecorder prototype
 records only the active local preview stream, stores actual `Blob` chunks in memory
-for the current page session, and does not add persistence, uploads, exports,
-recovery, or playback yet. Refreshing the page drops the chunks.
+for the current page session, and now assembles a temporary local playback preview
+after recording stops. It still does not add persistence, uploads, exports,
+recovery, download, or backend/database behavior. Refreshing the page or resetting
+the recording drops the chunks and the temporary preview because nothing is written
+to durable browser storage.
 
 ## Signaling
 
@@ -133,10 +136,11 @@ Those diagnostics do not trigger recording, storage, uploads, or browser prompts
 The local recording prototype is intentionally small and browser-only:
 
 - click `Start local recording` to record the active local preview stream
-- click `Stop local recording` to stop the current recorder and keep the in-memory chunks for this page session
-- click `Discard local recording / Reset` to clear the in-memory chunks and metadata
-- no persistence, upload, export, playback, or recovery is implemented yet
-- refreshes clear the chunks because nothing is written to durable browser storage
+- click `Stop local recording` to stop the current recorder, keep the in-memory chunks for this page session, and build a temporary local playback preview
+- click `Discard local recording / Reset` to clear the in-memory chunks, metadata, and preview URL
+- the playback preview is local-only, memory-backed, and temporary
+- no persistence, upload, export, download, recovery, or backend behavior is implemented yet
+- refreshes clear the chunks and preview because nothing is written to durable browser storage
 
 ### WebRTC peer connection foundation
 
