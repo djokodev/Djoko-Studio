@@ -16,6 +16,10 @@ export interface LocalMediaRecorderController {
   startedAt: number | null;
   stoppedAt: number | null;
   approximateDurationMs: number | null;
+  previewAvailable: boolean;
+  previewUrl: string | null;
+  previewBlobSizeBytes: number;
+  previewMimeType: string | null;
   startRecording: (stream: MediaStream | null, preferredMimeType?: string | null) => boolean;
   stopRecording: () => boolean;
   resetRecording: () => boolean;
@@ -29,6 +33,13 @@ interface RecordingSessionMetadata {
   stoppedAt: number | null;
 }
 
+interface RecordingPlaybackPreviewMetadata {
+  previewAvailable: boolean;
+  previewUrl: string | null;
+  previewBlobSizeBytes: number;
+  previewMimeType: string | null;
+}
+
 const initialRecordingSessionMetadata: RecordingSessionMetadata = {
   chunkCount: 0,
   totalBytes: 0,
@@ -37,14 +48,25 @@ const initialRecordingSessionMetadata: RecordingSessionMetadata = {
   stoppedAt: null,
 };
 
+const initialRecordingPlaybackPreviewMetadata: RecordingPlaybackPreviewMetadata = {
+  previewAvailable: false,
+  previewUrl: null,
+  previewBlobSizeBytes: 0,
+  previewMimeType: null,
+};
+
 export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const [snapshot, setSnapshot] = useState<RecordingStateSnapshot>(createInitialRecordingSnapshot());
   const [metadata, setMetadata] = useState<RecordingSessionMetadata>(
     initialRecordingSessionMetadata,
   );
+  const [preview, setPreview] = useState<RecordingPlaybackPreviewMetadata>(
+    initialRecordingPlaybackPreviewMetadata,
+  );
   const snapshotRef = useRef(snapshot);
   const metadataRef = useRef(metadata);
   const chunksRef = useRef<Blob[]>([]);
+  const previewUrlRef = useRef<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const isMountedRef = useRef(true);
   const [, setDurationTick] = useState(0);
@@ -62,6 +84,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
     return () => {
       isMountedRef.current = false;
+      disposePreviewObjectUrl();
       stopAndDisposeRecorder();
       clearRecordingChunks();
     };
@@ -103,6 +126,59 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
   function clearRecordingChunks() {
     chunksRef.current = [];
+  }
+
+  function commitPreview(nextPreview: RecordingPlaybackPreviewMetadata) {
+    setPreview(nextPreview);
+  }
+
+  function revokePreviewObjectUrl() {
+    const currentPreviewUrl = previewUrlRef.current;
+
+    if (currentPreviewUrl === null) {
+      return;
+    }
+
+    URL.revokeObjectURL(currentPreviewUrl);
+    previewUrlRef.current = null;
+  }
+
+  function resetPreview() {
+    revokePreviewObjectUrl();
+    commitPreview(initialRecordingPlaybackPreviewMetadata);
+  }
+
+  function disposePreviewObjectUrl() {
+    revokePreviewObjectUrl();
+    previewUrlRef.current = null;
+  }
+
+  function createPlaybackPreview() {
+    revokePreviewObjectUrl();
+
+    try {
+      const mimeType = metadataRef.current.selectedMimeType?.trim() || null;
+      const previewBlob =
+        mimeType === null
+          ? new Blob(chunksRef.current)
+          : new Blob(chunksRef.current, { type: mimeType });
+
+      if (previewBlob.size === 0) {
+        commitPreview(initialRecordingPlaybackPreviewMetadata);
+        return;
+      }
+
+      const previewUrl = URL.createObjectURL(previewBlob);
+      previewUrlRef.current = previewUrl;
+      commitPreview({
+        previewAvailable: true,
+        previewUrl,
+        previewBlobSizeBytes: previewBlob.size,
+        previewMimeType: previewBlob.type.trim() === '' ? mimeType : previewBlob.type,
+      });
+    } catch {
+      commitPreview(initialRecordingPlaybackPreviewMetadata);
+    }
   }
 
   function detachRecorderEventHandlers(recorder: MediaRecorder | null) {
@@ -164,6 +240,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
           ? metadataRef.current.stoppedAt
           : metadataRef.current.stoppedAt ?? stoppedAt,
     });
+    createPlaybackPreview();
   }
 
   function handleRecorderError(event: Event) {
@@ -196,6 +273,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return false;
     }
 
+    resetPreview();
     commitSnapshot(transitionRecordingState(snapshotRef.current, 'prepare').snapshot);
 
     if (stream === null) {
@@ -280,6 +358,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return false;
     }
 
+    resetPreview();
     stopAndDisposeRecorder();
     clearRecordingChunks();
     resetMetadata();
@@ -333,6 +412,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     startedAt: metadata.startedAt,
     stoppedAt: metadata.stoppedAt,
     approximateDurationMs,
+    previewAvailable: preview.previewAvailable,
+    previewUrl: preview.previewUrl,
+    previewBlobSizeBytes: preview.previewBlobSizeBytes,
+    previewMimeType: preview.previewMimeType,
     startRecording,
     stopRecording,
     resetRecording,

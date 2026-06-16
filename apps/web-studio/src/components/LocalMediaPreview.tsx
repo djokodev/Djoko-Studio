@@ -431,9 +431,10 @@ function LocalRecordingPrototype({
       </div>
 
       <p className="api-note recording-prototype__note">
-        Prototype only: chunks are stored in memory and will be lost on refresh. The
-        recorder prefers the supported MIME type from the diagnostics and falls back to
-        the browser default when needed.
+        Prototype only: chunks are stored in memory and will be lost on refresh. After
+        stopping, the recorder assembles a temporary local playback preview from those
+        chunks. The recorder prefers the supported MIME type from the diagnostics and
+        falls back to the browser default when needed.
       </p>
 
       <div className="recording-prototype__actions" aria-label="Local recording prototype actions">
@@ -507,6 +508,69 @@ function LocalRecordingPrototype({
           <dd className="mono">{formatRecordingEventList(allowedEvents)}</dd>
         </div>
       </dl>
+
+      <section
+        className="recording-prototype__preview"
+        aria-labelledby="local-recording-playback-preview-title"
+      >
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Playback preview</p>
+            <h4 id="local-recording-playback-preview-title">
+              Local recording playback preview
+            </h4>
+          </div>
+          <span
+            className={`status-pill ${
+              recorder.previewAvailable ? 'status-pill--live' : ''
+            }`}
+          >
+            {recorder.previewAvailable ? 'Available' : 'Unavailable'}
+          </span>
+        </div>
+
+        {recorder.previewAvailable && recorder.previewUrl !== null ? (
+          <div className="media-preview__stage recording-prototype__preview-stage">
+            <video
+              className="media-preview__video recording-prototype__preview-video"
+              controls
+              playsInline
+              src={recorder.previewUrl}
+            />
+          </div>
+        ) : (
+          <div className="message recording-prototype__preview-empty" role="status">
+            No local recording preview available yet.
+          </div>
+        )}
+
+        <dl className="details-grid recording-prototype__preview-details">
+          <div className="detail-card">
+            <dt>Preview available</dt>
+            <dd>{recorder.previewAvailable ? 'Yes' : 'No'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Preview blob size</dt>
+            <dd>
+              {recorder.previewAvailable
+                ? formatByteCount(recorder.previewBlobSizeBytes)
+                : '—'}
+            </dd>
+          </div>
+          <div className="detail-card">
+            <dt>Preview MIME type</dt>
+            <dd className="mono">{recorder.previewMimeType ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Object URL exists</dt>
+            <dd>{recorder.previewUrl !== null ? 'Yes' : 'No'}</dd>
+          </div>
+        </dl>
+
+        <div className="message message--warning recording-prototype__preview-warning" role="status">
+          Temporary local preview only. No file is saved, uploaded, or exported.
+        </div>
+      </section>
 
       <div className="message message--warning recording-prototype__warning" role="status">
         Prototype only: chunks are stored in memory and will be lost on refresh.
