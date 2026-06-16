@@ -53,7 +53,7 @@
 | DS-041 | v0.1 Web Studio Core | Add local microphone and camera toggle controls foundation | merged | Merged in PR #41. |
 | DS-042 | v0.1 Recording Core | Define browser local recording architecture plan | merged | Merged in PR #42. |
 | DS-043 | v0.1 Recording Core | Add browser recording capability diagnostics | merged | Merged in PR #43. |
-| DS-044 | v0.1 Recording Core | Add local recording state machine foundation | in_review | Draft PR opened. |
+| DS-044 | v0.1 Recording Core | Add local recording state machine foundation | merged | Merged in PR #44. |
 
 ## Allowed Statuses
 
