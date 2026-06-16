@@ -274,14 +274,14 @@ function HostSessionPage() {
         <h1 id="page-title">Create a host session from the web studio.</h1>
         <p className="lede">
           This first pass lets a host create a session, send the request to the API,
-          and immediately see the session ID, title, status, guest invite details, and
-          the signaling room foundation.
+          and immediately see the session ID, title, status, guest invite details, the
+          signaling room foundation, and the first WebRTC peer connection controls.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
-          <li>No WebRTC media yet</li>
+          <li>No camera or microphone access yet</li>
           <li>No recording, upload, or export yet</li>
-          <li>Signaling only for now</li>
+          <li>Signaling and peer connection foundation only</li>
         </ul>
         <p className="api-note">
           API base URL: <span className="mono">{getApiBaseUrl()}</span>
@@ -451,14 +451,14 @@ function GuestSessionPage() {
         <h1 id="page-title">Join a guest session in the web studio.</h1>
         <p className="lede">
           Open the invite link, look up the session, enter a display name, and join
-          without auth, WebRTC, recording, or browser media access yet. The signaling
-          room is available after you join.
+          without auth, recording, or browser media access yet. The signaling room and
+          first WebRTC peer connection controls are available after you join.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
           <li>No full authorization yet</li>
-          <li>No WebRTC or recording yet</li>
-          <li>Signaling only for now</li>
+          <li>No camera or microphone access yet</li>
+          <li>Signaling and peer connection foundation only</li>
         </ul>
         <p className="api-note">
           Guest URLs look like{' '}
