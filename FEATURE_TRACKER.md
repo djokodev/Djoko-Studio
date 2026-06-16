@@ -54,6 +54,7 @@
 | DS-042 | v0.1 Recording Core | Define browser local recording architecture plan | merged | Merged in PR #42. |
 | DS-043 | v0.1 Recording Core | Add browser recording capability diagnostics | merged | Merged in PR #43. |
 | DS-044 | v0.1 Recording Core | Add local recording state machine foundation | merged | Merged in PR #44. |
+| DS-045 | v0.1 Recording Core | Add local MediaRecorder in-memory prototype | in_review | Draft PR opened. |
 
 ## Allowed Statuses
 

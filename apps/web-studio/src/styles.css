@@ -367,11 +367,66 @@ dt {
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.recording-prototype {
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 .recording-diagnostics__details {
   margin-top: 0;
 }
 
 .recording-diagnostics__note {
+  margin-top: 0;
+}
+
+.recording-prototype__details {
+  margin-top: 0;
+}
+
+.recording-prototype__note {
+  margin-top: 0;
+}
+
+.recording-prototype__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.recording-prototype__actions .signaling-button {
+  flex: 1 1 180px;
+}
+
+.recording-prototype__status--recording {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #d1fae5;
+}
+
+.recording-prototype__status--preparing,
+.recording-prototype__status--stopping {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fef3c7;
+}
+
+.recording-prototype__status--failed {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fecaca;
+}
+
+.recording-prototype__status--stopped {
+  background: rgba(100, 116, 139, 0.16);
+  border-color: rgba(100, 116, 139, 0.24);
+  color: #cbd5e1;
+}
+
+.recording-prototype__warning {
   margin-top: 0;
 }
 
@@ -453,6 +508,12 @@ dt {
   border-color: rgba(248, 113, 113, 0.24);
   background: rgba(127, 29, 29, 0.3);
   color: #fee2e2;
+}
+
+.message--warning {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(120, 53, 15, 0.28);
+  color: #fde68a;
 }
 
 .details-grid {
