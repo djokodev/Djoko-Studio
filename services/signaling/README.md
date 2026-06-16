@@ -17,11 +17,15 @@ one-host/one-guest room protocol seam before any real WebRTC negotiation is adde
 
 ## What is not implemented yet
 
-- WebRTC offer/answer exchange
-- ICE candidate handling
-- auth
-- database access
-- NATS or other messaging integration
+- in-memory only, with no persistence
+- no auth yet
+- no full authorization yet
+- no frontend/browser WebRTC code
+- no WebRTC media behavior yet
+- no recording behavior
+- no upload/export behavior
+- no database dependency
+- no Redis or NATS dependency
 - Dockerfile changes
 - Docker Compose changes
 
