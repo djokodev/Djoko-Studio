@@ -44,6 +44,7 @@
 | DS-032 | v0.1 Web Studio Core | Add host session creation foundation | merged | Merged in PR #32. |
 | DS-033 | v0.1 Web Studio Core | Add guest session join foundation | merged | Merged in PR #33. |
 | DS-034 | v0.1 Web Studio Core | Add signaling room connection foundation | merged | Merged in PR #34. |
+| DS-035 | v0.1 Web Studio Core | Add WebRTC peer connection foundation | in_review | Adds minimal host/guest RTCPeerConnection offer-answer and ICE exchange through signaling without camera, microphone, media tracks, recording, upload, or export behavior. |
 
 ## Allowed Statuses
 

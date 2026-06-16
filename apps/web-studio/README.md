@@ -2,7 +2,7 @@
 
 `apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
-and a minimal signaling-room connection panel for both roles.
+and a minimal signaling-room connection panel plus the first WebRTC peer connection foundation for both roles.
 
 ## What this app does
 
@@ -16,13 +16,16 @@ and a minimal signaling-room connection panel for both roles.
 - displays joined participant details after a successful join
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
+- lets the host start a WebRTC peer connection using the signaling room
+- lets the guest answer the host offer and exchange ICE candidates
+- exposes a test data channel for small text messages
 - shows loading and error states for lookup and join
 
 ## What is not implemented yet
 
 - auth
 - full authorization
-- WebRTC media
+- WebRTC media capture
 - browser recording
 - camera or microphone access
 - upload
@@ -80,15 +83,37 @@ With the API, signaling service, and web app all running locally:
 8. Click `Send test signal` in the guest panel.
 9. Confirm the host event log shows the message.
 
-This is signaling relay only.
+This is signaling relay plus peer connection foundation only.
 
 No auth.
 No full authorization.
-No WebRTC media.
-No RTCPeerConnection.
+No WebRTC media capture.
+No RTCPeerConnection media tracks.
 No camera or microphone access.
 No browser recording.
 No upload/export behavior.
+
+### WebRTC peer connection foundation
+
+The app uses `RTCPeerConnection` plus a small test data channel to prove the signaling flow before any media capture work is added.
+
+The frontend reads optional ICE server configuration from `VITE_RTC_ICE_SERVERS_JSON`.
+
+If the variable is not set, the app falls back to an empty ICE server list:
+
+```json
+[]
+```
+
+Example local setup with an optional STUN server:
+
+```bash
+cd apps/web-studio
+VITE_API_BASE_URL=http://localhost:8080 \
+VITE_SIGNALING_BASE_URL=ws://localhost:8081 \
+VITE_RTC_ICE_SERVERS_JSON='[{"urls":"stun:stun.l.google.com:19302"}]' \
+npm run dev
+```
 
 ## API configuration
 
