@@ -206,6 +206,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return;
     }
 
+    chunksRef.current.push(blob);
     const nextManifest = appendLocalRecordingChunkManifestEntry(
       currentManifest,
       blob,
