@@ -1,16 +1,17 @@
 # Signaling Service
 
-This service is the minimal Go foundation for Djoko Studio WebRTC signaling.
-It exists to prove the service boundary, HTTP health checks, and a basic WebSocket
-connection flow before any real signaling logic is added.
+This service is the minimal Go foundation for Djoko Studio signaling.
+It exists to prove the service boundary, HTTP health checks, and the first
+one-host/one-guest room protocol seam before any real WebRTC negotiation is added.
 
 ## What is implemented
 
 - `GET /healthz` returns an `ok` JSON payload
 - `GET /readyz` returns an `ok` JSON payload
-- `GET /ws` accepts a WebSocket connection
-- `GET /ws` sends a welcome JSON message
-- `GET /ws` echoes incoming text messages as JSON
+- `GET /v1/signaling/rooms/{session_id}` accepts a WebSocket connection
+- query parameters `participant_id` and `role` select the room participant
+- roles are limited to `host` and `guest`
+- valid `signal` messages are relayed between the two participants in memory
 - `PORT` overrides the default listen port
 - graceful shutdown and basic HTTP server timeouts
 
@@ -18,14 +19,24 @@ connection flow before any real signaling logic is added.
 
 - WebRTC offer/answer exchange
 - ICE candidate handling
-- rooms
-- host and guest presence
-- reconnect coordination
 - auth
 - database access
 - NATS or other messaging integration
 - Dockerfile changes
 - Docker Compose changes
+
+## Room protocol notes
+
+- one session room supports at most one host and one guest
+- missing `session_id` returns `400`
+- missing `participant_id` returns `400`
+- missing `role` returns `400`
+- unsupported `role` returns `400`
+- non-WebSocket requests return `400`
+- invalid JSON message payloads are rejected with a JSON error message and the connection closes
+- unsupported message types are rejected with a JSON error message
+- if the peer is not connected yet, the sender receives a JSON error message
+- duplicate host or guest connections are rejected with a JSON error message
 
 ## Run
 
@@ -62,13 +73,13 @@ curl http://localhost:8081/readyz
 If you have an optional WebSocket client installed, you can connect to the endpoint manually:
 
 ```bash
-websocat ws://localhost:8081/ws
+websocat "ws://localhost:8081/v1/signaling/rooms/session-123?participant_id=participant-host&role=host"
 ```
 
 or:
 
 ```bash
-npx wscat -c ws://localhost:8081/ws
+npx wscat -c "ws://localhost:8081/v1/signaling/rooms/session-123?participant_id=participant-host&role=host"
 ```
 
 `websocat` and `wscat` are optional manual testing tools. They are not project dependencies.

@@ -40,6 +40,7 @@
 | DS-028 | v0.1 Recording Core | Add host participant join foundation | merged | Merged in PR #28. |
 | DS-029 | v0.1 Recording Core | Add session lifecycle transition foundation | merged | Merged in PR #29. |
 | DS-030 | v0.1 Recording Core | Add participant leave foundation | merged | Merged in PR #30. |
+| DS-031 | v0.1 Recording Core | Add signaling room protocol foundation | in_review | Signaling room WebSocket foundation implemented on `ds-031-signaling-room-protocol-foundation`. |
 
 ## Allowed Statuses
 
