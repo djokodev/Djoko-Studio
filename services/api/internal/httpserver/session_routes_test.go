@@ -19,6 +19,8 @@ type fakeSessionStore struct {
 	createSessionFunc               func(ctx context.Context, params storage.CreateSessionParams) (domain.Session, error)
 	getSessionFunc                  func(ctx context.Context, id string) (domain.Session, error)
 	getSessionByInviteTokenHashFunc func(ctx context.Context, inviteTokenHash string) (domain.Session, error)
+	startSessionFunc                func(ctx context.Context, params storage.StartSessionParams) (domain.Session, error)
+	endSessionFunc                  func(ctx context.Context, params storage.EndSessionParams) (domain.Session, error)
 	listSessionsFunc                func(ctx context.Context, studioID string) ([]domain.Session, error)
 }
 
@@ -32,6 +34,22 @@ func (f fakeSessionStore) GetSession(ctx context.Context, id string) (domain.Ses
 
 func (f fakeSessionStore) GetSessionByInviteTokenHash(ctx context.Context, inviteTokenHash string) (domain.Session, error) {
 	return f.getSessionByInviteTokenHashFunc(ctx, inviteTokenHash)
+}
+
+func (f fakeSessionStore) StartSession(ctx context.Context, params storage.StartSessionParams) (domain.Session, error) {
+	if f.startSessionFunc == nil {
+		return domain.Session{}, errors.New("unexpected start session call")
+	}
+
+	return f.startSessionFunc(ctx, params)
+}
+
+func (f fakeSessionStore) EndSession(ctx context.Context, params storage.EndSessionParams) (domain.Session, error) {
+	if f.endSessionFunc == nil {
+		return domain.Session{}, errors.New("unexpected end session call")
+	}
+
+	return f.endSessionFunc(ctx, params)
 }
 
 func (f fakeSessionStore) ListSessionsByStudio(ctx context.Context, studioID string) ([]domain.Session, error) {

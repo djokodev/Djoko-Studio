@@ -60,6 +60,14 @@ type joinHostSessionResponse struct {
 	Participant participantResponse `json:"participant"`
 }
 
+type sessionLifecycleRequest struct {
+	HostUserID string `json:"host_user_id"`
+}
+
+type sessionLifecycleResponse struct {
+	Session sessionResponse `json:"session"`
+}
+
 type sessionResponse struct {
 	ID          string     `json:"id"`
 	StudioID    string     `json:"studio_id"`
@@ -93,6 +101,8 @@ func newHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}", allowOnly(http.MethodGet, getGuestSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/guest/sessions/{invite_token}/join", allowOnly(http.MethodPost, joinGuestSessionHandler(deps.SessionStore, deps.ParticipantStore)))
 	mux.HandleFunc("/v1/sessions/{session_id}/host/join", allowOnly(http.MethodPost, joinHostSessionHandler(deps.SessionStore, deps.ParticipantStore)))
+	mux.HandleFunc("/v1/sessions/{session_id}/start", allowOnly(http.MethodPost, startSessionHandler(deps.SessionStore)))
+	mux.HandleFunc("/v1/sessions/{session_id}/end", allowOnly(http.MethodPost, endSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
 	return mux
@@ -388,6 +398,148 @@ func listStudioSessionsHandler(store storage.SessionStore) http.HandlerFunc {
 	}
 }
 
+func startSessionHandler(store storage.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		payload, err := decodeSessionLifecycleRequest(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		sessionID := strings.TrimSpace(r.PathValue("session_id"))
+		if sessionID == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "session not found",
+			})
+			return
+		}
+
+		session, err := store.GetSession(r.Context(), sessionID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		hostUserID := strings.TrimSpace(payload.HostUserID)
+		if hostUserID != session.HostUserID {
+			writeJSON(w, http.StatusForbidden, errorResponse{
+				Error: "host_user_id does not match session host_user_id",
+			})
+			return
+		}
+
+		updatedSession, err := store.StartSession(r.Context(), storage.StartSessionParams{
+			SessionID: session.ID,
+		})
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to start session",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, sessionLifecycleResponse{
+			Session: newSessionResponse(updatedSession),
+		})
+	}
+}
+
+func endSessionHandler(store storage.SessionStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sessionStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "session store unavailable",
+			})
+			return
+		}
+
+		payload, err := decodeSessionLifecycleRequest(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		sessionID := strings.TrimSpace(r.PathValue("session_id"))
+		if sessionID == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "session not found",
+			})
+			return
+		}
+
+		session, err := store.GetSession(r.Context(), sessionID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch session",
+			})
+			return
+		}
+
+		hostUserID := strings.TrimSpace(payload.HostUserID)
+		if hostUserID != session.HostUserID {
+			writeJSON(w, http.StatusForbidden, errorResponse{
+				Error: "host_user_id does not match session host_user_id",
+			})
+			return
+		}
+
+		updatedSession, err := store.EndSession(r.Context(), storage.EndSessionParams{
+			SessionID: session.ID,
+		})
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "session not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to end session",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, sessionLifecycleResponse{
+			Session: newSessionResponse(updatedSession),
+		})
+	}
+}
+
 func allowOnly(method string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != method {
@@ -480,6 +632,31 @@ func decodeJoinHostSessionRequest(body io.Reader) (joinHostSessionRequest, error
 	payload.DisplayName = strings.TrimSpace(payload.DisplayName)
 	if payload.DisplayName == "" {
 		return joinHostSessionRequest{}, errors.New("display_name is required")
+	}
+
+	return payload, nil
+}
+
+func decodeSessionLifecycleRequest(body io.Reader) (sessionLifecycleRequest, error) {
+	var payload sessionLifecycleRequest
+
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return sessionLifecycleRequest{}, errors.New("unknown json field")
+		}
+
+		return sessionLifecycleRequest{}, errors.New("invalid json body")
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return sessionLifecycleRequest{}, errors.New("invalid json body")
+	}
+
+	payload.HostUserID = strings.TrimSpace(payload.HostUserID)
+	if payload.HostUserID == "" {
+		return sessionLifecycleRequest{}, errors.New("host_user_id is required")
 	}
 
 	return payload, nil
