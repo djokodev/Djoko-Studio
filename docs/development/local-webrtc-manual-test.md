@@ -56,27 +56,43 @@ If you already have a local PostgreSQL instance running, use it. Otherwise, the 
 
 ## Seed Data
 
-The default host form uses a fixed demo user and studio ID. Seed matching rows before creating the first session:
+The default host form uses a fixed demo user and studio ID. The local seed script inserts or refreshes these rows:
 
-```sql
-INSERT INTO users (id, email, display_name)
-VALUES ('3c9abfe7-3133-4924-b159-f62277dfce7c', 'host@example.com', 'Host User')
-ON CONFLICT (id) DO UPDATE
-SET email = EXCLUDED.email,
-    display_name = EXCLUDED.display_name,
-    updated_at = now();
+- user id `3c9abfe7-3133-4924-b159-f62277dfce7c`
+- studio id `2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d`
 
-INSERT INTO studios (id, owner_user_id, name, slug, visibility)
-VALUES ('2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d', '3c9abfe7-3133-4924-b159-f62277dfce7c', 'Test Studio', 'test-studio', 'private')
-ON CONFLICT (id) DO UPDATE
-SET owner_user_id = EXCLUDED.owner_user_id,
-    name = EXCLUDED.name,
-    slug = EXCLUDED.slug,
-    visibility = EXCLUDED.visibility,
-    updated_at = now();
+From the repository root, run:
+
+```bash
+DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/seed-local-webrtc.sh
 ```
 
 If you use a different local demo user or studio, update the host form values to match valid rows in your database.
+
+## Local Conflict Cleanup
+
+This seed data is for local development only.
+
+If your local database already has `host@example.com` under a different user ID or `test-studio` under a different studio ID, the seed script can fail because those columns are unique in the schema.
+
+If you intentionally want to reset only those conflicting demo rows before seeding, run this from the repository root:
+
+```bash
+DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+DELETE FROM studios
+WHERE slug = 'test-studio'
+  AND id <> '2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d';
+
+DELETE FROM users
+WHERE email = 'host@example.com'
+  AND id <> '3c9abfe7-3133-4924-b159-f62277dfce7c';
+COMMIT;
+SQL
+```
+
+Use that cleanup only if you are deliberately resetting local demo data.
 
 ## Environment Variables
 
@@ -115,13 +131,23 @@ docker compose up -d
 
 2. Apply the API migrations if the database is empty.
 
+From the repository root, run:
+
 ```bash
-cd services/api
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" \
-  ./scripts/migrate.sh up
+  ./services/api/scripts/migrate.sh up
 ```
 
-3. Start the API service.
+3. Seed the local WebRTC demo rows.
+
+From the repository root, run:
+
+```bash
+DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" \
+  ./services/api/scripts/seed-local-webrtc.sh
+```
+
+4. Start the API service.
 
 ```bash
 cd services/api
@@ -129,14 +155,14 @@ DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?
   go run ./cmd/api
 ```
 
-4. Start the signaling service.
+5. Start the signaling service.
 
 ```bash
 cd services/signaling
 go run ./cmd/signaling
 ```
 
-5. Start the web studio.
+6. Start the web studio.
 
 ```bash
 cd apps/web-studio
@@ -149,6 +175,8 @@ npm run dev
 If you do not want a custom ICE server during local testing, omit `VITE_RTC_ICE_SERVERS_JSON`.
 
 ## Manual Browser Flow
+
+This browser-only flow starts after the services are already running.
 
 1. Open `http://localhost:5173` in one browser window.
 2. Fill in the host form and create a session.

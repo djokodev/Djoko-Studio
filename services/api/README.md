@@ -107,6 +107,23 @@ DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/migrate.sh up
 ```
 
+## Local Demo Seeds
+
+DS-037 adds a small local-only seed script for the manual WebRTC test flow.
+
+- it seeds the fixed local demo user and studio used by [the manual WebRTC guide](../../docs/development/local-webrtc-manual-test.md)
+- it is intended for local development only
+- app startup does not run seeds automatically
+- the script uses `DATABASE_URL` and runs the seed SQL with `psql`
+- if a local database already has `host@example.com` or `test-studio` under different IDs, the seed script can fail because those values are unique in the schema
+- if you intentionally need to reset only those conflicting demo rows, use the local cleanup snippet in [the manual WebRTC guide](../../docs/development/local-webrtc-manual-test.md)
+
+Example command from the repository root:
+
+```bash
+DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/seed-local-webrtc.sh
+```
+
 DS-024 adds the first repository and storage-layer foundation that reads and writes the `sessions` table without changing app startup behavior.
 
 ## Storage layer foundation

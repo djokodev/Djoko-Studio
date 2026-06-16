@@ -46,6 +46,7 @@
 | DS-034 | v0.1 Web Studio Core | Add signaling room connection foundation | merged | Merged in PR #34. |
 | DS-035 | v0.1 Web Studio Core | Add WebRTC peer connection foundation | merged | Merged in PR #35. |
 | DS-036 | v0.1 Web Studio Core | Add local WebRTC manual test documentation and diagnostics | merged | Merged in PR #36. |
+| DS-037 | v0.1 Web Studio Core | Add local WebRTC manual test seed tooling | in_review | Draft PR opened. |
 
 ## Allowed Statuses
 
