@@ -10,9 +10,13 @@ import {
   type LocalMediaPreviewStatus,
 } from '../media/localMedia';
 
+interface LocalMediaPreviewProps {
+  onStreamChange?: (stream: MediaStream | null) => void;
+}
+
 const idleDiagnostics = createIdleLocalMediaDiagnostics();
 
-export function LocalMediaPreview() {
+export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
   const [status, setStatus] = useState<LocalMediaPreviewStatus>('idle');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -79,6 +83,7 @@ export function LocalMediaPreview() {
       stopMediaStream(streamRef.current);
       streamRef.current = nextStream;
       setStream(nextStream);
+      onStreamChange?.(nextStream);
       setStatus('active');
     } catch (error) {
       if (!isMountedRef.current || requestId !== requestIdRef.current) {
@@ -107,6 +112,7 @@ export function LocalMediaPreview() {
     stopMediaStream(streamRef.current);
     streamRef.current = null;
     setStream(null);
+    onStreamChange?.(null);
     setStatus('idle');
     setErrorMessage('');
   }
@@ -134,7 +140,8 @@ export function LocalMediaPreview() {
       </div>
 
       <p className="api-note media-preview__note">
-        This preview stays local to the browser for now and is not sent over WebRTC yet.
+        This preview stays local to the browser. When WebRTC starts while it is active,
+        its tracks can be attached during the initial negotiation in this release.
       </p>
 
       <div className="media-preview__actions" aria-label="Local media preview actions">

@@ -2,8 +2,8 @@
 
 `apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
-and a minimal signaling-room connection panel plus the first WebRTC peer connection foundation for both roles.
-It also includes a local camera and microphone preview foundation for host and guest pages.
+a local camera and microphone preview foundation, initial WebRTC media track attachment during negotiation,
+and a remote preview foundation alongside the signaling-room connection panel for both roles.
 
 ## What this app does
 
@@ -17,19 +17,19 @@ It also includes a local camera and microphone preview foundation for host and g
 - displays joined participant details after a successful join
 - lets the host or guest start and stop a local camera/microphone preview in the browser
 - shows simple local media diagnostics for that preview
+- attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
 - lets the host start a WebRTC peer connection using the signaling room
 - lets the guest answer the host offer and exchange ICE candidates
 - exposes a test data channel for small text messages
+- renders a remote media preview foundation when WebRTC tracks arrive
 - shows loading and error states for lookup and join
 
 ## What is not implemented yet
 
 - auth
 - full authorization
-- WebRTC audio/video media attachment or remote media rendering yet
-- sending local media tracks over `RTCPeerConnection`
 - browser recording
 - upload
 - export
@@ -62,7 +62,7 @@ After a host creates a session, the page shows a signaling panel that can:
 - send a small manual test `signal` payload
 - display an event log for open, message, error, and close events
 - show the current signaling URL and room info
-- remind you that the local preview stays browser-only until a later media-attachment task
+- remind you that local tracks can be attached during the initial WebRTC negotiation when preview is active
 
 The host uses the host user ID from the form as the temporary signaling participant ID.
 
@@ -90,9 +90,6 @@ This is signaling relay plus peer connection foundation only.
 
 No auth.
 No full authorization.
-No WebRTC audio/video media attachment or remote media rendering yet.
-No RTCPeerConnection media tracks.
-No browser media tracks are sent over `RTCPeerConnection` yet.
 No browser recording.
 No upload/export behavior.
 
@@ -100,16 +97,17 @@ No upload/export behavior.
 
 The web app also includes a browser-only local camera and microphone preview for both host and guest pages.
 It uses `getUserMedia({ audio: true, video: true })` only for local browser-side preview.
-Those local tracks are not attached to the peer connection yet.
+When the preview is already active before WebRTC negotiation starts, the local tracks can be attached to the peer connection.
 
 - click `Start preview` to request `getUserMedia({ audio: true, video: true })`
 - click `Stop preview` to stop every local track and clear the preview
 - the preview video element is muted and uses `playsInline` to avoid autoplay issues
-- the preview is local-only and is not attached to the peer connection yet
+- if WebRTC starts without an active local preview, the data channel still works but media tracks are not attached in this release
 
 ### WebRTC peer connection foundation
 
-The app uses `RTCPeerConnection` plus a small test data channel to prove the signaling flow before any media capture work is added.
+The app uses `RTCPeerConnection` plus a small test data channel to prove the signaling flow and initial media transport foundation.
+It can attach the active local preview stream during the first offer/answer negotiation and renders a muted remote preview area when tracks arrive.
 
 The frontend reads optional ICE server configuration from `VITE_RTC_ICE_SERVERS_JSON`.
 

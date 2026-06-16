@@ -32,6 +32,7 @@ interface SignalingPanelProps {
   sessionId: string | null | undefined;
   participantId: string | null | undefined;
   role: SignalingRole;
+  localMediaStream: MediaStream | null;
 }
 
 const statusLabels: Record<SignalingStatus, string> = {
@@ -53,9 +54,41 @@ const idleWebRtcState: WebRtcPeerConnectionState = {
   peerConnectionCreated: false,
   localDescriptionState: 'not-set',
   remoteDescriptionState: 'not-set',
+  localTracksAttached: false,
+  remoteMediaStreamAvailable: false,
+  remoteVideoTrackCount: 0,
+  remoteAudioTrackCount: 0,
 };
 
-export function SignalingPanel({ heading, sessionId, participantId, role }: SignalingPanelProps) {
+function getLocalMediaAttachmentNote(
+  localMediaStreamAvailable: boolean,
+  hasWebRtcController: boolean,
+  localTracksAttached: boolean,
+): string {
+  if (!hasWebRtcController) {
+    return localMediaStreamAvailable
+      ? 'Local preview is ready. Start WebRTC while it is active if you want media tracks attached during the initial negotiation.'
+      : 'Start local preview before starting WebRTC if you want media tracks attached during the initial negotiation.';
+  }
+
+  if (localTracksAttached) {
+    return 'Local preview tracks are attached to this peer connection.';
+  }
+
+  if (!localMediaStreamAvailable) {
+    return 'WebRTC started before local preview, so no media tracks were attached in this PR. The data channel still works.';
+  }
+
+  return 'Local preview is active, but this peer connection was already negotiated before attachment. Renegotiation after preview start/stop is intentionally out of scope.';
+}
+
+export function SignalingPanel({
+  heading,
+  sessionId,
+  participantId,
+  role,
+  localMediaStream,
+}: SignalingPanelProps) {
   const [status, setStatus] = useState<SignalingStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [webRtcMessage, setWebRtcMessage] = useState('');
@@ -63,8 +96,10 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
   const [webRtcState, setWebRtcState] = useState<WebRtcPeerConnectionState>(idleWebRtcState);
   const [events, setEvents] = useState<PanelLogEntry[]>([]);
   const [hasWebRtcController, setHasWebRtcController] = useState(false);
+  const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
   const connectionRef = useRef<SignalingConnection | null>(null);
   const peerConnectionRef = useRef<WebRtcPeerConnectionController | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const isMountedRef = useRef(true);
   const disconnectCauseRef = useRef<'user' | 'system'>('system');
 
@@ -112,6 +147,7 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
     setWebRtcMessageKind('info');
     setWebRtcState(idleWebRtcState);
     setHasWebRtcController(false);
+    setRemoteMediaStream(null);
     setEvents([]);
   }, [trimmedSessionId, trimmedParticipantId, role]);
 
@@ -169,6 +205,14 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
       role,
       iceServers: rtcIceServersConfig.iceServers,
       sendSignal: sendWebRtcSignal,
+      getLocalMediaStream: () => localMediaStream,
+      onRemoteMediaStream: (stream) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setRemoteMediaStream(stream);
+      },
       onStateChange: (state) => {
         if (!isMountedRef.current) {
           return;
@@ -453,6 +497,33 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
   const canStartWebRtc = role === 'host' && status === 'open' && !hasWebRtcController;
   const canCloseWebRtc = hasWebRtcController;
   const canSendWebRtcMessage = hasWebRtcController && webRtcState.dataChannelState === 'open';
+  const localMediaStreamAvailable = localMediaStream !== null;
+  const mediaAttachmentNote = getLocalMediaAttachmentNote(
+    localMediaStreamAvailable,
+    hasWebRtcController,
+    webRtcState.localTracksAttached,
+  );
+
+  useEffect(() => {
+    const videoElement = remoteVideoRef.current;
+    if (videoElement === null) {
+      return;
+    }
+
+    videoElement.srcObject = remoteMediaStream;
+
+    if (remoteMediaStream !== null) {
+      void videoElement.play().catch(() => {
+        // Muted autoplay usually succeeds, but browsers can still reject play().
+      });
+    }
+
+    return () => {
+      if (videoElement.srcObject === remoteMediaStream) {
+        videoElement.srcObject = null;
+      }
+    };
+  }, [remoteMediaStream]);
 
   return (
     <section className="signaling-panel" aria-labelledby={`${role}-signaling-heading`}>
@@ -529,8 +600,10 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
         </div>
 
         <p className="api-note signaling-note">
-          Camera, microphone, media tracks, recording, upload, and export are not active yet.
-          This foundation only covers RTCPeerConnection, ICE, and a test data channel.
+          Camera and microphone preview remain browser-local. Media tracks can attach during
+          the initial WebRTC negotiation when preview is active. Recording, upload, and
+          export are not active yet. This foundation covers RTCPeerConnection, ICE, local
+          media track attachment, and a test data channel.
         </p>
 
         {rtcIceServersConfig.error ? (
@@ -598,6 +671,14 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
             <dd>{webRtcState.remoteDescriptionState}</dd>
           </div>
           <div className="detail-card">
+            <dt>Local stream available</dt>
+            <dd>{localMediaStreamAvailable ? 'yes' : 'no'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Local tracks attached</dt>
+            <dd>{webRtcState.localTracksAttached ? 'yes' : 'no'}</dd>
+          </div>
+          <div className="detail-card">
             <dt>ICE server config</dt>
             <dd>
               {rtcIceServersConfig.error
@@ -620,6 +701,54 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
         >
           {webRtcMessage || (role === 'guest' ? 'Waiting for host WebRTC offer.' : 'Ready to start the host WebRTC test.')}
         </div>
+
+        <section className="signaling-remote-media" aria-labelledby={`${role}-remote-media-heading`}>
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">Remote media</p>
+              <h4 id={`${role}-remote-media-heading`}>Remote preview foundation</h4>
+            </div>
+            <span className="status-pill">
+              {webRtcState.remoteMediaStreamAvailable ? 'Remote stream available' : 'Remote stream not available'}
+            </span>
+          </div>
+
+          <div className="media-preview__stage signaling-remote-preview">
+            <video
+              ref={remoteVideoRef}
+              className="media-preview__video"
+              muted
+              playsInline
+              autoPlay
+            />
+            {webRtcState.remoteMediaStreamAvailable ? null : (
+              <div className="media-preview__placeholder">
+                Remote video will appear here when tracks arrive.
+              </div>
+            )}
+          </div>
+
+          <dl className="details-grid signaling-details">
+            <div className="detail-card">
+              <dt>Remote stream available</dt>
+              <dd>{webRtcState.remoteMediaStreamAvailable ? 'yes' : 'no'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Remote video track count</dt>
+              <dd>{webRtcState.remoteVideoTrackCount}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Remote audio track count</dt>
+              <dd>{webRtcState.remoteAudioTrackCount}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Remote playback</dt>
+              <dd>Muted autoplay foundation is enabled for now.</dd>
+            </div>
+          </dl>
+        </section>
+
+        <p className="api-note signaling-note">{mediaAttachmentNote}</p>
 
         <section className="signaling-log" aria-labelledby={`${role}-signaling-log-heading`}>
           <div className="panel__header signaling-log__header">

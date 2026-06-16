@@ -6,6 +6,13 @@ This guide documents the local end-to-end manual check for the DS-035 WebRTC fou
 DS-038 adds a browser-only local camera/microphone preview on the host and guest
 pages, but that preview is still not attached to the peer connection yet.
 
+DS-039 adds initial media track attachment and a remote preview foundation. Start
+local preview on both host and guest before starting WebRTC if you want tracks to
+attach during the first negotiation. If WebRTC starts without local preview, the
+data channel still works, but media tracks are not attached in this PR. Renegotiation
+after preview start/stop is intentionally out of scope. Recording, upload, and
+export remain inactive.
+
 The test is intentionally data-channel-only. It is meant to verify the full local path:
 
 - host session creation
@@ -222,6 +229,7 @@ On a successful run, you should see:
 
 ## Scope Reminder
 
-This guide is for the data-channel-only WebRTC foundation.
-The local camera and microphone preview exists for manual browser checks, but media
-attachment to WebRTC is intentionally deferred to a later task.
+This guide now covers the initial WebRTC media-attachment foundation as well as the
+data-channel path.
+The local camera and microphone preview exists for manual browser checks, but
+renegotiation after preview changes is intentionally deferred to a later task.
