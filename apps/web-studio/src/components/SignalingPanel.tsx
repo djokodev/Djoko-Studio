@@ -50,6 +50,9 @@ const idleWebRtcState: WebRtcPeerConnectionState = {
   iceConnectionState: 'not-created',
   signalingState: 'not-created',
   dataChannelState: 'none',
+  peerConnectionCreated: false,
+  localDescriptionState: 'not-set',
+  remoteDescriptionState: 'not-set',
 };
 
 export function SignalingPanel({ heading, sessionId, participantId, role }: SignalingPanelProps) {
@@ -485,11 +488,15 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
         </button>
       </div>
 
-      <dl className="details-grid signaling-details">
-        <div className="detail-card">
-          <dt>Session ID</dt>
-          <dd className="mono">{trimmedSessionId || 'Missing session ID'}</dd>
-        </div>
+        <dl className="details-grid signaling-details">
+          <div className="detail-card">
+            <dt>Detected role</dt>
+            <dd>{role}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Session ID</dt>
+            <dd className="mono">{trimmedSessionId || 'Missing session ID'}</dd>
+          </div>
         <div className="detail-card">
           <dt>Participant ID</dt>
           <dd className="mono">{trimmedParticipantId || 'Missing participant ID'}</dd>
@@ -571,6 +578,10 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
             <dd>{webRtcState.connectionState}</dd>
           </div>
           <div className="detail-card">
+            <dt>Peer connection exists</dt>
+            <dd>{webRtcState.peerConnectionCreated ? 'yes' : 'no'}</dd>
+          </div>
+          <div className="detail-card">
             <dt>ICE connection state</dt>
             <dd>{webRtcState.iceConnectionState}</dd>
           </div>
@@ -583,11 +594,21 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
             <dd>{webRtcState.dataChannelState}</dd>
           </div>
           <div className="detail-card">
+            <dt>Local description</dt>
+            <dd>{webRtcState.localDescriptionState}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Remote description</dt>
+            <dd>{webRtcState.remoteDescriptionState}</dd>
+          </div>
+          <div className="detail-card">
             <dt>ICE server config</dt>
             <dd>
               {rtcIceServersConfig.error
                 ? 'Fallback to [] because the config could not be parsed.'
-                : `${rtcIceServersConfig.iceServers.length} server(s) configured.`}
+                : rtcIceServersConfig.iceServers.length === 0
+                  ? 'No custom ICE servers configured.'
+                  : `${rtcIceServersConfig.iceServers.length} server(s) configured.`}
             </dd>
           </div>
           <div className="detail-card">

@@ -19,6 +19,9 @@ export type WebRtcPeerConnectionState = {
   iceConnectionState: RTCIceConnectionState | 'not-created';
   signalingState: RTCSignalingState | 'not-created';
   dataChannelState: RTCDataChannelState | 'none';
+  peerConnectionCreated: boolean;
+  localDescriptionState: 'not-set' | 'set';
+  remoteDescriptionState: 'not-set' | 'set';
 };
 
 export type WebRtcPeerConnectionEvent = {
@@ -88,6 +91,9 @@ export function createWebRtcPeerConnection(
       iceConnectionState: peerConnection.iceConnectionState,
       signalingState: peerConnection.signalingState,
       dataChannelState: dataChannel?.readyState ?? 'none',
+      peerConnectionCreated: true,
+      localDescriptionState: peerConnection.localDescription === null ? 'not-set' : 'set',
+      remoteDescriptionState: peerConnection.remoteDescription === null ? 'not-set' : 'set',
     };
   }
 
@@ -134,19 +140,16 @@ export function createWebRtcPeerConnection(
       }
 
       const candidate = toIceCandidateInit(event.candidate);
-      emitEvent(
-        'signal',
-        'Local ICE candidate generated.',
-        stringifyValue(candidate),
-      );
+      emitEvent('signal', 'Local ICE candidate generated.', stringifyValue(candidate));
 
       try {
         options.sendSignal({
           kind: 'webrtc-ice-candidate',
           candidate,
         });
+        emitEvent('signal', 'Local ICE candidate sent through signaling.', stringifyValue(candidate));
       } catch (error) {
-        emitEvent('error', 'Unable to send local ICE candidate.', getErrorMessage(error));
+        emitEvent('error', 'Unable to send local ICE candidate through signaling.', getErrorMessage(error));
       }
     };
 
@@ -270,11 +273,12 @@ export function createWebRtcPeerConnection(
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      emitEvent('signal', 'Host created a WebRTC offer.', stringifyValue(offer));
+      emitEvent('signal', 'Host created a local WebRTC offer.', stringifyValue(offer));
       options.sendSignal({
         kind: 'webrtc-offer',
         description: toSessionDescriptionInit(pc.localDescription ?? offer),
       });
+      emitEvent('signal', 'Host sent the WebRTC offer through signaling.', stringifyValue(pc.localDescription ?? offer));
       await flushPendingRemoteCandidates();
       emitState('Host offer sent through signaling.');
     },
@@ -294,11 +298,12 @@ export function createWebRtcPeerConnection(
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        emitEvent('signal', 'Guest created a WebRTC answer.', stringifyValue(answer));
+        emitEvent('signal', 'Guest created a local WebRTC answer.', stringifyValue(answer));
         options.sendSignal({
           kind: 'webrtc-answer',
           description: toSessionDescriptionInit(pc.localDescription ?? answer),
         });
+        emitEvent('signal', 'Guest sent the WebRTC answer through signaling.', stringifyValue(pc.localDescription ?? answer));
         await flushPendingRemoteCandidates();
         emitState('Guest answer sent through signaling.');
         return;
@@ -416,6 +421,9 @@ function createEmptyState(): WebRtcPeerConnectionState {
     iceConnectionState: 'not-created',
     signalingState: 'not-created',
     dataChannelState: 'none',
+    peerConnectionCreated: false,
+    localDescriptionState: 'not-set',
+    remoteDescriptionState: 'not-set',
   };
 }
 
@@ -425,6 +433,9 @@ function createClosedState(): WebRtcPeerConnectionState {
     iceConnectionState: 'closed',
     signalingState: 'closed',
     dataChannelState: 'closed',
+    peerConnectionCreated: false,
+    localDescriptionState: 'not-set',
+    remoteDescriptionState: 'not-set',
   };
 }
 

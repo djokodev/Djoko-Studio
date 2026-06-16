@@ -78,6 +78,33 @@ func TestReadyzRejectsNonGetMethods(t *testing.T) {
 	}
 }
 
+func TestOptionsRequestsReturnCORSPreflightHeaders(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/v1/sessions", nil)
+	request.Header.Set("Origin", "http://localhost:5175")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+
+	newHandler(Dependencies{}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, recorder.Code)
+	}
+
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("expected Access-Control-Allow-Origin %q, got %q", "*", got)
+	}
+
+	if got := recorder.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
+		t.Fatalf("expected Access-Control-Allow-Methods %q, got %q", "GET, POST, OPTIONS", got)
+	}
+
+	if got := recorder.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
+		t.Fatalf("expected Access-Control-Allow-Headers %q, got %q", "Content-Type", got)
+	}
+}
+
 func assertStatusResponse(t *testing.T, response *http.Response, expectedStatus int) {
 	t.Helper()
 	defer response.Body.Close()
