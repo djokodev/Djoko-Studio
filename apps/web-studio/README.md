@@ -5,9 +5,9 @@ It now includes the first host-facing session creation flow, the first guest-fac
 a local camera and microphone preview foundation with local mic/camera toggle controls,
 initial WebRTC media track attachment during negotiation,
 and a remote preview foundation with manual remote audio playback controls alongside the
-signaling-room connection panel for both roles. It also includes a browser recording
-capability diagnostics panel that inspects MediaRecorder support without starting
-recording.
+signaling-room connection panel for both roles. It also includes browser recording
+capability diagnostics and a read-only recording state machine foundation for future
+local capture work.
 
 ## What this app does
 
@@ -23,6 +23,7 @@ recording.
 - lets the host or guest mute/unmute the microphone and disable/enable the camera while preview is active
 - shows simple local media diagnostics for that preview
 - shows browser recording capability diagnostics for the active browser and preview stream
+- shows a read-only recording state machine diagnostics section with the initial state and allowed next actions
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -42,8 +43,10 @@ recording.
 - export
 
 The recording diagnostics are present so the app can report browser support and MIME
-type readiness before any recording prototype is added. They do not create
-MediaRecorder instances, chunks, persistence, uploads, or exported files.
+type readiness before any recording prototype is added. A separate pure recording
+state machine module models the future lifecycle and is surfaced in the UI as read-only
+diagnostics. They do not create MediaRecorder instances, chunks, persistence, uploads,
+or exported files.
 
 ## Signaling
 
@@ -111,7 +114,9 @@ It uses `getUserMedia({ audio: true, video: true })` only for local browser-side
 When the preview is already active before WebRTC negotiation starts, the local tracks can be attached to the peer connection.
 The microphone and camera controls toggle existing `MediaStreamTrack.enabled` values, so already attached WebRTC senders see the change without renegotiation.
 The preview panel also shows recording capability diagnostics for the current browser.
-Those diagnostics are read-only and do not trigger recording, storage, uploads, or browser prompts on their own.
+It also shows a read-only recording state machine foundation that starts in `idle`
+and lists the allowed next actions. Those diagnostics do not trigger recording,
+storage, uploads, or browser prompts on their own.
 
 - click `Start preview` to request `getUserMedia({ audio: true, video: true })`
 - click `Stop preview` to stop every local track and clear the preview
