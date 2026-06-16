@@ -290,11 +290,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   function clearRecoveredPreviewState(recordingId?: string) {
     const currentRecoveredPreview = recoveredPreviewRef.current;
 
-    if (
-      recordingId !== undefined &&
-      currentRecoveredPreview.recordingId !== recordingId &&
-      currentRecoveredPreview.status !== 'loading'
-    ) {
+    if (recordingId !== undefined && currentRecoveredPreview.recordingId !== recordingId) {
       return;
     }
 

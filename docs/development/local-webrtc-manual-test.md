@@ -61,8 +61,8 @@ This test does not include:
 - sending local media tracks over `RTCPeerConnection`
 - upload
 - export
-- persistence
 - recovery routing
+- backend recovery
 - auth
 
 ## Recording Capability Diagnostics
