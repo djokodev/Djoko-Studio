@@ -107,7 +107,7 @@ func newHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/v1/sessions/{session_id}/end", allowOnly(http.MethodPost, endSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
-	return mux
+	return withCORS(mux)
 }
 
 func healthzHandler(w http.ResponseWriter, r *http.Request) {
@@ -697,6 +697,27 @@ func allowOnly(method string, next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setCORSHeaders(w)
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func setCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Max-Age", "600")
+	w.Header().Add("Vary", "Origin")
 }
 
 func decodeCreateSessionRequest(body io.Reader) (createSessionRequest, error) {

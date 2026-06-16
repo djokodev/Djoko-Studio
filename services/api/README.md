@@ -76,6 +76,14 @@ Session and join routes are still registered when `DATABASE_URL` is empty, but t
 Session lifecycle routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` for the same reason.
 Guest leave and host leave routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` when the required stores are not configured.
 
+## Browser CORS and preflight
+
+The API currently enables CORS and preflight handling so the local Vite web studio can call it directly from the browser during development.
+
+- `Access-Control-Allow-Origin: *` is a temporary development-friendly baseline
+- this should be tightened later before authentication or production behavior is introduced
+- the current setup is intentionally minimal and only exists to keep local browser testing simple
+
 ## Database migrations
 
 Migration tooling is in place for `services/api`, but migrations are still manual for now.
