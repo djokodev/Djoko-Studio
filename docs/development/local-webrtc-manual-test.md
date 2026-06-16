@@ -3,6 +3,8 @@
 ## Purpose
 
 This guide documents the local end-to-end manual check for the DS-035 WebRTC foundation.
+DS-038 adds a browser-only local camera/microphone preview on the host and guest
+pages, but that preview is still not attached to the peer connection yet.
 
 The test is intentionally data-channel-only. It is meant to verify the full local path:
 
@@ -30,10 +32,7 @@ DS-035 already gives the web studio:
 
 This test does not include:
 
-- camera access
-- microphone access
-- `getUserMedia`
-- media tracks
+- sending local media tracks over `RTCPeerConnection`
 - recording
 - upload
 - export
@@ -224,5 +223,5 @@ On a successful run, you should see:
 ## Scope Reminder
 
 This guide is for the data-channel-only WebRTC foundation.
-
-Camera and microphone preview are intentionally deferred to a later task.
+The local camera and microphone preview exists for manual browser checks, but media
+attachment to WebRTC is intentionally deferred to a later task.
