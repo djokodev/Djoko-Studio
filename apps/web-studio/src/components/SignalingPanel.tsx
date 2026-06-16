@@ -488,22 +488,18 @@ export function SignalingPanel({ heading, sessionId, participantId, role }: Sign
         </button>
       </div>
 
-        <dl className="details-grid signaling-details">
-          <div className="detail-card">
-            <dt>Detected role</dt>
-            <dd>{role}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Session ID</dt>
-            <dd className="mono">{trimmedSessionId || 'Missing session ID'}</dd>
-          </div>
+      <dl className="details-grid signaling-details">
+        <div className="detail-card">
+          <dt>Detected role</dt>
+          <dd>{role}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Session ID</dt>
+          <dd className="mono">{trimmedSessionId || 'Missing session ID'}</dd>
+        </div>
         <div className="detail-card">
           <dt>Participant ID</dt>
           <dd className="mono">{trimmedParticipantId || 'Missing participant ID'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Role</dt>
-          <dd>{role}</dd>
         </div>
         <div className="detail-card">
           <dt>Signaling URL</dt>

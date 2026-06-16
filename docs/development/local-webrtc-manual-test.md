@@ -52,7 +52,7 @@ Optional but useful for richer ICE testing:
 
 - coturn or another TURN/STUN endpoint
 
-If you already have a local PostgreSQL instance running, use it. This repository does not yet ship a dedicated local infra command for PostgreSQL.
+If you already have a local PostgreSQL instance running, use it. Otherwise, the repository already includes local infra tooling in `infra/local`.
 
 ## Seed Data
 
@@ -98,7 +98,21 @@ If `VITE_RTC_ICE_SERVERS_JSON` is omitted, the app uses an empty custom ICE serv
 
 ## Start Local Services
 
-1. Start PostgreSQL with your local development setup.
+1. Start PostgreSQL with the existing local infra.
+
+```bash
+cd infra/local
+cp .env.example .env
+docker compose up -d postgres
+```
+
+If you want the full local infra stack, run:
+
+```bash
+cd infra/local
+docker compose up -d
+```
+
 2. Apply the API migrations if the database is empty.
 
 ```bash
