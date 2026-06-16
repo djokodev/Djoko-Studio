@@ -140,9 +140,10 @@ Future work should be split into small steps so recording risk stays contained:
 - DS-043: Add browser recording capability diagnostics
 - DS-044: Add local recording state machine foundation
 - DS-045: Add local MediaRecorder prototype without persistence or upload
-- DS-046: Add local chunk metadata model
-- DS-047: Add local persistence spike and decision for IndexedDB vs OPFS
-- DS-048: Add local recording recovery listing foundation
+- DS-046: Add temporary local playback preview and chunk capture diagnostics
+- DS-047: Add local recording manifest, session summary, and lifecycle diagnostics
+- DS-048: Add local persistence spike and decision for IndexedDB vs OPFS
+- DS-049: Add local recording recovery listing foundation
 
 ## Explicit non-goals
 

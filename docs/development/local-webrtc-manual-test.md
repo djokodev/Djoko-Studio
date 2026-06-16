@@ -24,6 +24,9 @@ DS-045 adds a local MediaRecorder in-memory prototype that records only the acti
 local preview stream and keeps chunks in memory for the current page session.
 DS-046 adds a temporary local playback preview that assembles a Blob from those
 in-memory chunks after recording stops and plays it back locally in the browser.
+DS-047 adds a local recording manifest, derived session summary, stronger
+start/stop/reset cleanup, and richer diagnostics for the current local-only
+prototype.
 
 The test is meant to verify the full local path:
 
@@ -71,6 +74,7 @@ section for the current browser and active preview stream.
 - it shows whether a local preview stream is active
 - it shows the current audio and video track counts
 - it shows whether the browser and stream look ready for the local recording prototype
+- it does not create a recording, manifest, or preview by itself
 
 Because the diagnostics are read-only, they should not trigger a browser permission
 prompt by themselves. No recording file is created yet.
@@ -83,12 +87,12 @@ stream.
 - click `Start local recording`
 - wait a few seconds so the `dataavailable` events can produce chunks
 - click `Stop local recording`
-- confirm the chunk count increases, total bytes go up, and actual `Blob` chunks are stored in memory for this page session
-- confirm the start time, stop time, and approximate duration populate
+- confirm the manifest recording ID appears, the chunk count increases, total bytes go up, and actual `Blob` chunks are stored in memory for this page session
+- confirm the manifest status changes to `stopped`, the start time, stop time, and approximate duration populate, and the latest chunk fields update
 - confirm the local playback preview appears after stop
 - press play in the preview video if the browser allows it
 - click `Discard local recording / Reset`
-- confirm the in-memory chunk count, total bytes, metadata, and preview clear
+- confirm the recording ID, manifest details, chunk metadata, and preview clear
 - no download, upload, export, persistence, recovery, or backend call is expected
 - no file should be created on disk
 
@@ -283,7 +287,7 @@ On a successful run, you should see:
 - `dataChannelState` change to `open`
 - local preview active on both sides if media is being tested
 - recording capability diagnostics show the active preview stream and MIME type readiness
-- the local recording prototype shows chunk count, total bytes, and the selected MIME type after a local recording run
+- the local recording prototype shows the manifest recording ID, status, chunk count, total bytes, and selected MIME type after a local recording run
 - the local recording playback preview shows the blob metadata and object URL state after recording stops
 - `Peer connection exists` show `yes`
 - `Local description` show `set`

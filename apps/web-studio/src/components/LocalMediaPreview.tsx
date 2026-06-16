@@ -403,6 +403,7 @@ function LocalRecordingPrototype({
   recorder: LocalMediaRecorderController;
 }) {
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
+  const summary = recorder.summary;
   const hasLocalPreviewStream = stream !== null;
   const hasAudioAndVideoTracks =
     recordingCapability.audioTrackCount > 0 && recordingCapability.videoTrackCount > 0;
@@ -425,8 +426,10 @@ function LocalRecordingPrototype({
           <p className="eyebrow">Recording prototype</p>
           <h3 id="local-recording-prototype-title">Local recording prototype</h3>
         </div>
-        <span className={`status-pill recording-prototype__status recording-prototype__status--${recorder.snapshot.state}`}>
-          {formatRecordingStateLabel(recorder.snapshot.state)}
+        <span
+          className={`status-pill recording-prototype__status recording-prototype__status--${summary.status}`}
+        >
+          {formatRecordingStateLabel(summary.status)}
         </span>
       </div>
 
@@ -472,32 +475,68 @@ function LocalRecordingPrototype({
 
       <dl className="details-grid recording-prototype__details">
         <div className="detail-card">
-          <dt>State</dt>
-          <dd className="mono">{formatRecordingStateLabel(recorder.snapshot.state)}</dd>
+          <dt>Recording ID</dt>
+          <dd className="mono">{formatNullableText(summary.recordingId)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Manifest status</dt>
+          <dd className="mono">{formatRecordingStateLabel(summary.status)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Source kind</dt>
+          <dd className="mono">{formatNullableText(summary.sourceKind)}</dd>
         </div>
         <div className="detail-card">
           <dt>Selected MIME type</dt>
-          <dd className="mono">{recorder.selectedMimeType ?? '—'}</dd>
+          <dd className="mono">{formatNullableText(summary.selectedMimeType)}</dd>
         </div>
         <div className="detail-card">
-          <dt>Chunk count</dt>
-          <dd>{recorder.chunkCount}</dd>
+          <dt>Started at</dt>
+          <dd>{formatDiagnosticTimestamp(summary.startedAt)}</dd>
         </div>
         <div className="detail-card">
-          <dt>Total bytes</dt>
-          <dd>{formatByteCount(recorder.totalBytes)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Start time</dt>
-          <dd>{formatDiagnosticTimestamp(recorder.startedAt)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Stop time</dt>
-          <dd>{formatDiagnosticTimestamp(recorder.stoppedAt)}</dd>
+          <dt>Stopped at</dt>
+          <dd>{formatDiagnosticTimestamp(summary.stoppedAt)}</dd>
         </div>
         <div className="detail-card">
           <dt>Approximate duration</dt>
-          <dd>{formatApproximateDuration(recorder.approximateDurationMs)}</dd>
+          <dd>{formatApproximateDuration(summary.approximateDurationMs)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Manifest chunk count</dt>
+          <dd>{summary.chunkCount}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Manifest total bytes</dt>
+          <dd>{formatByteCount(summary.totalBytes)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Latest chunk index</dt>
+          <dd>{formatNullableNumber(summary.latestChunkIndex)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Latest chunk size</dt>
+          <dd>{formatNullableByteCount(summary.latestChunkSizeBytes)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Latest chunk timestamp</dt>
+          <dd>{formatDiagnosticTimestamp(summary.latestChunkAt)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Preview available</dt>
+          <dd>{summary.previewAvailable ? 'Yes' : 'No'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Preview blob size</dt>
+          <dd>{summary.previewAvailable ? formatByteCount(summary.previewBlobSizeBytes) : '—'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Persistence status</dt>
+          <dd className="mono">{summary.persistenceStatus}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Upload status</dt>
+          <dd className="mono">{summary.uploadStatus}</dd>
         </div>
         <div className="detail-card">
           <dt>Last error</dt>
@@ -521,15 +560,13 @@ function LocalRecordingPrototype({
             </h4>
           </div>
           <span
-            className={`status-pill ${
-              recorder.previewAvailable ? 'status-pill--live' : ''
-            }`}
+            className={`status-pill ${summary.previewAvailable ? 'status-pill--live' : ''}`}
           >
-            {recorder.previewAvailable ? 'Available' : 'Unavailable'}
+            {summary.previewAvailable ? 'Available' : 'Unavailable'}
           </span>
         </div>
 
-        {recorder.previewAvailable && recorder.previewUrl !== null ? (
+        {summary.previewAvailable && recorder.previewUrl !== null ? (
           <div className="media-preview__stage recording-prototype__preview-stage">
             <video
               className="media-preview__video recording-prototype__preview-video"
@@ -547,13 +584,13 @@ function LocalRecordingPrototype({
         <dl className="details-grid recording-prototype__preview-details">
           <div className="detail-card">
             <dt>Preview available</dt>
-            <dd>{recorder.previewAvailable ? 'Yes' : 'No'}</dd>
+            <dd>{summary.previewAvailable ? 'Yes' : 'No'}</dd>
           </div>
           <div className="detail-card">
             <dt>Preview blob size</dt>
             <dd>
-              {recorder.previewAvailable
-                ? formatByteCount(recorder.previewBlobSizeBytes)
+              {summary.previewAvailable
+                ? formatByteCount(summary.previewBlobSizeBytes)
                 : '—'}
             </dd>
           </div>
@@ -585,6 +622,18 @@ function formatMimeTypeList(mimeTypes: RecordingCapabilityReport['supportedMimeT
   }
 
   return mimeTypes.join(', ');
+}
+
+function formatNullableText(value: string | null): string {
+  return value ?? '—';
+}
+
+function formatNullableNumber(value: number | null): string {
+  return value === null ? '—' : String(value);
+}
+
+function formatNullableByteCount(value: number | null): string {
+  return value === null ? '—' : formatByteCount(value);
 }
 
 function formatRecordingEventList(events: RecordingEvent[]): string {
