@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/coder/websocket"
 )
@@ -19,22 +20,51 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-type welcomeResponse struct {
-	Type    string `json:"type"`
-	Service string `json:"service"`
+type wsErrorResponse struct {
+	Type  string        `json:"type"`
+	Error wsErrorDetail `json:"error"`
 }
 
-type echoResponse struct {
-	Type    string `json:"type"`
-	Service string `json:"service"`
-	Payload string `json:"payload"`
+type wsErrorDetail struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
+
+type wsSignalEnvelope struct {
+	Type    string          `json:"type"`
+	From    wsSignalFrom    `json:"from"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type wsSignalFrom struct {
+	ParticipantID string `json:"participant_id"`
+	Role          string `json:"role"`
+}
+
+type wsSignalMessage struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+const (
+	signalingRoomRoutePrefix = "/v1/signaling/rooms/"
+	hostRole                 = "host"
+	guestRole                = "guest"
+)
 
 func newHandler() http.Handler {
+	roomManager := newRoomManager()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", allowOnly(http.MethodGet, healthzHandler))
 	mux.HandleFunc("/readyz", allowOnly(http.MethodGet, readyzHandler))
-	mux.HandleFunc("/ws", allowOnly(http.MethodGet, wsHandler))
+	mux.HandleFunc("/v1/signaling/rooms", allowOnly(http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
+		roomHandler(roomManager, w, r)
+	}))
+	mux.HandleFunc("/v1/signaling/rooms/", allowOnly(http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
+		roomHandler(roomManager, w, r)
+	}))
+
 	return mux
 }
 
@@ -52,19 +82,63 @@ func readyzHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
+func roomHandler(roomManager *roomManager, w http.ResponseWriter, r *http.Request) {
+	sessionID, ok := extractSessionID(r.URL.Path)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing session_id"})
+		return
+	}
+
+	participantID := strings.TrimSpace(r.URL.Query().Get("participant_id"))
+	if participantID == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing participant_id"})
+		return
+	}
+
+	role := strings.TrimSpace(r.URL.Query().Get("role"))
+	if role == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing role"})
+		return
+	}
+	if role != hostRole && role != guestRole {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "unsupported role"})
+		return
+	}
+
+	if !isWebSocketRequest(r) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "websocket upgrade required"})
+		return
+	}
+
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}
 	defer conn.CloseNow()
 
-	if err := writeWebSocketJSON(context.Background(), conn, welcomeResponse{
-		Type:    "welcome",
-		Service: serviceName,
-	}); err != nil {
+	membership, err := roomManager.join(sessionID, wsParticipant{
+		participantID: participantID,
+		role:          role,
+	}, conn)
+	if err != nil {
+		joinErr, ok := err.(roomJoinError)
+		if !ok {
+			joinErr = roomJoinError{
+				code:    "room_join_failed",
+				message: err.Error(),
+			}
+		}
+
+		_ = writeWebSocketJSON(context.Background(), conn, wsErrorResponse{
+			Type: "error",
+			Error: wsErrorDetail{
+				Code:    joinErr.code,
+				Message: joinErr.message,
+			},
+		})
 		return
 	}
+	defer membership.leave()
 
 	for {
 		messageType, payload, err := conn.Read(context.Background())
@@ -73,17 +147,91 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if messageType != websocket.MessageText {
+			_ = writeWebSocketJSON(context.Background(), conn, wsErrorResponse{
+				Type: "error",
+				Error: wsErrorDetail{
+					Code:    "unsupported_message_type",
+					Message: "Only text messages are supported.",
+				},
+			})
+			return
+		}
+
+		var incoming wsSignalMessage
+		if err := json.Unmarshal(payload, &incoming); err != nil {
+			_ = writeWebSocketJSON(context.Background(), conn, wsErrorResponse{
+				Type: "error",
+				Error: wsErrorDetail{
+					Code:    "invalid_json",
+					Message: "Message must be valid JSON.",
+				},
+			})
+			return
+		}
+
+		if incoming.Type != "signal" {
+			_ = writeWebSocketJSON(context.Background(), conn, wsErrorResponse{
+				Type: "error",
+				Error: wsErrorDetail{
+					Code:    "unsupported_message_type",
+					Message: "Only signal messages are supported.",
+				},
+			})
 			continue
 		}
 
-		if err := writeWebSocketJSON(context.Background(), conn, echoResponse{
-			Type:    "echo",
-			Service: serviceName,
-			Payload: string(payload),
+		peer := membership.peer()
+		if peer == nil {
+			_ = writeWebSocketJSON(context.Background(), conn, wsErrorResponse{
+				Type: "error",
+				Error: wsErrorDetail{
+					Code:    "peer_not_connected",
+					Message: "Peer is not connected.",
+				},
+			})
+			continue
+		}
+
+		if err := writeWebSocketJSON(context.Background(), peer.conn, wsSignalEnvelope{
+			Type: "signal",
+			From: wsSignalFrom{
+				ParticipantID: membership.participant.participantID,
+				Role:          membership.participant.role,
+			},
+			Payload: incoming.Payload,
 		}); err != nil {
 			return
 		}
 	}
+}
+
+func extractSessionID(path string) (string, bool) {
+	if path == "/v1/signaling/rooms" || path == "/v1/signaling/rooms/" {
+		return "", false
+	}
+
+	if !strings.HasPrefix(path, signalingRoomRoutePrefix) {
+		return "", false
+	}
+
+	sessionID := strings.TrimPrefix(path, signalingRoomRoutePrefix)
+	if sessionID == "" || strings.Contains(sessionID, "/") {
+		return "", false
+	}
+
+	return sessionID, true
+}
+
+func isWebSocketRequest(r *http.Request) bool {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+
+	if !strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") {
+		return false
+	}
+
+	return strings.TrimSpace(r.Header.Get("Sec-WebSocket-Key")) != ""
 }
 
 func allowOnly(method string, next http.HandlerFunc) http.HandlerFunc {
