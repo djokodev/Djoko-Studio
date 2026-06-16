@@ -41,6 +41,20 @@ interface StoredLocalRecordingChunkRecord {
   persistedAt: number;
 }
 
+export interface PersistedLocalRecordingChunkRecord {
+  chunkId: string;
+  recordingId: string;
+  chunkEntry: LocalRecordingChunkManifestEntry;
+  blob: Blob;
+  persistedAt: number;
+}
+
+export interface PersistedLocalRecordingBlobResult {
+  recording: PersistedLocalRecordingRecord;
+  chunks: PersistedLocalRecordingChunkRecord[];
+  blob: Blob;
+}
+
 let localRecordingDatabasePromise: Promise<IDBDatabase> | null = null;
 let localRecordingSupportPromise: Promise<LocalRecordingPersistenceSupportResult> | null = null;
 
@@ -116,6 +130,21 @@ export async function saveLocalRecordingChunk(
   await transactionDone(transaction);
 }
 
+export async function getPersistedLocalRecording(
+  recordingId: string,
+): Promise<PersistedLocalRecordingRecord | null> {
+  const database = await getLocalRecordingDatabase();
+  const transaction = database.transaction(recordingsStoreName, 'readonly');
+  const store = transaction.objectStore(recordingsStoreName);
+  const record = await requestToPromise<StoredLocalRecordingRecord | undefined>(
+    store.get(recordingId),
+  );
+
+  await transactionDone(transaction);
+
+  return record ?? null;
+}
+
 export async function listPersistedLocalRecordings(): Promise<PersistedLocalRecordingRecord[]> {
   const database = await getLocalRecordingDatabase();
   const transaction = database.transaction(recordingsStoreName, 'readonly');
@@ -135,6 +164,57 @@ export async function listPersistedLocalRecordings(): Promise<PersistedLocalReco
       right.recordingId.localeCompare(left.recordingId)
     );
   });
+}
+
+export async function listPersistedLocalRecordingChunks(
+  recordingId: string,
+): Promise<PersistedLocalRecordingChunkRecord[]> {
+  const database = await getLocalRecordingDatabase();
+  const transaction = database.transaction(chunksStoreName, 'readonly');
+  const store = transaction.objectStore(chunksStoreName);
+  const index = store.index(chunksByRecordingIdIndexName);
+  const chunks = await requestToPromise<StoredLocalRecordingChunkRecord[]>(
+    index.getAll(IDBKeyRange.only(recordingId)),
+  );
+
+  await transactionDone(transaction);
+
+  return [...chunks].sort((left, right) => {
+    return (
+      left.chunkEntry.chunkIndex - right.chunkEntry.chunkIndex ||
+      left.chunkEntry.capturedAt - right.chunkEntry.capturedAt ||
+      left.persistedAt - right.persistedAt ||
+      left.chunkId.localeCompare(right.chunkId)
+    );
+  });
+}
+
+export async function buildPersistedLocalRecordingBlob(
+  recordingId: string,
+): Promise<Blob | null> {
+  const recording = await getPersistedLocalRecording(recordingId);
+  if (recording === null) {
+    return null;
+  }
+
+  const chunks = await listPersistedLocalRecordingChunks(recordingId);
+  if (chunks.length === 0) {
+    return null;
+  }
+
+  const selectedMimeType =
+    normalizeMimeType(recording.manifest.selectedMimeType) ??
+    normalizeMimeType(chunks[0]?.chunkEntry.mimeType) ??
+    normalizeMimeType(chunks[0]?.blob.type);
+
+  return selectedMimeType === null
+    ? new Blob(
+        chunks.map((chunk) => chunk.blob),
+      )
+    : new Blob(
+        chunks.map((chunk) => chunk.blob),
+        { type: selectedMimeType },
+      );
 }
 
 export async function deletePersistedLocalRecording(recordingId: string): Promise<void> {
@@ -265,4 +345,10 @@ function getPersistenceErrorMessage(error: unknown, fallbackMessage: string): st
   }
 
   return fallbackMessage;
+}
+
+function normalizeMimeType(mimeType: string | null | undefined): string | null {
+  const trimmedMimeType = mimeType?.trim();
+
+  return trimmedMimeType ? trimmedMimeType : null;
 }

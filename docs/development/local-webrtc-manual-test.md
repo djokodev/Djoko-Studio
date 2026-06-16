@@ -28,6 +28,8 @@ DS-047 adds a local recording manifest, derived session summary, stronger
 start/stop/reset cleanup, and richer diagnostics for the current local-only
 prototype. DS-048 adds IndexedDB persistence for the manifest and chunks, plus
 recovery detection for persisted local recordings in the current browser.
+DS-049 adds recovered playback preview from IndexedDB so a persisted local copy
+can be played back after refresh.
 
 The test is meant to verify the full local path:
 
@@ -60,7 +62,7 @@ This test does not include:
 - upload
 - export
 - persistence
-- recovery
+- recovery routing
 - auth
 
 ## Recording Capability Diagnostics
@@ -96,8 +98,10 @@ stream.
 - confirm the recording ID, manifest details, chunk metadata, and preview clear
 - if IndexedDB is available, confirm the persistence support and status cards show the browser result and that the current recording persists after save
 - refresh the page and confirm the recovery panel lists the persisted local recording from this browser
+- click `Preview local copy` on the persisted recording and confirm a recovered local browser preview appears with controls
+- confirm the preview is labeled as recovered from local browser storage and that the recovered playback details are populated
 - click `Discard local copy` in the recovery panel and confirm the persisted recording disappears
-- no download, upload, export, restored playback, or backend call is expected
+- no download, upload, export, or backend call is expected
 - no file should be created on disk
 
 ## Local Services
@@ -255,27 +259,29 @@ This browser-only flow starts after the services are already running.
 11. Confirm the persistence support and status cards reflect the browser result, and that the current recording persists when IndexedDB is available.
 12. Confirm the local playback preview appears with the recorded blob metadata.
 13. Press play in the preview video if the browser allows it.
-14. Click `Discard local recording / Reset`.
-15. Confirm the in-memory chunk count, total bytes, metadata, and preview clear, and the persisted local recording is removed if IndexedDB was available.
-16. Refresh the page and confirm the recovery panel lists any persisted local recording that remains in the browser.
-17. Click `Discard local copy` in the recovery panel and confirm the persisted recording disappears.
-18. On the host page, open the signaling panel and click `Connect signaling`.
-19. Keep the host page open.
-20. Open the guest invite URL from the host session summary in a second browser window or private window.
-21. Join the guest session.
-22. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
-23. On the guest page, inspect the `Recording capability diagnostics` section and
+14. Refresh the page and confirm the recovery panel lists any persisted local recording that remains in the browser.
+15. Click `Preview local copy` for the persisted recording and confirm the recovered browser copy appears in the recovery preview panel.
+16. Confirm the recovered preview is labeled as a local browser copy and the playback details populate.
+17. Click `Discard local copy` and confirm the persisted recording disappears.
+18. Click `Discard local recording / Reset`.
+19. Confirm the in-memory chunk count, total bytes, metadata, and live playback preview clear, and the persisted local recording is removed if IndexedDB was available.
+20. On the host page, open the signaling panel and click `Connect signaling`.
+21. Keep the host page open.
+22. Open the guest invite URL from the host session summary in a second browser window or private window.
+23. Join the guest session.
+24. On the guest page, click `Start preview` and grant camera/microphone permission if the browser asks.
+25. On the guest page, inspect the `Recording capability diagnostics` section and
     confirm it reflects the guest preview stream.
-24. On the guest page, click `Mute microphone` / `Unmute microphone` and
+26. On the guest page, click `Mute microphone` / `Unmute microphone` and
     `Disable camera` / `Enable camera` to confirm the local controls while preview is active.
-25. On the guest page, click `Connect signaling`.
-26. On the host page, click `Create peer connection / Start WebRTC test`.
-27. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
-28. Confirm the remote preview area appears when remote tracks arrive.
-29. Click `Enable remote audio` on the side where you want to hear the remote stream.
-30. Confirm the remote playback diagnostics switch to an enabled state after the click.
-31. When the data channel opens, send a test message from the host.
-32. If both sides show an open data channel, send a message from the guest too.
+27. On the guest page, click `Connect signaling`.
+28. On the host page, click `Create peer connection / Start WebRTC test`.
+29. Watch the host and guest logs for the offer, answer, ICE exchange, local track attachment, and remote track arrival.
+30. Confirm the remote preview area appears when remote tracks arrive.
+31. Click `Enable remote audio` on the side where you want to hear the remote stream.
+32. Confirm the remote playback diagnostics switch to an enabled state after the click.
+33. When the data channel opens, send a test message from the host.
+34. If both sides show an open data channel, send a message from the guest too.
 
 If you want media tracks attached, both sides must start local preview before the initial WebRTC offer/answer negotiation. In DS-039, the host attaches tracks during peer-connection setup, and the guest attaches tracks while handling the incoming offer and creating the answer.
 
