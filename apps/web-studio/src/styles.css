@@ -375,6 +375,14 @@ dt {
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.recording-recovery {
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 .recording-diagnostics__details {
   margin-top: 0;
 }
@@ -408,6 +416,48 @@ dt {
 }
 
 .recording-prototype__preview-warning {
+  margin-top: 0;
+}
+
+.recording-recovery__note {
+  margin-top: 0;
+}
+
+.recording-recovery__list {
+  display: grid;
+  gap: 16px;
+}
+
+.recording-recovery__item {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.recording-recovery__item-header {
+  gap: 16px;
+}
+
+.recording-recovery__item-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+.recording-recovery__discard {
+  flex: 0 0 auto;
+  min-width: 180px;
+}
+
+.recording-recovery__details {
+  margin-top: 0;
+}
+
+.recording-recovery__empty {
   margin-top: 0;
 }
 

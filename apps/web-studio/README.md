@@ -11,7 +11,8 @@ capability diagnostics and a local MediaRecorder in-memory prototype with DS-044
 state machine diagnostics for future local capture work. DS-047 extends that
 prototype with a local recording manifest foundation, a derived session summary,
 stronger lifecycle cleanup, and richer local diagnostics for the current page
-session.
+session. DS-048 adds the first IndexedDB local persistence foundation and recovery
+detection for persisted local recordings.
 
 ## What this app does
 
@@ -31,6 +32,8 @@ session.
 - shows the DS-044 recording state machine through the local prototype controls
 - exposes a local recording manifest and session diagnostics panel for the current
   in-memory recording run
+- persists the local recording manifest and chunks to IndexedDB when the browser supports it
+- detects persisted local recordings on load and lets you discard the local copy
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -47,8 +50,8 @@ session.
 - full authorization
 - upload
 - export
-- persistence
-- recovery
+- restored playback from IndexedDB
+- recovery routing
 
 The recording diagnostics are present so the app can report browser support and MIME
 type readiness before the local recording prototype is used. A separate pure
@@ -56,12 +59,14 @@ recording state machine module models the lifecycle and is surfaced in the UI
 through the local recording prototype controls. The local MediaRecorder prototype
 records only the active local preview stream, stores actual `Blob` chunks in memory
 for the current page session, and now assembles a temporary local playback preview
-after recording stops. It still does not add persistence, uploads, exports,
-recovery, download, or backend/database behavior. Refreshing the page or resetting
-the recording drops the chunks and the temporary preview because nothing is written
-to durable browser storage.
+after recording stops. DS-048 adds IndexedDB persistence for the manifest and
+chunks, plus local recovery detection when persisted recordings are found in this
+browser. Restored playback from IndexedDB, uploads, exports, recovery routing,
+download, and backend/database behavior are still out of scope.
 DS-047 adds a focused manifest model, derived summary fields, and more explicit
 lifecycle reset behavior while keeping the recording local-only and memory-backed.
+DS-048 layers in browser-local durability and recovery detection while keeping the
+playback preview memory-backed.
 
 ## Signaling
 
@@ -144,11 +149,12 @@ The local recording prototype is intentionally small and browser-only:
 
 - click `Start local recording` to record the active local preview stream
 - click `Stop local recording` to stop the current recorder, keep the in-memory chunks for this page session, and build a temporary local playback preview
-- click `Discard local recording / Reset` to clear the in-memory chunks, metadata, and preview URL
-- the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, and preview availability
-- the playback preview is local-only, memory-backed, and temporary
-- no persistence, upload, export, download, recovery, or backend behavior is implemented yet
-- refreshes clear the chunks and preview because nothing is written to durable browser storage
+- click `Discard local recording / Reset` to clear the in-memory chunks, metadata, preview URL, and persisted local copy when present
+- the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, preview availability, and IndexedDB persistence status
+- the recovery panel lists persisted local recordings detected in this browser and lets you discard the local copy
+- the playback preview is still local-only, memory-backed, and temporary
+- restored playback from IndexedDB is not implemented yet
+- refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available
 
 ### WebRTC peer connection foundation
 

@@ -109,7 +109,7 @@ The long-term recording system should preserve chunks locally so refreshes, cras
 - In-memory only buffering is acceptable only for the smallest prototype and is not production-safe.
 - IndexedDB or OPFS should be evaluated for resilient local chunk persistence.
 - Future recovery should be able to discover incomplete local recordings after a refresh or crash where the browser storage model allows it.
-- This PR does not implement persistence.
+- DS-048 implements the first local persistence foundation with IndexedDB for manifest and chunk durability, plus recovery detection for persisted recordings in the browser.
 
 ## Upload and recovery boundaries
 
@@ -142,7 +142,7 @@ Future work should be split into small steps so recording risk stays contained:
 - DS-045: Add local MediaRecorder prototype without persistence or upload
 - DS-046: Add temporary local playback preview and chunk capture diagnostics
 - DS-047: Add local recording manifest, session summary, and lifecycle diagnostics
-- DS-048: Add local persistence spike and decision for IndexedDB vs OPFS
+- DS-048: Add IndexedDB local recording persistence foundation and recovery detection
 - DS-049: Add local recording recovery listing foundation
 
 ## Explicit non-goals

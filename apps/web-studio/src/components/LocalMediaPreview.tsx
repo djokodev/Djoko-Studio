@@ -402,6 +402,7 @@ function LocalRecordingPrototype({
   recordingCapability: RecordingCapabilityReport;
   recorder: LocalMediaRecorderController;
 }) {
+  const [discardingRecordingId, setDiscardingRecordingId] = useState<string | null>(null);
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
   const summary = recorder.summary;
   const hasLocalPreviewStream = stream !== null;
@@ -434,10 +435,11 @@ function LocalRecordingPrototype({
       </div>
 
       <p className="api-note recording-prototype__note">
-        Prototype only: chunks are stored in memory and will be lost on refresh. After
-        stopping, the recorder assembles a temporary local playback preview from those
-        chunks. The recorder prefers the supported MIME type from the diagnostics and
-        falls back to the browser default when needed.
+        Prototype only: the recorder keeps the playback preview in memory, while
+        IndexedDB persistence stores the manifest and chunks locally when the browser
+        supports it. Recovery is detection-only for now, so restored playback is not
+        implemented yet. The recorder prefers the supported MIME type from the
+        diagnostics and falls back to the browser default when needed.
       </p>
 
       <div className="recording-prototype__actions" aria-label="Local recording prototype actions">
@@ -531,16 +533,32 @@ function LocalRecordingPrototype({
           <dd>{summary.previewAvailable ? formatByteCount(summary.previewBlobSizeBytes) : '—'}</dd>
         </div>
         <div className="detail-card">
+          <dt>Persistence support</dt>
+          <dd className="mono">{formatPersistenceSupportLabel(recorder.persistenceSupportStatus)}</dd>
+        </div>
+        <div className="detail-card">
           <dt>Persistence status</dt>
-          <dd className="mono">{summary.persistenceStatus}</dd>
+          <dd className="mono">{formatPersistenceStatusLabel(summary.persistenceStatus)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Persistence error</dt>
+          <dd>{recorder.persistenceErrorMessage ?? '—'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Persisted recordings detected</dt>
+          <dd>{summary.persistedRecordingCount}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Current recording persisted</dt>
+          <dd>{summary.currentRecordingPersisted ? 'Yes' : 'No'}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Recording error</dt>
+          <dd>{recorder.snapshot.errorMessage ?? '—'}</dd>
         </div>
         <div className="detail-card">
           <dt>Upload status</dt>
           <dd className="mono">{summary.uploadStatus}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Last error</dt>
-          <dd>{recorder.snapshot.errorMessage ?? '—'}</dd>
         </div>
         <div className="detail-card">
           <dt>Available next actions</dt>
@@ -605,15 +623,130 @@ function LocalRecordingPrototype({
         </dl>
 
         <div className="message message--warning recording-prototype__preview-warning" role="status">
-          Temporary local preview only. No file is saved, uploaded, or exported.
+          Temporary local preview only. The persisted copy is listed below for discard
+          and recovery detection, but playback restoration is not implemented yet.
         </div>
       </section>
 
+      <section
+        className="recording-recovery"
+        aria-labelledby="local-recording-recovery-title"
+      >
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Recovery</p>
+            <h4 id="local-recording-recovery-title">Local recording found in this browser</h4>
+          </div>
+          <span
+            className={`status-pill ${
+              recorder.persistedRecordings.length > 0 ? 'status-pill--live' : ''
+            }`}
+          >
+            {recorder.persistedRecordings.length > 0 ? 'Detected' : 'None'}
+          </span>
+        </div>
+
+        <p className="api-note recording-recovery__note">
+          Upload/recovery is not implemented yet. This panel only confirms that a local
+          recording manifest exists in IndexedDB and lets you discard the persisted
+          copy.
+        </p>
+
+        {recorder.persistedRecordings.length > 0 ? (
+          <div className="recording-recovery__list">
+            {recorder.persistedRecordings.map((record) => (
+              <article className="recording-recovery__item" key={record.recordingId}>
+                <div className="panel__header recording-recovery__item-header">
+                  <div>
+                    <p className="eyebrow">Persisted recording</p>
+                    <h5 className="recording-recovery__item-title">{record.recordingId}</h5>
+                  </div>
+                  <button
+                    className="submit-button signaling-button signaling-button--secondary recording-recovery__discard"
+                    type="button"
+                    onClick={() => handleDiscardPersistedRecording(record.recordingId)}
+                    disabled={discardingRecordingId === record.recordingId}
+                  >
+                    {discardingRecordingId === record.recordingId
+                      ? 'Discarding…'
+                      : 'Discard local copy'}
+                  </button>
+                </div>
+
+                <dl className="details-grid recording-recovery__details">
+                  <div className="detail-card">
+                    <dt>Status</dt>
+                    <dd className="mono">{formatRecordingStateLabel(record.manifest.status)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Source kind</dt>
+                    <dd className="mono">{formatNullableText(record.manifest.sourceKind)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Selected MIME type</dt>
+                    <dd className="mono">{formatNullableText(record.manifest.selectedMimeType)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Started at</dt>
+                    <dd>{formatDiagnosticTimestamp(record.manifest.startedAt)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Stopped at</dt>
+                    <dd>{formatDiagnosticTimestamp(record.manifest.stoppedAt)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Chunk count</dt>
+                    <dd>{record.manifest.chunkCount}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Total bytes</dt>
+                    <dd>{formatByteCount(record.manifest.totalBytes)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Approximate duration</dt>
+                    <dd>{formatApproximateDuration(record.manifest.approximateDurationMs)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>First persisted at</dt>
+                    <dd>{formatDiagnosticTimestamp(record.firstPersistedAt)}</dd>
+                  </div>
+                  <div className="detail-card">
+                    <dt>Last persisted at</dt>
+                    <dd>{formatDiagnosticTimestamp(record.lastPersistedAt)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="message recording-recovery__empty" role="status">
+            No persisted local recordings were detected in this browser.
+          </div>
+        )}
+      </section>
+
       <div className="message message--warning recording-prototype__warning" role="status">
-        Prototype only: chunks are stored in memory and will be lost on refresh.
+        Prototype only: the playback preview stays in memory, while IndexedDB keeps a
+        local manifest/chunk copy for recovery detection when available.
       </div>
     </section>
   );
+
+  async function handleDiscardPersistedRecording(recordingId: string) {
+    if (discardingRecordingId !== null) {
+      return;
+    }
+
+    setDiscardingRecordingId(recordingId);
+
+    try {
+      await recorder.discardPersistedRecording(recordingId);
+    } finally {
+      setDiscardingRecordingId((currentRecordingId) =>
+        currentRecordingId === recordingId ? null : currentRecordingId,
+      );
+    }
+  }
 }
 
 function formatMimeTypeList(mimeTypes: RecordingCapabilityReport['supportedMimeTypes']): string {
@@ -656,6 +789,40 @@ function formatRecordingStateLabel(state: LocalMediaRecorderController['snapshot
       return 'Stopping';
     case 'stopped':
       return 'Stopped';
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function formatPersistenceSupportLabel(
+  status: LocalMediaRecorderController['persistenceSupportStatus'],
+): string {
+  switch (status) {
+    case 'not_checked':
+      return 'Not checked';
+    case 'supported':
+      return 'Supported';
+    case 'unavailable':
+      return 'Unavailable';
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function formatPersistenceStatusLabel(
+  status: LocalMediaRecorderController['summary']['persistenceStatus'],
+): string {
+  switch (status) {
+    case 'not_checked':
+      return 'Not checked';
+    case 'unsupported':
+      return 'Unsupported';
+    case 'available':
+      return 'Available';
+    case 'persisting':
+      return 'Persisting';
+    case 'persisted':
+      return 'Persisted';
     case 'failed':
       return 'Failed';
   }
