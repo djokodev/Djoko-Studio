@@ -11,6 +11,7 @@ import {
 } from './api/client';
 import { getSignalingBaseUrl } from './signaling/client';
 import { SignalingPanel } from './components/SignalingPanel';
+import { LocalMediaPreview } from './components/LocalMediaPreview';
 
 type FormState = {
   title: string;
@@ -274,12 +275,13 @@ function HostSessionPage() {
         <h1 id="page-title">Create a host session from the web studio.</h1>
         <p className="lede">
           This first pass lets a host create a session, send the request to the API,
-          and immediately see the session ID, title, status, guest invite details, the
-          signaling room foundation, and the first WebRTC peer connection controls.
+          and immediately see the session ID, title, status, guest invite details, a
+          local camera/microphone preview foundation, the signaling room foundation,
+          and the first WebRTC peer connection controls.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
-          <li>No camera or microphone access yet</li>
+          <li>Local camera/microphone preview only</li>
           <li>No recording, upload, or export yet</li>
           <li>Signaling and peer connection foundation only</li>
         </ul>
@@ -350,6 +352,8 @@ function HostSessionPage() {
             {errorMessage}
           </div>
         ) : null}
+
+        <LocalMediaPreview />
       </section>
 
       {sessionResult ? <HostSessionSummary result={sessionResult} /> : null}
@@ -451,13 +455,14 @@ function GuestSessionPage() {
         <h1 id="page-title">Join a guest session in the web studio.</h1>
         <p className="lede">
           Open the invite link, look up the session, enter a display name, and join
-          without auth, recording, or browser media access yet. The signaling room and
-          first WebRTC peer connection controls are available after you join.
+          without auth, recording, or upload/export yet. Local camera and microphone
+          preview are available in the browser, and the signaling room plus first
+          WebRTC peer connection controls are available after you join.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
           <li>No full authorization yet</li>
-          <li>No camera or microphone access yet</li>
+          <li>Local camera/microphone preview only</li>
           <li>Signaling and peer connection foundation only</li>
         </ul>
         <p className="api-note">
@@ -491,6 +496,8 @@ function GuestSessionPage() {
             {lookupError}
           </div>
         ) : null}
+
+        <LocalMediaPreview />
 
         {session ? (
           <>
@@ -538,8 +545,8 @@ function GuestSessionPage() {
             ) : null}
 
             <p className="api-note">
-              Recording and WebRTC are not active yet. This screen only looks up the
-              invite token and joins the guest participant.
+              Recording, upload, and export are not active yet. The local media preview
+              stays in the browser, and WebRTC media attachment will come later.
             </p>
           </>
         ) : null}

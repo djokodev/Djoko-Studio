@@ -3,6 +3,7 @@
 `apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
 and a minimal signaling-room connection panel plus the first WebRTC peer connection foundation for both roles.
+It also includes a local camera and microphone preview foundation for host and guest pages.
 
 ## What this app does
 
@@ -14,6 +15,8 @@ and a minimal signaling-room connection panel plus the first WebRTC peer connect
 - lets a guest enter a display name and join with `POST /v1/guest/sessions/{invite_token}/join`
 - displays basic session details after lookup
 - displays joined participant details after a successful join
+- lets the host or guest start and stop a local camera/microphone preview in the browser
+- shows simple local media diagnostics for that preview
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
 - lets the host start a WebRTC peer connection using the signaling room
@@ -26,8 +29,8 @@ and a minimal signaling-room connection panel plus the first WebRTC peer connect
 - auth
 - full authorization
 - WebRTC media capture
+- sending local media tracks over `RTCPeerConnection`
 - browser recording
-- camera or microphone access
 - upload
 - export
 
@@ -59,7 +62,7 @@ After a host creates a session, the page shows a signaling panel that can:
 - send a small manual test `signal` payload
 - display an event log for open, message, error, and close events
 - show the current signaling URL and room info
-- remind you that camera, microphone, and WebRTC media are not active yet
+- remind you that the local preview stays browser-only until a later media-attachment task
 
 The host uses the host user ID from the form as the temporary signaling participant ID.
 
@@ -89,9 +92,18 @@ No auth.
 No full authorization.
 No WebRTC media capture.
 No RTCPeerConnection media tracks.
-No camera or microphone access.
+No browser media tracks are sent over `RTCPeerConnection` yet.
 No browser recording.
 No upload/export behavior.
+
+### Local camera and microphone preview
+
+The web app also includes a browser-only local camera and microphone preview for both host and guest pages.
+
+- click `Start preview` to request `getUserMedia({ audio: true, video: true })`
+- click `Stop preview` to stop every local track and clear the preview
+- the preview video element is muted and uses `playsInline` to avoid autoplay issues
+- the preview is local-only and is not attached to the peer connection yet
 
 ### WebRTC peer connection foundation
 
