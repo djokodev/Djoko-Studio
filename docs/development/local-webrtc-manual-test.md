@@ -61,13 +61,38 @@ The default host form uses a fixed demo user and studio ID. The local seed scrip
 - user id `3c9abfe7-3133-4924-b159-f62277dfce7c`
 - studio id `2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d`
 
-Run it from the repository root:
+From the repository root, run:
 
 ```bash
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" ./services/api/scripts/seed-local-webrtc.sh
 ```
 
 If you use a different local demo user or studio, update the host form values to match valid rows in your database.
+
+## Local Conflict Cleanup
+
+This seed data is for local development only.
+
+If your local database already has `host@example.com` under a different user ID or `test-studio` under a different studio ID, the seed script can fail because those columns are unique in the schema.
+
+If you intentionally want to reset only those conflicting demo rows before seeding, run this from the repository root:
+
+```bash
+DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+DELETE FROM studios
+WHERE slug = 'test-studio'
+  AND id <> '2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d';
+
+DELETE FROM users
+WHERE email = 'host@example.com'
+  AND id <> '3c9abfe7-3133-4924-b159-f62277dfce7c';
+COMMIT;
+SQL
+```
+
+Use that cleanup only if you are deliberately resetting local demo data.
 
 ## Environment Variables
 
@@ -106,12 +131,16 @@ docker compose up -d
 
 2. Apply the API migrations if the database is empty.
 
+From the repository root, run:
+
 ```bash
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" \
   ./services/api/scripts/migrate.sh up
 ```
 
 3. Seed the local WebRTC demo rows.
+
+From the repository root, run:
 
 ```bash
 DATABASE_URL="postgres://djoko:djoko_local_password@localhost:5432/djoko_studio?sslmode=disable" \
@@ -147,17 +176,19 @@ If you do not want a custom ICE server during local testing, omit `VITE_RTC_ICE_
 
 ## Manual Browser Flow
 
-7. Open `http://localhost:5173` in one browser window.
-8. Fill in the host form and create a session.
-9. On the host page, open the signaling panel and click `Connect signaling`.
-10. Keep the host page open.
-11. Open the guest invite URL from the host session summary in a second browser window or private window.
-12. Join the guest session.
-13. On the guest page, click `Connect signaling`.
-14. On the host page, click `Create peer connection / Start WebRTC test`.
-15. Watch the host and guest logs for the offer, answer, and ICE exchange.
-16. When the data channel opens, send a test message from the host.
-17. If both sides show an open data channel, send a message from the guest too.
+This browser-only flow starts after the services are already running.
+
+1. Open `http://localhost:5173` in one browser window.
+2. Fill in the host form and create a session.
+3. On the host page, open the signaling panel and click `Connect signaling`.
+4. Keep the host page open.
+5. Open the guest invite URL from the host session summary in a second browser window or private window.
+6. Join the guest session.
+7. On the guest page, click `Connect signaling`.
+8. On the host page, click `Create peer connection / Start WebRTC test`.
+9. Watch the host and guest logs for the offer, answer, and ICE exchange.
+10. When the data channel opens, send a test message from the host.
+11. If both sides show an open data channel, send a message from the guest too.
 
 ## Expected Success States
 
