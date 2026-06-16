@@ -17,10 +17,15 @@ import (
 
 type fakeParticipantStore struct {
 	joinGuestParticipantFunc func(ctx context.Context, params storage.JoinGuestParticipantParams) (domain.Participant, error)
+	joinHostParticipantFunc  func(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error)
 }
 
 func (f fakeParticipantStore) JoinGuestParticipant(ctx context.Context, params storage.JoinGuestParticipantParams) (domain.Participant, error) {
 	return f.joinGuestParticipantFunc(ctx, params)
+}
+
+func (f fakeParticipantStore) JoinHostParticipant(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error) {
+	return f.joinHostParticipantFunc(ctx, params)
 }
 
 func TestPostGuestSessionJoinReturnsSessionAndParticipant(t *testing.T) {

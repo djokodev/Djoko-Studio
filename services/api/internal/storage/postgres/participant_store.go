@@ -49,6 +49,33 @@ SET
 RETURNING
 ` + participantColumnList
 
+const joinHostParticipantQuery = `
+INSERT INTO participants (
+  session_id,
+  user_id,
+  role,
+  display_name,
+  status,
+  joined_at
+) VALUES (
+  $1::uuid,
+  $2::uuid,
+  'host',
+  $3,
+  'joined',
+  now()
+)
+ON CONFLICT (session_id, role) DO UPDATE
+SET
+  user_id = EXCLUDED.user_id,
+  display_name = EXCLUDED.display_name,
+  status = 'joined',
+  joined_at = EXCLUDED.joined_at,
+  left_at = NULL,
+  updated_at = now()
+RETURNING
+` + participantColumnList
+
 type ParticipantStore struct {
 	db queryer
 }
@@ -61,6 +88,10 @@ func NewParticipantStore(pool *pgxpool.Pool) *ParticipantStore {
 
 func (s *ParticipantStore) JoinGuestParticipant(ctx context.Context, params storage.JoinGuestParticipantParams) (domain.Participant, error) {
 	return scanParticipant(s.db.QueryRow(ctx, joinGuestParticipantQuery, params.SessionID, params.DisplayName))
+}
+
+func (s *ParticipantStore) JoinHostParticipant(ctx context.Context, params storage.JoinHostParticipantParams) (domain.Participant, error) {
+	return scanParticipant(s.db.QueryRow(ctx, joinHostParticipantQuery, params.SessionID, params.HostUserID, params.DisplayName))
 }
 
 func scanParticipant(scanner rowScanner) (domain.Participant, error) {
