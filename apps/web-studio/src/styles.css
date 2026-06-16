@@ -94,6 +94,14 @@ a {
     linear-gradient(180deg, rgba(10, 18, 32, 0.96), rgba(7, 11, 20, 0.92));
 }
 
+.signaling-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 .summary-block {
   display: grid;
   gap: 16px;
@@ -120,7 +128,8 @@ a {
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   line-height: 1.05;
   letter-spacing: -0.04em;
@@ -137,6 +146,10 @@ h2 {
 
 h3 {
   font-size: 1.12rem;
+}
+
+h4 {
+  font-size: 1rem;
 }
 
 .lede {
@@ -172,6 +185,35 @@ h3 {
   background: rgba(16, 185, 129, 0.14);
   border-color: rgba(16, 185, 129, 0.3);
   color: #d1fae5;
+}
+
+.signaling-status--idle {
+  color: #dbeafe;
+}
+
+.signaling-status--connecting {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fef3c7;
+}
+
+.signaling-status--open {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #d1fae5;
+}
+
+.signaling-status--closing,
+.signaling-status--closed {
+  background: rgba(100, 116, 139, 0.16);
+  border-color: rgba(100, 116, 139, 0.24);
+  color: #cbd5e1;
+}
+
+.signaling-status--error {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fecaca;
 }
 
 .api-note {
@@ -250,6 +292,26 @@ dt {
   opacity: 0.72;
 }
 
+.signaling-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.signaling-button {
+  flex: 1 1 180px;
+  margin-top: 0;
+}
+
+.signaling-button--secondary {
+  background: linear-gradient(135deg, rgba(51, 65, 85, 0.92), rgba(15, 23, 42, 0.92));
+}
+
+.signaling-button--secondary:hover:not(:disabled),
+.signaling-button--secondary:focus-visible:not(:disabled) {
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.26);
+}
+
 .message {
   margin-top: 16px;
   padding: 14px 16px;
@@ -287,11 +349,96 @@ dt {
   color: #f8fafc;
 }
 
+.signaling-details .detail-card dd {
+  min-height: 24px;
+}
+
 .mono {
   font-family:
     "SFMono-Regular", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
     Consolas, monospace;
   font-size: 0.95em;
+}
+
+.signaling-log {
+  display: grid;
+  gap: 12px;
+}
+
+.signaling-log__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.signaling-log__item {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.signaling-log__item--open {
+  border-color: rgba(16, 185, 129, 0.26);
+  background: rgba(6, 95, 70, 0.18);
+}
+
+.signaling-log__item--message {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(30, 41, 59, 0.78);
+}
+
+.signaling-log__item--error {
+  border-color: rgba(248, 113, 113, 0.26);
+  background: rgba(127, 29, 29, 0.32);
+}
+
+.signaling-log__item--close {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(120, 53, 15, 0.26);
+}
+
+.signaling-log__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.84rem;
+}
+
+.signaling-log__kind {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.signaling-log__summary {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.signaling-log__details {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.55);
+  color: rgba(226, 232, 240, 0.92);
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.signaling-log__empty {
+  margin-top: 0;
+}
+
+.signaling-note {
+  margin-top: 4px;
+}
+
+.api-note + .api-note {
+  margin-top: 8px;
 }
 
 @media (max-width: 900px) {

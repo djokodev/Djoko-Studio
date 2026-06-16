@@ -9,6 +9,8 @@ import {
   type JoinGuestSessionResponse,
   type Session,
 } from './api/client';
+import { getSignalingBaseUrl } from './signaling/client';
+import { SignalingPanel } from './components/SignalingPanel';
 
 type FormState = {
   title: string;
@@ -227,6 +229,13 @@ function HostSessionSummary({ result }: { result: CreateSessionResponse }) {
           <dd>{formatDateTime(result.session.updated_at)}</dd>
         </div>
       </dl>
+
+      <SignalingPanel
+        heading="Host signaling room"
+        sessionId={result.session.id}
+        participantId={result.session.host_user_id}
+        role="host"
+      />
     </section>
   );
 }
@@ -265,15 +274,20 @@ function HostSessionPage() {
         <h1 id="page-title">Create a host session from the web studio.</h1>
         <p className="lede">
           This first pass lets a host create a session, send the request to the API,
-          and immediately see the session ID, title, status, and guest invite details.
+          and immediately see the session ID, title, status, guest invite details, and
+          the signaling room foundation.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
           <li>No WebRTC media yet</li>
           <li>No recording, upload, or export yet</li>
+          <li>Signaling only for now</li>
         </ul>
         <p className="api-note">
           API base URL: <span className="mono">{getApiBaseUrl()}</span>
+        </p>
+        <p className="api-note">
+          Signaling base URL: <span className="mono">{getSignalingBaseUrl()}</span>
         </p>
       </section>
 
@@ -437,18 +451,23 @@ function GuestSessionPage() {
         <h1 id="page-title">Join a guest session in the web studio.</h1>
         <p className="lede">
           Open the invite link, look up the session, enter a display name, and join
-          without auth, WebRTC, recording, or browser media access yet.
+          without auth, WebRTC, recording, or browser media access yet. The signaling
+          room is available after you join.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
           <li>No full authorization yet</li>
           <li>No WebRTC or recording yet</li>
+          <li>Signaling only for now</li>
         </ul>
         <p className="api-note">
           Guest URLs look like{' '}
           <span className="mono">
             {window.location.origin}/guest/{"{invite_token}"}
           </span>
+        </p>
+        <p className="api-note">
+          Signaling base URL: <span className="mono">{getSignalingBaseUrl()}</span>
         </p>
       </section>
 
@@ -545,6 +564,12 @@ function GuestSessionPage() {
             participant={joinedResult.participant}
             heading="Participant details"
             headingId="joined-participant-summary"
+          />
+          <SignalingPanel
+            heading="Guest signaling room"
+            sessionId={joinedResult.session.id}
+            participantId={joinedResult.participant.id}
+            role="guest"
           />
         </section>
       ) : null}
