@@ -39,7 +39,7 @@
 | DS-027 | v0.1 Recording Core | Add guest participant join foundation | merged | Merged in PR #27. |
 | DS-028 | v0.1 Recording Core | Add host participant join foundation | merged | Merged in PR #28. |
 | DS-029 | v0.1 Recording Core | Add session lifecycle transition foundation | merged | Merged in PR #29. |
-| DS-030 | v0.1 Recording Core | Add participant leave foundation | in_review | Adds API-only host and guest participant leave routes without auth, signaling, or recording behavior. |
+| DS-030 | v0.1 Recording Core | Add participant leave foundation | merged | Merged in PR #30. |
 
 ## Allowed Statuses
 
