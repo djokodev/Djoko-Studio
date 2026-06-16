@@ -8,7 +8,10 @@ initial WebRTC media track attachment during negotiation,
 and a remote preview foundation with manual remote audio playback controls alongside the
 signaling-room connection panel for both roles. It also includes browser recording
 capability diagnostics and a local MediaRecorder in-memory prototype with DS-044
-state machine diagnostics for future local capture work.
+state machine diagnostics for future local capture work. DS-047 extends that
+prototype with a local recording manifest foundation, a derived session summary,
+stronger lifecycle cleanup, and richer local diagnostics for the current page
+session.
 
 ## What this app does
 
@@ -26,6 +29,8 @@ state machine diagnostics for future local capture work.
 - shows browser recording capability diagnostics for the active browser and preview stream
 - shows a local recording prototype that records only the active preview stream with in-memory chunks
 - shows the DS-044 recording state machine through the local prototype controls
+- exposes a local recording manifest and session diagnostics panel for the current
+  in-memory recording run
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -55,6 +60,8 @@ after recording stops. It still does not add persistence, uploads, exports,
 recovery, download, or backend/database behavior. Refreshing the page or resetting
 the recording drops the chunks and the temporary preview because nothing is written
 to durable browser storage.
+DS-047 adds a focused manifest model, derived summary fields, and more explicit
+lifecycle reset behavior while keeping the recording local-only and memory-backed.
 
 ## Signaling
 
@@ -138,6 +145,7 @@ The local recording prototype is intentionally small and browser-only:
 - click `Start local recording` to record the active local preview stream
 - click `Stop local recording` to stop the current recorder, keep the in-memory chunks for this page session, and build a temporary local playback preview
 - click `Discard local recording / Reset` to clear the in-memory chunks, metadata, and preview URL
+- the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, and preview availability
 - the playback preview is local-only, memory-backed, and temporary
 - no persistence, upload, export, download, recovery, or backend behavior is implemented yet
 - refreshes clear the chunks and preview because nothing is written to durable browser storage

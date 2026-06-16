@@ -56,6 +56,7 @@
 | DS-044 | v0.1 Recording Core | Add local recording state machine foundation | merged | Merged in PR #44. |
 | DS-045 | v0.1 Recording Core | Add local MediaRecorder in-memory prototype | merged | Merged in PR #45. |
 | DS-046 | v0.1 Recording Core | Add local recording playback preview | merged | Merged in PR #46. |
+| DS-047 | v0.1 Recording Core | Add local recording manifest, session summary, and lifecycle diagnostics | in_review | Draft PR. |
 
 ## Allowed Statuses
 
