@@ -22,9 +22,14 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const onStreamChangeRef = useRef(onStreamChange);
   const requestIdRef = useRef(0);
   const isMountedRef = useRef(true);
   const isRequestInFlightRef = useRef(false);
+
+  useEffect(() => {
+    onStreamChangeRef.current = onStreamChange;
+  }, [onStreamChange]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -35,6 +40,7 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
       isRequestInFlightRef.current = false;
       stopMediaStream(streamRef.current);
       streamRef.current = null;
+      notifyStreamChange(null);
     };
   }, []);
 
@@ -83,7 +89,7 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
       stopMediaStream(streamRef.current);
       streamRef.current = nextStream;
       setStream(nextStream);
-      onStreamChange?.(nextStream);
+      notifyStreamChange(nextStream);
       setStatus('active');
     } catch (error) {
       if (!isMountedRef.current || requestId !== requestIdRef.current) {
@@ -112,7 +118,7 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
     stopMediaStream(streamRef.current);
     streamRef.current = null;
     setStream(null);
-    onStreamChange?.(null);
+    notifyStreamChange(null);
     setStatus('idle');
     setErrorMessage('');
   }
@@ -212,4 +218,8 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
       ) : null}
     </section>
   );
+
+  function notifyStreamChange(nextStream: MediaStream | null) {
+    onStreamChangeRef.current?.(nextStream);
+  }
 }

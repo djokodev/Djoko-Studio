@@ -99,6 +99,7 @@ export function SignalingPanel({
   const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
   const connectionRef = useRef<SignalingConnection | null>(null);
   const peerConnectionRef = useRef<WebRtcPeerConnectionController | null>(null);
+  const localMediaStreamRef = useRef(localMediaStream);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const isMountedRef = useRef(true);
   const disconnectCauseRef = useRef<'user' | 'system'>('system');
@@ -150,6 +151,10 @@ export function SignalingPanel({
     setRemoteMediaStream(null);
     setEvents([]);
   }, [trimmedSessionId, trimmedParticipantId, role]);
+
+  useEffect(() => {
+    localMediaStreamRef.current = localMediaStream;
+  }, [localMediaStream]);
 
   function appendLog(kind: PanelLogKind, summary: string, details?: string) {
     if (!isMountedRef.current) {
@@ -205,7 +210,7 @@ export function SignalingPanel({
       role,
       iceServers: rtcIceServersConfig.iceServers,
       sendSignal: sendWebRtcSignal,
-      getLocalMediaStream: () => localMediaStream,
+      getLocalMediaStream: () => localMediaStreamRef.current,
       onRemoteMediaStream: (stream) => {
         if (!isMountedRef.current) {
           return;
