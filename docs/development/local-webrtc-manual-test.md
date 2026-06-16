@@ -18,6 +18,8 @@ safety, and browsers require a user gesture before remote audio can be enabled.
 DS-043 adds browser recording capability diagnostics that report MediaRecorder
 support and MIME type readiness without starting recording. Recording, upload,
 and export remain inactive.
+DS-044 adds a read-only local recording state machine foundation that models the
+future lifecycle without creating a recording.
 
 The test is meant to verify the full local path:
 
@@ -67,6 +69,13 @@ section for the current browser and active preview stream.
 
 Because the diagnostics are read-only, they should not trigger a browser permission
 prompt by themselves. No recording file is created yet.
+
+The same panel also includes a recording state machine diagnostics section.
+
+- it starts in `idle`
+- it shows the allowed next action from the initial state
+- it confirms recording is not implemented yet
+- it does not create files, chunks, or browser prompts
 
 ## Local Services
 
@@ -215,7 +224,9 @@ This browser-only flow starts after the services are already running.
 5. On the host page, inspect the `Recording capability diagnostics` section and
    confirm it shows `Local stream available` as `Yes`, the audio/video track counts,
    and a supported MIME type summary.
-6. On the host page, open the signaling panel and click `Connect signaling`.
+6. Inspect the `Recording state machine diagnostics` section and confirm it starts
+   in `idle` with `prepare` as the only available next action.
+7. On the host page, open the signaling panel and click `Connect signaling`.
 7. Keep the host page open.
 8. Open the guest invite URL from the host session summary in a second browser window or private window.
 9. Join the guest session.

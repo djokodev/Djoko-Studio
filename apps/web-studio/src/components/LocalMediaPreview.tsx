@@ -13,6 +13,11 @@ import {
   getRecordingCapabilityReport,
   type RecordingCapabilityReport,
 } from '../recording/recordingCapabilities';
+import {
+  createInitialRecordingSnapshot,
+  getAllowedRecordingEvents,
+  type RecordingEvent,
+} from '../recording/recordingStateMachine';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -261,6 +266,7 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
       </dl>
 
       <RecordingCapabilityDiagnostics stream={stream} />
+      <RecordingStateMachineDiagnostics />
 
       {diagnostics.errorMessage ? (
         <div className="message message--error" role="alert">
@@ -376,10 +382,57 @@ function RecordingCapabilityDiagnostics({ stream }: { stream: MediaStream | null
   );
 }
 
+function RecordingStateMachineDiagnostics() {
+  const snapshot = createInitialRecordingSnapshot();
+  const allowedEvents = getAllowedRecordingEvents(snapshot.state);
+
+  return (
+    <section
+      className="recording-diagnostics"
+      aria-labelledby="recording-state-machine-diagnostics-title"
+    >
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Recording lifecycle</p>
+          <h3 id="recording-state-machine-diagnostics-title">
+            Recording state machine diagnostics
+          </h3>
+        </div>
+        <span className="status-pill">Read only</span>
+      </div>
+
+      <p className="api-note recording-diagnostics__note">
+        This pure helper models the future local recording lifecycle. Recording is not
+        implemented yet, and the diagnostics do not create MediaRecorder instances,
+        chunks, or files.
+      </p>
+
+      <dl className="details-grid recording-diagnostics__details">
+        <div className="detail-card">
+          <dt>Initial state</dt>
+          <dd className="mono">{snapshot.state}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Available next actions</dt>
+          <dd className="mono">{formatRecordingEventList(allowedEvents)}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 function formatMimeTypeList(mimeTypes: RecordingCapabilityReport['supportedMimeTypes']): string {
   if (mimeTypes.length === 0) {
     return '—';
   }
 
   return mimeTypes.join(', ');
+}
+
+function formatRecordingEventList(events: RecordingEvent[]): string {
+  if (events.length === 0) {
+    return '—';
+  }
+
+  return events.join(', ');
 }
