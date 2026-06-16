@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"testing"
@@ -76,6 +77,121 @@ func TestScanSessionMapsDatabaseRowToDomainSession(t *testing.T) {
 
 	if session.EndedAt != nil {
 		t.Fatalf("expected nil ended time, got %v", session.EndedAt)
+	}
+}
+
+func TestStartSessionUpdatesSessionAndReturnsMappedRow(t *testing.T) {
+	t.Parallel()
+
+	startedAt := time.Date(2026, time.June, 15, 20, 5, 0, 0, time.UTC)
+	createdAt := time.Date(2026, time.June, 15, 20, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(5 * time.Minute)
+
+	var gotQuery string
+	var gotArgs []any
+
+	store := &SessionStore{
+		db: stubQueryer{
+			queryRow: func(ctx context.Context, query string, args ...any) pgx.Row {
+				gotQuery = query
+				gotArgs = append([]any(nil), args...)
+
+				return stubRowScanner{
+					scan: func(dest ...any) error {
+						*(dest[0].(*string)) = "session-1"
+						*(dest[1].(*string)) = "studio-1"
+						*(dest[2].(*string)) = "user-1"
+						*(dest[3].(*string)) = "Launch recording"
+						*(dest[4].(*string)) = "live"
+						*(dest[5].(*sql.NullTime)) = sql.NullTime{}
+						*(dest[6].(*sql.NullTime)) = sql.NullTime{Time: startedAt, Valid: true}
+						*(dest[7].(*sql.NullTime)) = sql.NullTime{}
+						*(dest[8].(*time.Time)) = createdAt
+						*(dest[9].(*time.Time)) = updatedAt
+						return nil
+					},
+				}
+			},
+		},
+	}
+
+	session, err := store.StartSession(context.Background(), storage.StartSessionParams{SessionID: "session-1"})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	if gotQuery != startSessionQuery {
+		t.Fatalf("expected start session query to be used")
+	}
+
+	if len(gotArgs) != 1 || gotArgs[0] != "session-1" {
+		t.Fatalf("expected session id arg %q, got %v", "session-1", gotArgs)
+	}
+
+	if session.Status != domain.SessionStatusLive {
+		t.Fatalf("expected live status %q, got %q", domain.SessionStatusLive, session.Status)
+	}
+
+	if session.StartedAt == nil || !session.StartedAt.Equal(startedAt) {
+		t.Fatalf("expected started time %v, got %v", startedAt, session.StartedAt)
+	}
+}
+
+func TestEndSessionUpdatesSessionAndReturnsMappedRow(t *testing.T) {
+	t.Parallel()
+
+	startedAt := time.Date(2026, time.June, 15, 20, 5, 0, 0, time.UTC)
+	endedAt := time.Date(2026, time.June, 15, 20, 45, 0, 0, time.UTC)
+	createdAt := time.Date(2026, time.June, 15, 20, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(45 * time.Minute)
+
+	var gotQuery string
+	var gotArgs []any
+
+	store := &SessionStore{
+		db: stubQueryer{
+			queryRow: func(ctx context.Context, query string, args ...any) pgx.Row {
+				gotQuery = query
+				gotArgs = append([]any(nil), args...)
+
+				return stubRowScanner{
+					scan: func(dest ...any) error {
+						*(dest[0].(*string)) = "session-1"
+						*(dest[1].(*string)) = "studio-1"
+						*(dest[2].(*string)) = "user-1"
+						*(dest[3].(*string)) = "Launch recording"
+						*(dest[4].(*string)) = "ended"
+						*(dest[5].(*sql.NullTime)) = sql.NullTime{}
+						*(dest[6].(*sql.NullTime)) = sql.NullTime{Time: startedAt, Valid: true}
+						*(dest[7].(*sql.NullTime)) = sql.NullTime{Time: endedAt, Valid: true}
+						*(dest[8].(*time.Time)) = createdAt
+						*(dest[9].(*time.Time)) = updatedAt
+						return nil
+					},
+				}
+			},
+		},
+	}
+
+	session, err := store.EndSession(context.Background(), storage.EndSessionParams{SessionID: "session-1"})
+	if err != nil {
+		t.Fatalf("end session: %v", err)
+	}
+
+	if gotQuery != endSessionQuery {
+		t.Fatalf("expected end session query to be used")
+	}
+
+	if len(gotArgs) != 1 || gotArgs[0] != "session-1" {
+		t.Fatalf("expected session id arg %q, got %v", "session-1", gotArgs)
+	}
+
+	if session.Status != domain.SessionStatusEnded {
+		t.Fatalf("expected ended status %q, got %q", domain.SessionStatusEnded, session.Status)
+	}
+
+	if session.EndedAt == nil || !session.EndedAt.Equal(endedAt) {
+		t.Fatalf("expected ended time %v, got %v", endedAt, session.EndedAt)
 	}
 }
 

@@ -23,7 +23,17 @@ type SessionStore interface {
 	CreateSession(ctx context.Context, params CreateSessionParams) (domain.Session, error)
 	GetSession(ctx context.Context, id string) (domain.Session, error)
 	GetSessionByInviteTokenHash(ctx context.Context, inviteTokenHash string) (domain.Session, error)
+	StartSession(ctx context.Context, params StartSessionParams) (domain.Session, error)
+	EndSession(ctx context.Context, params EndSessionParams) (domain.Session, error)
 	ListSessionsByStudio(ctx context.Context, studioID string) ([]domain.Session, error)
+}
+
+type StartSessionParams struct {
+	SessionID string
+}
+
+type EndSessionParams struct {
+	SessionID string
 }
 
 type JoinGuestParticipantParams struct {

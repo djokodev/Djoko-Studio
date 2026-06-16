@@ -58,6 +58,26 @@ FROM sessions
 WHERE invite_token_hash = $1
 `
 
+const startSessionQuery = `
+UPDATE sessions
+SET
+  status = 'live',
+  started_at = COALESCE(started_at, now()),
+  updated_at = now()
+WHERE id = $1::uuid
+RETURNING
+` + sessionColumnList
+
+const endSessionQuery = `
+UPDATE sessions
+SET
+  status = 'ended',
+  ended_at = COALESCE(ended_at, now()),
+  updated_at = now()
+WHERE id = $1::uuid
+RETURNING
+` + sessionColumnList
+
 const listSessionsByStudioQuery = `
 SELECT
 ` + sessionColumnList + `
@@ -109,6 +129,14 @@ func (s *SessionStore) GetSession(ctx context.Context, id string) (domain.Sessio
 
 func (s *SessionStore) GetSessionByInviteTokenHash(ctx context.Context, inviteTokenHash string) (domain.Session, error) {
 	return scanSession(s.db.QueryRow(ctx, getSessionByInviteTokenHashQuery, inviteTokenHash))
+}
+
+func (s *SessionStore) StartSession(ctx context.Context, params storage.StartSessionParams) (domain.Session, error) {
+	return scanSession(s.db.QueryRow(ctx, startSessionQuery, params.SessionID))
+}
+
+func (s *SessionStore) EndSession(ctx context.Context, params storage.EndSessionParams) (domain.Session, error) {
+	return scanSession(s.db.QueryRow(ctx, endSessionQuery, params.SessionID))
 }
 
 func (s *SessionStore) ListSessionsByStudio(ctx context.Context, studioID string) ([]domain.Session, error) {
