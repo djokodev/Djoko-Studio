@@ -50,6 +50,7 @@
 | DS-038 | v0.1 Web Studio Core | Add camera/micro preview foundation | merged | Merged in PR #38. |
 | DS-039 | v0.1 Web Studio Core | Add WebRTC media track attachment and remote preview foundation | merged | Merged in PR #39. |
 | DS-040 | v0.1 Web Studio Core | Add remote media playback controls foundation | merged | Merged in PR #40. |
+| DS-041 | v0.1 Web Studio Core | Add local microphone and camera toggle controls foundation | in_review | Draft PR opened. |
 
 ## Allowed Statuses
 
