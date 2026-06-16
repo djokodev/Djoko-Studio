@@ -3,7 +3,8 @@
 `apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
 a local camera and microphone preview foundation, initial WebRTC media track attachment during negotiation,
-and a remote preview foundation alongside the signaling-room connection panel for both roles.
+and a remote preview foundation with manual remote audio playback controls alongside the
+signaling-room connection panel for both roles.
 
 ## What this app does
 
@@ -24,6 +25,7 @@ and a remote preview foundation alongside the signaling-room connection panel fo
 - lets the guest answer the host offer and exchange ICE candidates
 - exposes a test data channel for small text messages
 - renders a remote media preview foundation when WebRTC tracks arrive
+- lets the user intentionally enable or mute remote audio after the remote stream arrives
 - shows loading and error states for lookup and join
 
 ## What is not implemented yet
@@ -108,6 +110,7 @@ When the preview is already active before WebRTC negotiation starts, the local t
 
 The app uses `RTCPeerConnection` plus a small test data channel to prove the signaling flow and initial media transport foundation.
 It can attach the active local preview stream during the first offer/answer negotiation and renders a muted remote preview area when tracks arrive.
+Remote audio stays muted by default until the user clicks `Enable remote audio`.
 
 The frontend reads optional ICE server configuration from `VITE_RTC_ICE_SERVERS_JSON`.
 
