@@ -179,7 +179,13 @@ function ParticipantDetails({
   );
 }
 
-function HostSessionSummary({ result }: { result: CreateSessionResponse }) {
+function HostSessionSummary({
+  result,
+  localMediaStream,
+}: {
+  result: CreateSessionResponse;
+  localMediaStream: MediaStream | null;
+}) {
   const inviteUrl = buildGuestInviteUrl(result.guest_invite_token);
 
   return (
@@ -236,6 +242,7 @@ function HostSessionSummary({ result }: { result: CreateSessionResponse }) {
         sessionId={result.session.id}
         participantId={result.session.host_user_id}
         role="host"
+        localMediaStream={localMediaStream}
       />
     </section>
   );
@@ -246,6 +253,7 @@ function HostSessionPage() {
   const [sessionResult, setSessionResult] = useState<CreateSessionResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -276,14 +284,15 @@ function HostSessionPage() {
         <p className="lede">
           This first pass lets a host create a session, send the request to the API,
           and immediately see the session ID, title, status, guest invite details, a
-          local camera/microphone preview foundation, the signaling room foundation,
+          local camera/microphone preview foundation, initial WebRTC media track
+          attachment, the remote preview foundation, the signaling room foundation,
           and the first WebRTC peer connection controls.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
-          <li>Local camera/microphone preview only</li>
+          <li>Local preview and initial track attachment</li>
           <li>No recording, upload, or export yet</li>
-          <li>Signaling and peer connection foundation only</li>
+          <li>Signaling, peer connection, and remote preview foundation</li>
         </ul>
         <p className="api-note">
           API base URL: <span className="mono">{getApiBaseUrl()}</span>
@@ -353,10 +362,12 @@ function HostSessionPage() {
           </div>
         ) : null}
 
-        <LocalMediaPreview />
+        <LocalMediaPreview onStreamChange={setLocalMediaStream} />
       </section>
 
-      {sessionResult ? <HostSessionSummary result={sessionResult} /> : null}
+      {sessionResult ? (
+        <HostSessionSummary result={sessionResult} localMediaStream={localMediaStream} />
+      ) : null}
     </main>
   );
 }
@@ -371,6 +382,7 @@ function GuestSessionPage() {
   const [displayNameError, setDisplayNameError] = useState('');
   const [isLookingUp, setIsLookingUp] = useState(Boolean(inviteToken));
   const [isJoining, setIsJoining] = useState(false);
+  const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -456,14 +468,15 @@ function GuestSessionPage() {
         <p className="lede">
           Open the invite link, look up the session, enter a display name, and join
           without auth, recording, or upload/export yet. Local camera and microphone
-          preview are available in the browser, and the signaling room plus first
-          WebRTC peer connection controls are available after you join.
+          preview are available in the browser, initial WebRTC media track attachment
+          is supported during negotiation, and the signaling room plus remote preview
+          foundation are available after you join.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
           <li>No full authorization yet</li>
-          <li>Local camera/microphone preview only</li>
-          <li>Signaling and peer connection foundation only</li>
+          <li>Local preview and initial track attachment</li>
+          <li>Signaling, peer connection, and remote preview foundation</li>
         </ul>
         <p className="api-note">
           Guest URLs look like{' '}
@@ -497,7 +510,7 @@ function GuestSessionPage() {
           </div>
         ) : null}
 
-        <LocalMediaPreview />
+        <LocalMediaPreview onStreamChange={setLocalMediaStream} />
 
         {session ? (
           <>
@@ -546,7 +559,8 @@ function GuestSessionPage() {
 
             <p className="api-note">
               Recording, upload, and export are not active yet. The local media preview
-              stays in the browser, and WebRTC media attachment will come later.
+              stays in the browser, and initial WebRTC media track attachment plus the
+              remote preview foundation are available in this release.
             </p>
           </>
         ) : null}
@@ -577,6 +591,7 @@ function GuestSessionPage() {
             sessionId={joinedResult.session.id}
             participantId={joinedResult.participant.id}
             role="guest"
+            localMediaStream={localMediaStream}
           />
         </section>
       ) : null}

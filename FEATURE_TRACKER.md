@@ -48,6 +48,7 @@
 | DS-036 | v0.1 Web Studio Core | Add local WebRTC manual test documentation and diagnostics | merged | Merged in PR #36. |
 | DS-037 | v0.1 Web Studio Core | Add local WebRTC manual test seed tooling | merged | Merged in PR #37. |
 | DS-038 | v0.1 Web Studio Core | Add camera/micro preview foundation | merged | Merged in PR #38. |
+| DS-039 | v0.1 Web Studio Core | Add WebRTC media track attachment and remote preview foundation | in_review | Draft PR opened. |
 
 ## Allowed Statuses
 

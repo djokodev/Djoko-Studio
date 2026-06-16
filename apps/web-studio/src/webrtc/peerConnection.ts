@@ -22,6 +22,10 @@ export type WebRtcPeerConnectionState = {
   peerConnectionCreated: boolean;
   localDescriptionState: 'not-set' | 'set';
   remoteDescriptionState: 'not-set' | 'set';
+  localTracksAttached: boolean;
+  remoteMediaStreamAvailable: boolean;
+  remoteVideoTrackCount: number;
+  remoteAudioTrackCount: number;
 };
 
 export type WebRtcPeerConnectionEvent = {
@@ -41,6 +45,8 @@ export interface CreateWebRtcPeerConnectionOptions {
   role: SignalingRole;
   iceServers: RTCIceServer[];
   sendSignal: (payload: WebRtcSignalPayload) => void;
+  getLocalMediaStream?: () => MediaStream | null;
+  onRemoteMediaStream?: (stream: MediaStream | null) => void;
   onStateChange?: (state: WebRtcPeerConnectionState) => void;
   onEvent?: (event: WebRtcPeerConnectionEvent) => void;
   onDataChannelMessage?: (message: string) => void;
@@ -61,8 +67,10 @@ export function createWebRtcPeerConnection(
 ): WebRtcPeerConnectionController {
   let peerConnection: RTCPeerConnection | null = null;
   let dataChannel: RTCDataChannel | null = null;
+  let remoteMediaStream: MediaStream | null = null;
   let pendingRemoteCandidates: RTCIceCandidateInit[] = [];
   let closed = false;
+  let localTracksAttached = false;
   let currentState = createEmptyState();
 
   function emitEvent(kind: WebRtcPeerConnectionEvent['kind'], summary: string, details?: string) {
@@ -94,6 +102,10 @@ export function createWebRtcPeerConnection(
       peerConnectionCreated: true,
       localDescriptionState: peerConnection.localDescription === null ? 'not-set' : 'set',
       remoteDescriptionState: peerConnection.remoteDescription === null ? 'not-set' : 'set',
+      localTracksAttached,
+      remoteMediaStreamAvailable: remoteMediaStream !== null,
+      remoteVideoTrackCount: remoteMediaStream?.getVideoTracks().length ?? 0,
+      remoteAudioTrackCount: remoteMediaStream?.getAudioTracks().length ?? 0,
     };
   }
 
@@ -153,6 +165,41 @@ export function createWebRtcPeerConnection(
       }
     };
 
+    peerConnection.ontrack = (event) => {
+      const track = event.track;
+
+      if (remoteMediaStream === null) {
+        remoteMediaStream = new MediaStream();
+      }
+
+      if (!remoteMediaStream.getTracks().some((existingTrack) => existingTrack.id === track.id)) {
+        remoteMediaStream.addTrack(track);
+      }
+
+      track.onended = () => {
+        if (remoteMediaStream === null) {
+          return;
+        }
+
+        if (remoteMediaStream.getTracks().some((existingTrack) => existingTrack.id === track.id)) {
+          remoteMediaStream.removeTrack(track);
+        }
+
+        if (remoteMediaStream.getTracks().length === 0) {
+          remoteMediaStream = null;
+          options.onRemoteMediaStream?.(null);
+          emitState(`Remote ${track.kind} track ended.`);
+          return;
+        }
+
+        options.onRemoteMediaStream?.(remoteMediaStream);
+        emitState(`Remote ${track.kind} track ended.`);
+      };
+
+      options.onRemoteMediaStream?.(remoteMediaStream);
+      emitState(`Remote ${track.kind} track received.`, `trackId=${track.id}`);
+    };
+
     if (options.role === 'guest') {
       peerConnection.ondatachannel = (event) => {
         attachDataChannel(event.channel);
@@ -162,6 +209,50 @@ export function createWebRtcPeerConnection(
 
     emitState('WebRTC peer connection created.');
     return peerConnection;
+  }
+
+  function attachLocalMediaTracks() {
+    const pc = createPeerConnection();
+
+    if (localTracksAttached) {
+      emitState('Local media tracks were already attached to this peer connection.');
+      return;
+    }
+
+    const localStream = options.getLocalMediaStream?.() ?? null;
+    if (localStream === null) {
+      emitEvent(
+        'info',
+        'No local media stream was available before WebRTC negotiation; local tracks were not attached.',
+      );
+      emitState('Local media was not attached because no local preview stream was available.');
+      return;
+    }
+
+    const activeTracks = localStream
+      .getTracks()
+      .filter((track) => track.readyState === 'live');
+
+    if (activeTracks.length === 0) {
+      emitEvent(
+        'info',
+        'The local preview stream had no live tracks, so nothing was attached to WebRTC.',
+      );
+      emitState('Local media stream was available, but it had no live tracks to attach.');
+      return;
+    }
+
+    for (const track of activeTracks) {
+      pc.addTrack(track, localStream);
+    }
+
+    localTracksAttached = true;
+    emitEvent(
+      'info',
+      'Local media tracks attached to the peer connection.',
+      `videoTracks=${localStream.getVideoTracks().length}, audioTracks=${localStream.getAudioTracks().length}`,
+    );
+    emitState('Local media tracks attached to the peer connection.');
   }
 
   function attachDataChannel(channel: RTCDataChannel) {
@@ -271,6 +362,8 @@ export function createWebRtcPeerConnection(
         attachDataChannel(pc.createDataChannel('djoko-peer-test'));
       }
 
+      attachLocalMediaTracks();
+
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       emitEvent('signal', 'Host created a local WebRTC offer.', stringifyValue(offer));
@@ -295,6 +388,8 @@ export function createWebRtcPeerConnection(
         if (pc === null) {
           throw new Error('WebRTC peer connection is not available.');
         }
+
+        attachLocalMediaTracks();
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -345,12 +440,16 @@ export function createWebRtcPeerConnection(
         peerConnection.oniceconnectionstatechange = null;
         peerConnection.onsignalingstatechange = null;
         peerConnection.onicecandidate = null;
+        peerConnection.ontrack = null;
         peerConnection.ondatachannel = null;
         peerConnection.close();
       }
 
       dataChannel = null;
+      remoteMediaStream = null;
       peerConnection = null;
+      localTracksAttached = false;
+      options.onRemoteMediaStream?.(null);
       currentState = createClosedState();
       options.onStateChange?.(currentState);
       emitEvent('state', 'WebRTC peer connection closed.');
@@ -424,6 +523,10 @@ function createEmptyState(): WebRtcPeerConnectionState {
     peerConnectionCreated: false,
     localDescriptionState: 'not-set',
     remoteDescriptionState: 'not-set',
+    localTracksAttached: false,
+    remoteMediaStreamAvailable: false,
+    remoteVideoTrackCount: 0,
+    remoteAudioTrackCount: 0,
   };
 }
 
@@ -436,6 +539,10 @@ function createClosedState(): WebRtcPeerConnectionState {
     peerConnectionCreated: false,
     localDescriptionState: 'not-set',
     remoteDescriptionState: 'not-set',
+    localTracksAttached: false,
+    remoteMediaStreamAvailable: false,
+    remoteVideoTrackCount: 0,
+    remoteAudioTrackCount: 0,
   };
 }
 

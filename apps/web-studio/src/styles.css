@@ -116,6 +116,18 @@ a {
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.signaling-remote-media {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.signaling-remote-preview {
+  min-height: 240px;
+}
+
 .summary-block {
   display: grid;
   gap: 16px;
