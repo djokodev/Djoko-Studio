@@ -110,6 +110,7 @@ The long-term recording system should preserve chunks locally so refreshes, cras
 - IndexedDB or OPFS should be evaluated for resilient local chunk persistence.
 - Future recovery should be able to discover incomplete local recordings after a refresh or crash where the browser storage model allows it.
 - DS-048 implements the first local persistence foundation with IndexedDB for manifest and chunk durability, plus recovery detection for persisted recordings in the browser.
+- DS-049 adds recovered playback preview from IndexedDB so a persisted local copy can be viewed after refresh.
 
 ## Upload and recovery boundaries
 
@@ -118,8 +119,8 @@ Recording, persistence, upload, and recovery should remain separate layers.
 - Upload service integration is separate from recording capture.
 - Recording should be able to continue or preserve chunks even if upload fails.
 - Upload should later be resumable.
-- A recovery screen is future work.
-- This document does not introduce upload or recovery behavior.
+- A fuller recovery workflow is future work, but local preview recovery from IndexedDB is now implemented in DS-049.
+- This document does not introduce upload, cloud sync, or backend recovery behavior.
 
 ## Testing strategy
 
@@ -143,7 +144,7 @@ Future work should be split into small steps so recording risk stays contained:
 - DS-046: Add temporary local playback preview and chunk capture diagnostics
 - DS-047: Add local recording manifest, session summary, and lifecycle diagnostics
 - DS-048: Add IndexedDB local recording persistence foundation and recovery detection
-- DS-049: Add local recording recovery listing foundation
+- DS-049: Add local recording recovered playback preview
 
 ## Explicit non-goals
 

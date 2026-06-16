@@ -405,6 +405,13 @@ function LocalRecordingPrototype({
   const [discardingRecordingId, setDiscardingRecordingId] = useState<string | null>(null);
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
   const summary = recorder.summary;
+  const recoveredPreview = recorder.recoveredPreview;
+  const recoveredRecording =
+    recoveredPreview.recordingId === null
+      ? null
+      : recorder.persistedRecordings.find(
+          (record) => record.recordingId === recoveredPreview.recordingId,
+        ) ?? null;
   const hasLocalPreviewStream = stream !== null;
   const hasAudioAndVideoTracks =
     recordingCapability.audioTrackCount > 0 && recordingCapability.videoTrackCount > 0;
@@ -416,6 +423,7 @@ function LocalRecordingPrototype({
   const stopDisabled = recorder.snapshot.state !== 'recording';
   const resetDisabled =
     recorder.snapshot.state !== 'stopped' && recorder.snapshot.state !== 'failed';
+  const recoveredPreviewStatusLabel = formatRecoveredPreviewStatusLabel(recoveredPreview.status);
 
   return (
     <section
@@ -437,8 +445,8 @@ function LocalRecordingPrototype({
       <p className="api-note recording-prototype__note">
         Prototype only: the recorder keeps the playback preview in memory, while
         IndexedDB persistence stores the manifest and chunks locally when the browser
-        supports it. Recovery is detection-only for now, so restored playback is not
-        implemented yet. The recorder prefers the supported MIME type from the
+        supports it. The recovery panel can now preview a persisted local copy from
+        IndexedDB after refresh. The recorder prefers the supported MIME type from the
         diagnostics and falls back to the browser default when needed.
       </p>
 
@@ -624,7 +632,7 @@ function LocalRecordingPrototype({
 
         <div className="message message--warning recording-prototype__preview-warning" role="status">
           Temporary local preview only. The persisted copy is listed below for discard
-          and recovery detection, but playback restoration is not implemented yet.
+          and recovered playback from IndexedDB is available in the recovery panel.
         </div>
       </section>
 
@@ -647,76 +655,220 @@ function LocalRecordingPrototype({
         </div>
 
         <p className="api-note recording-recovery__note">
-          Upload/recovery is not implemented yet. This panel only confirms that a local
-          recording manifest exists in IndexedDB and lets you discard the persisted
-          copy.
+          Local recording recovery stays browser-only. The app can detect persisted
+          recordings in IndexedDB after refresh, preview a local copy from browser
+          storage, and discard the local copy. Upload/recovery sync is not implemented
+          yet.
         </p>
+
+        <article className="recording-recovery__preview">
+          <div className="panel__header recording-recovery__preview-header">
+            <div>
+              <p className="eyebrow">Recovered playback</p>
+              <h5 className="recording-recovery__preview-title">
+                Recovered local browser copy
+              </h5>
+            </div>
+            <span
+              className={`status-pill recording-recovery__preview-status recording-recovery__preview-status--${recoveredPreview.status}`}
+            >
+              {recoveredPreviewStatusLabel}
+            </span>
+          </div>
+
+          <p className="api-note recording-recovery__preview-note">
+            Recovered playback is read from local browser storage only. It is labeled
+            here as a browser copy so it is easy to distinguish from the live in-memory
+            playback preview.
+          </p>
+
+          {recoveredPreview.status === 'idle' ? (
+            <div className="message recording-recovery__empty" role="status">
+              Choose Preview local copy on a persisted recording to load the recovered
+              browser copy here.
+            </div>
+          ) : null}
+
+          {recoveredPreview.status === 'loading' ? (
+            <div className="message" role="status">
+              Loading recovered local copy…
+            </div>
+          ) : null}
+
+          {recoveredPreview.status === 'failed' ? (
+            <div className="message message--error" role="alert">
+              {recoveredPreview.errorMessage ??
+                'Unable to recover the persisted local recording preview.'}
+            </div>
+          ) : null}
+
+          {recoveredPreview.status === 'ready' && recoveredPreview.previewUrl !== null ? (
+            <div className="media-preview__stage recording-recovery__preview-stage">
+              <video
+                className="media-preview__video recording-recovery__preview-video"
+                controls
+                playsInline
+                src={recoveredPreview.previewUrl}
+              />
+            </div>
+          ) : null}
+
+          <dl className="details-grid recording-recovery__preview-details">
+            <div className="detail-card">
+              <dt>Recording ID</dt>
+              <dd className="mono">{formatNullableText(recoveredPreview.recordingId)}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Browser storage status</dt>
+              <dd className="mono">{recoveredPreviewStatusLabel}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Source kind</dt>
+              <dd className="mono">
+                {formatNullableText(recoveredRecording?.manifest.sourceKind ?? null)}
+              </dd>
+            </div>
+            <div className="detail-card">
+              <dt>Selected MIME type</dt>
+              <dd className="mono">
+                {formatNullableText(recoveredRecording?.manifest.selectedMimeType ?? null)}
+              </dd>
+            </div>
+            <div className="detail-card">
+              <dt>Preview MIME type</dt>
+              <dd className="mono">{formatNullableText(recoveredPreview.previewMimeType)}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Preview blob size</dt>
+              <dd>
+                {recoveredPreview.previewAvailable
+                  ? formatByteCount(recoveredPreview.previewBlobSizeBytes)
+                  : '—'}
+              </dd>
+            </div>
+            <div className="detail-card">
+              <dt>Started at</dt>
+              <dd>{formatDiagnosticTimestamp(recoveredRecording?.manifest.startedAt ?? null)}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Stopped at</dt>
+              <dd>{formatDiagnosticTimestamp(recoveredRecording?.manifest.stoppedAt ?? null)}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Chunk count</dt>
+              <dd>{recoveredRecording?.manifest.chunkCount ?? '—'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Total bytes</dt>
+              <dd>
+                {recoveredRecording?.manifest.totalBytes !== undefined
+                  ? formatByteCount(recoveredRecording.manifest.totalBytes)
+                  : '—'}
+              </dd>
+            </div>
+            <div className="detail-card">
+              <dt>Approximate duration</dt>
+              <dd>
+                {recoveredRecording?.manifest.approximateDurationMs !== undefined
+                  ? formatApproximateDuration(recoveredRecording.manifest.approximateDurationMs)
+                  : '—'}
+              </dd>
+            </div>
+            <div className="detail-card">
+              <dt>Recovery note</dt>
+              <dd>Recovered from local browser storage only.</dd>
+            </div>
+          </dl>
+        </article>
 
         {recorder.persistedRecordings.length > 0 ? (
           <div className="recording-recovery__list">
-            {recorder.persistedRecordings.map((record) => (
-              <article className="recording-recovery__item" key={record.recordingId}>
-                <div className="panel__header recording-recovery__item-header">
-                  <div>
-                    <p className="eyebrow">Persisted recording</p>
-                    <h5 className="recording-recovery__item-title">{record.recordingId}</h5>
-                  </div>
-                  <button
-                    className="submit-button signaling-button signaling-button--secondary recording-recovery__discard"
-                    type="button"
-                    onClick={() => handleDiscardPersistedRecording(record.recordingId)}
-                    disabled={discardingRecordingId === record.recordingId}
-                  >
-                    {discardingRecordingId === record.recordingId
-                      ? 'Discarding…'
-                      : 'Discard local copy'}
-                  </button>
-                </div>
+            {recorder.persistedRecordings.map((record) => {
+              const isPreviewLoadingForRecord =
+                recoveredPreview.status === 'loading' &&
+                recoveredPreview.recordingId === record.recordingId;
+              const isCurrentRecoveredRecording =
+                recoveredPreview.recordingId === record.recordingId &&
+                recoveredPreview.status !== 'idle';
 
-                <dl className="details-grid recording-recovery__details">
-                  <div className="detail-card">
-                    <dt>Status</dt>
-                    <dd className="mono">{formatRecordingStateLabel(record.manifest.status)}</dd>
+              return (
+                <article className="recording-recovery__item" key={record.recordingId}>
+                  <div className="panel__header recording-recovery__item-header">
+                    <div>
+                      <p className="eyebrow">Persisted recording</p>
+                      <h5 className="recording-recovery__item-title">{record.recordingId}</h5>
+                    </div>
+                    <div className="recording-recovery__item-actions">
+                      <button
+                        className="submit-button signaling-button recording-recovery__preview-button"
+                        type="button"
+                        onClick={() => handlePreviewPersistedRecording(record.recordingId)}
+                        disabled={recoveredPreview.status === 'loading'}
+                      >
+                        {isPreviewLoadingForRecord
+                          ? 'Previewing…'
+                          : isCurrentRecoveredRecording && recoveredPreview.status === 'ready'
+                            ? 'Preview local copy'
+                            : 'Preview local copy'}
+                      </button>
+                      <button
+                        className="submit-button signaling-button signaling-button--secondary recording-recovery__discard"
+                        type="button"
+                        onClick={() => handleDiscardPersistedRecording(record.recordingId)}
+                        disabled={discardingRecordingId === record.recordingId}
+                      >
+                        {discardingRecordingId === record.recordingId
+                          ? 'Discarding…'
+                          : 'Discard local copy'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="detail-card">
-                    <dt>Source kind</dt>
-                    <dd className="mono">{formatNullableText(record.manifest.sourceKind)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Selected MIME type</dt>
-                    <dd className="mono">{formatNullableText(record.manifest.selectedMimeType)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Started at</dt>
-                    <dd>{formatDiagnosticTimestamp(record.manifest.startedAt)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Stopped at</dt>
-                    <dd>{formatDiagnosticTimestamp(record.manifest.stoppedAt)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Chunk count</dt>
-                    <dd>{record.manifest.chunkCount}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Total bytes</dt>
-                    <dd>{formatByteCount(record.manifest.totalBytes)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Approximate duration</dt>
-                    <dd>{formatApproximateDuration(record.manifest.approximateDurationMs)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>First persisted at</dt>
-                    <dd>{formatDiagnosticTimestamp(record.firstPersistedAt)}</dd>
-                  </div>
-                  <div className="detail-card">
-                    <dt>Last persisted at</dt>
-                    <dd>{formatDiagnosticTimestamp(record.lastPersistedAt)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
+
+                  <dl className="details-grid recording-recovery__details">
+                    <div className="detail-card">
+                      <dt>Status</dt>
+                      <dd className="mono">{formatRecordingStateLabel(record.manifest.status)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Source kind</dt>
+                      <dd className="mono">{formatNullableText(record.manifest.sourceKind)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Selected MIME type</dt>
+                      <dd className="mono">{formatNullableText(record.manifest.selectedMimeType)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Started at</dt>
+                      <dd>{formatDiagnosticTimestamp(record.manifest.startedAt)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Stopped at</dt>
+                      <dd>{formatDiagnosticTimestamp(record.manifest.stoppedAt)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Chunk count</dt>
+                      <dd>{record.manifest.chunkCount}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Total bytes</dt>
+                      <dd>{formatByteCount(record.manifest.totalBytes)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Approximate duration</dt>
+                      <dd>{formatApproximateDuration(record.manifest.approximateDurationMs)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>First persisted at</dt>
+                      <dd>{formatDiagnosticTimestamp(record.firstPersistedAt)}</dd>
+                    </div>
+                    <div className="detail-card">
+                      <dt>Last persisted at</dt>
+                      <dd>{formatDiagnosticTimestamp(record.lastPersistedAt)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
           </div>
         ) : (
           <div className="message recording-recovery__empty" role="status">
@@ -726,8 +878,9 @@ function LocalRecordingPrototype({
       </section>
 
       <div className="message message--warning recording-prototype__warning" role="status">
-        Prototype only: the playback preview stays in memory, while IndexedDB keeps a
-        local manifest/chunk copy for recovery detection when available.
+        Prototype only: the in-memory playback preview stays separate from the recovered
+        browser copy. IndexedDB keeps a local manifest/chunk copy for recovery
+        detection and local preview when available.
       </div>
     </section>
   );
@@ -746,6 +899,10 @@ function LocalRecordingPrototype({
         currentRecordingId === recordingId ? null : currentRecordingId,
       );
     }
+  }
+
+  async function handlePreviewPersistedRecording(recordingId: string) {
+    await recorder.loadRecoveredPreview(recordingId);
   }
 }
 
@@ -823,6 +980,21 @@ function formatPersistenceStatusLabel(
       return 'Persisting';
     case 'persisted':
       return 'Persisted';
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function formatRecoveredPreviewStatusLabel(
+  status: 'idle' | 'loading' | 'ready' | 'failed',
+): string {
+  switch (status) {
+    case 'idle':
+      return 'Idle';
+    case 'loading':
+      return 'Loading';
+    case 'ready':
+      return 'Ready';
     case 'failed':
       return 'Failed';
   }

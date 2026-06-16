@@ -15,9 +15,12 @@ import {
   type LocalRecordingSummary,
 } from './recordingManifest';
 import {
+  buildPersistedLocalRecordingBlob,
   deletePersistedLocalRecording,
+  getPersistedLocalRecording,
   getLocalRecordingPersistenceSupport,
   listPersistedLocalRecordings,
+  listPersistedLocalRecordingChunks,
   saveLocalRecordingChunk,
   saveLocalRecordingManifest,
   type PersistedLocalRecordingRecord,
@@ -32,6 +35,18 @@ import {
 const recordingTimesliceMs = 1000;
 
 interface LocalRecordingPlaybackPreviewMetadata {
+  previewAvailable: boolean;
+  previewUrl: string | null;
+  previewBlobSizeBytes: number;
+  previewMimeType: string | null;
+}
+
+type LocalRecordingRecoveredPreviewStatus = 'idle' | 'loading' | 'ready' | 'failed';
+
+interface LocalRecordingRecoveredPreviewMetadata {
+  status: LocalRecordingRecoveredPreviewStatus;
+  recordingId: string | null;
+  errorMessage: string | null;
   previewAvailable: boolean;
   previewUrl: string | null;
   previewBlobSizeBytes: number;
@@ -53,6 +68,16 @@ const initialRecordingPlaybackPreviewMetadata: LocalRecordingPlaybackPreviewMeta
   previewMimeType: null,
 };
 
+const initialRecoveredPreviewMetadata: LocalRecordingRecoveredPreviewMetadata = {
+  status: 'idle',
+  recordingId: null,
+  errorMessage: null,
+  previewAvailable: false,
+  previewUrl: null,
+  previewBlobSizeBytes: 0,
+  previewMimeType: null,
+};
+
 const initialPersistenceState: LocalRecordingPersistenceState = {
   supportStatus: 'not_checked',
   status: 'not_checked',
@@ -67,6 +92,9 @@ export interface LocalMediaRecorderController {
   summary: LocalRecordingSummary;
   previewUrl: string | null;
   previewMimeType: string | null;
+  recoveredPreview: LocalRecordingRecoveredPreviewMetadata;
+  loadRecoveredPreview: (recordingId: string) => Promise<boolean>;
+  clearRecoveredPreview: (recordingId?: string) => void;
   persistenceSupportStatus: LocalRecordingPersistenceSupportStatus;
   persistenceErrorMessage: string | null;
   persistedRecordings: PersistedLocalRecordingRecord[];
@@ -82,12 +110,18 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const [preview, setPreview] = useState<LocalRecordingPlaybackPreviewMetadata>(
     initialRecordingPlaybackPreviewMetadata,
   );
+  const [recoveredPreview, setRecoveredPreview] = useState<LocalRecordingRecoveredPreviewMetadata>(
+    initialRecoveredPreviewMetadata,
+  );
   const snapshotRef = useRef(snapshot);
   const manifestRef = useRef(manifest);
+  const recoveredPreviewRef = useRef(recoveredPreview);
   const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
+  const recoveredPreviewUrlRef = useRef<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const currentRecordingIdRef = useRef<string | null>(null);
+  const recoveredPreviewRequestIdRef = useRef(0);
   const persistenceQueueRef = useRef(Promise.resolve());
   const isMountedRef = useRef(true);
   const [persistenceState, setPersistenceState] = useState<LocalRecordingPersistenceState>(
@@ -104,17 +138,27 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   }, [manifest]);
 
   useEffect(() => {
+    recoveredPreviewRef.current = recoveredPreview;
+  }, [recoveredPreview]);
+
+  useEffect(() => {
+    recoveredPreviewUrlRef.current = recoveredPreview.previewUrl;
+  }, [recoveredPreview.previewUrl]);
+
+  useEffect(() => {
     isMountedRef.current = true;
     void initializePersistenceSupport();
 
     return () => {
       isMountedRef.current = false;
       disposePreviewObjectUrl();
+      disposeRecoveredPreviewObjectUrl();
       stopAndDisposeRecorder();
       clearRecordingChunks();
       currentRecordingIdRef.current = null;
       setManifest(null);
       setPreview(initialRecordingPlaybackPreviewMetadata);
+      setRecoveredPreview(initialRecoveredPreviewMetadata);
     };
     // The cleanup uses the current refs directly so it stays correct on unmount.
   }, []);
@@ -222,6 +266,39 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       });
   }
 
+  function revokeRecoveredPreviewObjectUrl() {
+    const currentPreviewUrl = recoveredPreviewUrlRef.current;
+
+    if (currentPreviewUrl === null) {
+      return;
+    }
+
+    URL.revokeObjectURL(currentPreviewUrl);
+    recoveredPreviewUrlRef.current = null;
+  }
+
+  function disposeRecoveredPreviewObjectUrl() {
+    revokeRecoveredPreviewObjectUrl();
+    recoveredPreviewUrlRef.current = null;
+  }
+
+  function commitRecoveredPreview(nextRecoveredPreview: LocalRecordingRecoveredPreviewMetadata) {
+    recoveredPreviewRef.current = nextRecoveredPreview;
+    setRecoveredPreview(nextRecoveredPreview);
+  }
+
+  function clearRecoveredPreviewState(recordingId?: string) {
+    const currentRecoveredPreview = recoveredPreviewRef.current;
+
+    if (recordingId !== undefined && currentRecoveredPreview.recordingId !== recordingId) {
+      return;
+    }
+
+    recoveredPreviewRequestIdRef.current += 1;
+    revokeRecoveredPreviewObjectUrl();
+    commitRecoveredPreview(initialRecoveredPreviewMetadata);
+  }
+
   async function initializePersistenceSupport() {
     const support = await getLocalRecordingPersistenceSupport();
 
@@ -256,7 +333,134 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       errorMessage: support.errorMessage,
       persistedRecordings: [],
       currentRecordingPersisted: false,
+      });
+  }
+
+  async function loadRecoveredPreview(recordingId: string): Promise<boolean> {
+    const normalizedRecordingId = recordingId.trim();
+    if (normalizedRecordingId === '') {
+      return false;
+    }
+
+    const requestId = recoveredPreviewRequestIdRef.current + 1;
+    recoveredPreviewRequestIdRef.current = requestId;
+    revokeRecoveredPreviewObjectUrl();
+    commitRecoveredPreview({
+      status: 'loading',
+      recordingId: normalizedRecordingId,
+      errorMessage: null,
+      previewAvailable: false,
+      previewUrl: null,
+      previewBlobSizeBytes: 0,
+      previewMimeType: null,
     });
+
+    if (persistenceState.supportStatus === 'unavailable') {
+      if (!isMountedRef.current || recoveredPreviewRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      commitRecoveredPreview({
+        status: 'failed',
+        recordingId: normalizedRecordingId,
+        errorMessage: 'IndexedDB persistence is unavailable in this browser.',
+        previewAvailable: false,
+        previewUrl: null,
+        previewBlobSizeBytes: 0,
+        previewMimeType: null,
+      });
+      return false;
+    }
+
+    try {
+      const persistedRecording = await getPersistedLocalRecording(normalizedRecordingId);
+      if (!isMountedRef.current || recoveredPreviewRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      if (persistedRecording === null) {
+        commitRecoveredPreview({
+          status: 'failed',
+          recordingId: normalizedRecordingId,
+          errorMessage: 'Persisted local recording could not be found.',
+          previewAvailable: false,
+          previewUrl: null,
+          previewBlobSizeBytes: 0,
+          previewMimeType: null,
+        });
+        return false;
+      }
+
+      const chunks = await listPersistedLocalRecordingChunks(normalizedRecordingId);
+      if (!isMountedRef.current || recoveredPreviewRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      if (chunks.length === 0) {
+        commitRecoveredPreview({
+          status: 'failed',
+          recordingId: normalizedRecordingId,
+          errorMessage: 'No persisted chunks available for preview.',
+          previewAvailable: false,
+          previewUrl: null,
+          previewBlobSizeBytes: 0,
+          previewMimeType: null,
+        });
+        return false;
+      }
+
+      const previewBlob = await buildPersistedLocalRecordingBlob(normalizedRecordingId);
+      if (!isMountedRef.current || recoveredPreviewRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      if (previewBlob === null || previewBlob.size === 0) {
+        commitRecoveredPreview({
+          status: 'failed',
+          recordingId: normalizedRecordingId,
+          errorMessage: 'No persisted chunks available for preview.',
+          previewAvailable: false,
+          previewUrl: null,
+          previewBlobSizeBytes: 0,
+          previewMimeType: null,
+        });
+        return false;
+      }
+
+      const previewUrl = URL.createObjectURL(previewBlob);
+      recoveredPreviewUrlRef.current = previewUrl;
+      commitRecoveredPreview({
+        status: 'ready',
+        recordingId: normalizedRecordingId,
+        errorMessage: null,
+        previewAvailable: true,
+        previewUrl,
+        previewBlobSizeBytes: previewBlob.size,
+        previewMimeType:
+          previewBlob.type.trim() === ''
+            ? persistedRecording.manifest.selectedMimeType
+            : previewBlob.type,
+      });
+      return true;
+    } catch (error) {
+      if (!isMountedRef.current || recoveredPreviewRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      commitRecoveredPreview({
+        status: 'failed',
+        recordingId: normalizedRecordingId,
+        errorMessage: getRecorderErrorMessage(
+          error,
+          'Unable to recover the persisted local recording preview.',
+        ),
+        previewAvailable: false,
+        previewUrl: null,
+        previewBlobSizeBytes: 0,
+        previewMimeType: null,
+      });
+      return false;
+    }
   }
 
   function enqueuePersistenceTask(task: () => Promise<void>) {
@@ -385,6 +589,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
         if (!isMountedRef.current) {
           return;
+        }
+
+        if (recoveredPreviewRef.current.recordingId === recordingId) {
+          clearRecoveredPreviewState(recordingId);
         }
 
         if (currentRecordingIdRef.current === recordingId) {
@@ -738,6 +946,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     summary,
     previewUrl: preview.previewUrl,
     previewMimeType: preview.previewMimeType,
+    recoveredPreview,
+    loadRecoveredPreview,
+    clearRecoveredPreview: clearRecoveredPreviewState,
     persistenceSupportStatus: persistenceState.supportStatus,
     persistenceErrorMessage: persistenceState.errorMessage,
     persistedRecordings: persistenceState.persistedRecordings,
