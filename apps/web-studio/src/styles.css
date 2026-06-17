@@ -380,6 +380,14 @@ dt {
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.upload-readiness {
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 .recording-storage {
   display: grid;
   gap: 16px;
@@ -409,6 +417,10 @@ dt {
 }
 
 .recording-prototype__note {
+  margin-top: 0;
+}
+
+.upload-readiness__note {
   margin-top: 0;
 }
 
@@ -666,6 +678,26 @@ dt {
 }
 
 .recording-prototype__warning {
+  margin-top: 0;
+}
+
+.upload-readiness__details {
+  margin-top: 0;
+}
+
+.upload-readiness__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.upload-readiness__status {
+  background: rgba(100, 116, 139, 0.16);
+  border-color: rgba(100, 116, 139, 0.24);
+  color: #cbd5e1;
+}
+
+.upload-readiness__message {
   margin-top: 0;
 }
 
