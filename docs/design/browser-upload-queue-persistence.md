@@ -169,9 +169,10 @@ Recommended follow-on sequence after DS-056:
 - DS-057 - Add frontend upload queue persistence adapter skeleton
 - DS-058 - Handle upload persistence IndexedDB open failures gracefully
 - DS-059 - Add upload service API contract draft
-- DS-061 - Add upload progress UI placeholder
-- DS-062 - Add upload session initialization client skeleton
-- DS-063 - Add chunk upload client skeleton behind disabled UI
+- DS-061 - Add upload readiness panel and disabled client foundation
+- DS-062 - Add upload session initialization end-to-end behind an explicit disabled/experimental gate
+- DS-063 - Add chunk upload client/API MVP behind an explicit disabled/experimental gate
 
 DS-059 is the upload service API contract draft slice. The later slices begin
-with client and UI work after the documentation-first contract is in place.
+with the frontend readiness panel and disabled client foundation after the
+documentation-first contract is in place.

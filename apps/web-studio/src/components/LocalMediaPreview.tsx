@@ -21,6 +21,7 @@ import {
 import type { LocalRecordingIntegrityReport } from '../recording/recordingIntegrity';
 import { buildLocalRecordingFilename } from '../recording/recordingDownload';
 import { formatBytes } from '../recording/formatBytes';
+import { UploadReadinessPanel } from './UploadReadinessPanel';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -668,6 +669,8 @@ function LocalRecordingPrototype({
           and recovered playback from IndexedDB is available in the recovery panel.
         </div>
       </section>
+
+      <UploadReadinessPanel recorder={recorder} />
 
       <section
         className="recording-recovery"
