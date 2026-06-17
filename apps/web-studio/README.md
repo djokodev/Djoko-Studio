@@ -13,7 +13,9 @@ prototype with a local recording manifest foundation, a derived session summary,
 stronger lifecycle cleanup, and richer local diagnostics for the current page
 session. DS-048 adds the first IndexedDB local persistence foundation and recovery
 detection for persisted local recordings. DS-049 adds recovered playback preview
-from IndexedDB for persisted local recordings in this browser.
+from IndexedDB for persisted local recordings in this browser. DS-050 adds a raw
+local recording download safety copy for the completed in-memory preview and the
+recovered IndexedDB-backed preview.
 
 ## What this app does
 
@@ -36,6 +38,7 @@ from IndexedDB for persisted local recordings in this browser.
 - persists the local recording manifest and chunks to IndexedDB when the browser supports it
 - detects persisted local recordings on load and lets you discard the local copy
 - lets you preview a recovered local copy from IndexedDB after refresh
+- lets you download a raw local safety copy from the completed preview or the recovered browser copy
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -52,7 +55,6 @@ from IndexedDB for persisted local recordings in this browser.
 - full authorization
 - upload
 - export
-- download
 - cloud sync
 - recovery routing
 
@@ -65,8 +67,10 @@ for the current page session, and now assembles a temporary local playback previ
 after recording stops. DS-048 adds IndexedDB persistence for the manifest and
 chunks, plus local recovery detection when persisted recordings are found in this
 browser. DS-049 adds recovered playback preview from IndexedDB so persisted local
-recordings can be previewed after refresh. Uploads, exports, recovery routing,
-download, cloud sync, and backend/database behavior are still out of scope.
+recordings can be previewed after refresh. DS-050 adds a local-only raw download
+safety copy for both the current stopped preview and the recovered browser copy.
+Uploads, exports, recovery routing, cloud sync, and backend/database behavior are
+still out of scope.
 DS-047 adds a focused manifest model, derived summary fields, and more explicit
 lifecycle reset behavior while keeping the recording local-only and memory-backed.
 DS-048 layers in browser-local durability and recovery detection while keeping the
@@ -153,9 +157,10 @@ The local recording prototype is intentionally small and browser-only:
 
 - click `Start local recording` to record the active local preview stream
 - click `Stop local recording` to stop the current recorder, keep the in-memory chunks for this page session, and build a temporary local playback preview
+- click `Download raw local copy` on the completed preview to download the raw browser recording as a local safety copy
 - click `Discard local recording / Reset` to clear the in-memory chunks, metadata, preview URL, and persisted local copy when present
 - the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, preview availability, and IndexedDB persistence status
-- the recovery panel lists persisted local recordings detected in this browser, lets you preview a local copy from IndexedDB, and lets you discard the local copy
+- the recovery panel lists persisted local recordings detected in this browser, lets you preview a local copy from IndexedDB, download the raw local copy after it loads, and lets you discard the local copy
 - the playback preview is still local-only, memory-backed, and temporary
 - recovered playback from IndexedDB is available through the recovery panel
 - refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available

@@ -18,6 +18,7 @@ import {
   type LocalMediaRecorderController,
   useLocalMediaRecorder,
 } from '../recording/useLocalMediaRecorder';
+import { buildLocalRecordingFilename } from '../recording/recordingDownload';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -412,6 +413,17 @@ function LocalRecordingPrototype({
       : recorder.persistedRecordings.find(
           (record) => record.recordingId === recoveredPreview.recordingId,
         ) ?? null;
+  const currentRecordingDownloadFilename = buildLocalRecordingFilename({
+    recordingId: summary.recordingId,
+    startedAt: summary.startedAt,
+    mimeType: recorder.previewMimeType ?? summary.selectedMimeType,
+  });
+  const recoveredPreviewDownloadFilename = buildLocalRecordingFilename({
+    recordingId: recoveredPreview.recordingId,
+    startedAt: recoveredRecording?.manifest.startedAt ?? null,
+    mimeType:
+      recoveredPreview.previewMimeType ?? recoveredRecording?.manifest.selectedMimeType ?? null,
+  });
   const hasLocalPreviewStream = stream !== null;
   const hasAudioAndVideoTracks =
     recordingCapability.audioTrackCount > 0 && recordingCapability.videoTrackCount > 0;
@@ -593,14 +605,28 @@ function LocalRecordingPrototype({
         </div>
 
         {summary.previewAvailable && recorder.previewUrl !== null ? (
-          <div className="media-preview__stage recording-prototype__preview-stage">
-            <video
-              className="media-preview__video recording-prototype__preview-video"
-              controls
-              playsInline
-              src={recorder.previewUrl}
-            />
-          </div>
+          <>
+            <div className="media-preview__stage recording-prototype__preview-stage">
+              <video
+                className="media-preview__video recording-prototype__preview-video"
+                controls
+                playsInline
+                src={recorder.previewUrl}
+              />
+            </div>
+            <div className="recording-prototype__download">
+              <a
+                className="submit-button signaling-button recording-prototype__download-link"
+                href={recorder.previewUrl}
+                download={currentRecordingDownloadFilename}
+              >
+                Download raw local copy
+              </a>
+              <p className="api-note recording-prototype__download-note">
+                This is the raw browser recording, not the final exported interview.
+              </p>
+            </div>
+          </>
         ) : (
           <div className="message recording-prototype__preview-empty" role="status">
             No local recording preview available yet.
@@ -703,14 +729,29 @@ function LocalRecordingPrototype({
           ) : null}
 
           {recoveredPreview.status === 'ready' && recoveredPreview.previewUrl !== null ? (
-            <div className="media-preview__stage recording-recovery__preview-stage">
-              <video
-                className="media-preview__video recording-recovery__preview-video"
-                controls
-                playsInline
-                src={recoveredPreview.previewUrl}
-              />
-            </div>
+            <>
+              <div className="media-preview__stage recording-recovery__preview-stage">
+                <video
+                  className="media-preview__video recording-recovery__preview-video"
+                  controls
+                  playsInline
+                  src={recoveredPreview.previewUrl}
+                />
+              </div>
+              <div className="recording-recovery__download">
+                <a
+                  className="submit-button signaling-button recording-recovery__download-link"
+                  href={recoveredPreview.previewUrl}
+                  download={recoveredPreviewDownloadFilename}
+                >
+                  Download raw local copy
+                </a>
+                <p className="api-note recording-recovery__download-note">
+                  This raw browser recording comes from browser local storage only. It is
+                  not the final exported interview, and no upload is performed.
+                </p>
+              </div>
+            </>
           ) : null}
 
           <dl className="details-grid recording-recovery__preview-details">

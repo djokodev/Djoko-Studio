@@ -59,6 +59,7 @@
 | DS-047 | v0.1 Recording Core | Add local recording manifest, session summary, and lifecycle diagnostics | merged | Merged in PR #47. |
 | DS-048 | v0.1 Recording Core | Add IndexedDB local recording persistence foundation and recovery detection | merged | Merged in PR #48. |
 | DS-049 | v0.1 Recording Core | Recover persisted local recording playback preview from IndexedDB | merged | Merged in PR #49. |
+| DS-050 | v0.1 Recording Core | Add raw local recording download safety copy | in_review | Draft PR. |
 
 ## Allowed Statuses
 

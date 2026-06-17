@@ -419,6 +419,17 @@ dt {
   margin-top: 0;
 }
 
+.recording-prototype__download,
+.recording-recovery__download {
+  display: grid;
+  gap: 8px;
+}
+
+.recording-prototype__download-link,
+.recording-recovery__download-link {
+  text-decoration: none;
+}
+
 .recording-recovery__note {
   margin-top: 0;
 }

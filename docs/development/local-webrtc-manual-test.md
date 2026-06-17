@@ -30,6 +30,8 @@ prototype. DS-048 adds IndexedDB persistence for the manifest and chunks, plus
 recovery detection for persisted local recordings in the current browser.
 DS-049 adds recovered playback preview from IndexedDB so a persisted local copy
 can be played back after refresh.
+DS-050 adds a raw local recording download safety copy for both the completed
+in-memory preview and the recovered IndexedDB-backed preview.
 
 The test is meant to verify the full local path:
 
@@ -93,6 +95,7 @@ stream.
 - confirm the manifest recording ID appears, the chunk count increases, total bytes go up, and actual `Blob` chunks are stored in memory for this page session
 - confirm the manifest status changes to `stopped`, the start time, stop time, and approximate duration populate, and the latest chunk fields update
 - confirm the local playback preview appears after stop
+- click `Download raw local copy` on the completed preview and confirm the browser downloads the raw local recording with a safe filename
 - press play in the preview video if the browser allows it
 - click `Discard local recording / Reset`
 - confirm the recording ID, manifest details, chunk metadata, and preview clear
@@ -100,9 +103,10 @@ stream.
 - refresh the page and confirm the recovery panel lists the persisted local recording from this browser
 - click `Preview local copy` on the persisted recording and confirm a recovered local browser preview appears with controls
 - confirm the preview is labeled as recovered from local browser storage and that the recovered playback details are populated
+- click `Download raw local copy` on the recovered preview and confirm the browser downloads the recovered raw local recording with a safe filename
 - click `Discard local copy` in the recovery panel and confirm the persisted recording disappears
-- no download, upload, export, or backend call is expected
-- no file should be created on disk
+- no upload, export, or backend call is expected
+- the only local file write should be the explicit browser download from the raw local copy action
 
 ## Local Services
 
