@@ -16,15 +16,22 @@ import {
 } from './recordingManifest';
 import {
   buildPersistedLocalRecordingBlob,
+  deleteAllPersistedLocalRecordings,
   deletePersistedLocalRecording,
   getPersistedLocalRecording,
   getLocalRecordingPersistenceSupport,
+  getLocalRecordingStorageSummary,
   listPersistedLocalRecordings,
   listPersistedLocalRecordingChunks,
   saveLocalRecordingChunk,
   saveLocalRecordingManifest,
+  type LocalRecordingStorageSummary,
   type PersistedLocalRecordingRecord,
 } from './recordingPersistence';
+import {
+  getBrowserStorageEstimate,
+  type BrowserStorageEstimate,
+} from './browserStorageEstimate';
 import {
   canTransitionRecordingState,
   createInitialRecordingSnapshot,
@@ -33,6 +40,8 @@ import {
 } from './recordingStateMachine';
 
 const recordingTimesliceMs = 1000;
+
+export type LocalStorageSummaryStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
 interface LocalRecordingPlaybackPreviewMetadata {
   previewAvailable: boolean;
@@ -61,6 +70,13 @@ interface LocalRecordingPersistenceState {
   currentRecordingPersisted: boolean;
 }
 
+interface LocalStorageSummaryState {
+  status: LocalStorageSummaryStatus;
+  errorMessage: string | null;
+  localStorageSummary: LocalRecordingStorageSummary | null;
+  browserStorageEstimate: BrowserStorageEstimate | null;
+}
+
 const initialRecordingPlaybackPreviewMetadata: LocalRecordingPlaybackPreviewMetadata = {
   previewAvailable: false,
   previewUrl: null,
@@ -86,6 +102,13 @@ const initialPersistenceState: LocalRecordingPersistenceState = {
   currentRecordingPersisted: false,
 };
 
+const initialLocalStorageSummaryState: LocalStorageSummaryState = {
+  status: 'idle',
+  errorMessage: null,
+  localStorageSummary: null,
+  browserStorageEstimate: null,
+};
+
 export interface LocalMediaRecorderController {
   snapshot: RecordingStateSnapshot;
   manifest: LocalRecordingManifest | null;
@@ -99,6 +122,12 @@ export interface LocalMediaRecorderController {
   persistenceErrorMessage: string | null;
   persistedRecordings: PersistedLocalRecordingRecord[];
   discardPersistedRecording: (recordingId: string) => Promise<boolean>;
+  localStorageSummary: LocalRecordingStorageSummary | null;
+  browserStorageEstimate: BrowserStorageEstimate | null;
+  storageSummaryStatus: LocalStorageSummaryStatus;
+  storageSummaryError: string | null;
+  refreshLocalStorageSummary: () => Promise<void>;
+  clearAllPersistedLocalRecordings: () => Promise<boolean>;
   startRecording: (stream: MediaStream | null, preferredMimeType?: string | null) => boolean;
   stopRecording: () => boolean;
   resetRecording: () => boolean;
@@ -113,9 +142,13 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const [recoveredPreview, setRecoveredPreview] = useState<LocalRecordingRecoveredPreviewMetadata>(
     initialRecoveredPreviewMetadata,
   );
+  const [storageSummaryState, setStorageSummaryState] = useState<LocalStorageSummaryState>(
+    initialLocalStorageSummaryState,
+  );
   const snapshotRef = useRef(snapshot);
   const manifestRef = useRef(manifest);
   const recoveredPreviewRef = useRef(recoveredPreview);
+  const storageSummaryRequestIdRef = useRef(0);
   const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
   const recoveredPreviewUrlRef = useRef<string | null>(null);
@@ -159,6 +192,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       setManifest(null);
       setPreview(initialRecordingPlaybackPreviewMetadata);
       setRecoveredPreview(initialRecoveredPreviewMetadata);
+      setStorageSummaryState(initialLocalStorageSummaryState);
     };
     // The cleanup uses the current refs directly so it stays correct on unmount.
   }, []);
@@ -185,6 +219,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     currentRecordingPersisted: persistenceState.currentRecordingPersisted,
   });
 
+  const localStorageSummary = storageSummaryState.localStorageSummary;
+  const browserStorageEstimate = storageSummaryState.browserStorageEstimate;
+
   function commitSnapshot(nextSnapshot: RecordingStateSnapshot) {
     snapshotRef.current = nextSnapshot;
     setSnapshot(nextSnapshot);
@@ -205,6 +242,15 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     setPersistenceState((currentPersistenceState) => ({
       ...currentPersistenceState,
       ...nextPersistenceState,
+    }));
+  }
+
+  function commitStorageSummaryState(
+    nextStorageSummaryState: Partial<LocalStorageSummaryState>,
+  ) {
+    setStorageSummaryState((currentStorageSummaryState) => ({
+      ...currentStorageSummaryState,
+      ...nextStorageSummaryState,
     }));
   }
 
@@ -266,6 +312,47 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       });
   }
 
+  async function refreshLocalStorageSummary(): Promise<void> {
+    const requestId = storageSummaryRequestIdRef.current + 1;
+    storageSummaryRequestIdRef.current = requestId;
+    commitStorageSummaryState({
+      status: 'loading',
+      errorMessage: null,
+    });
+
+    try {
+      const [storageSummary, browserEstimate] = await Promise.all([
+        getLocalRecordingStorageSummary(),
+        getBrowserStorageEstimate(),
+      ]);
+
+      if (!isMountedRef.current || storageSummaryRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      commitStorageSummaryState({
+        status: storageSummary.supportStatus === 'failed' ? 'failed' : 'ready',
+        errorMessage: storageSummary.supportErrorMessage,
+        localStorageSummary: storageSummary,
+        browserStorageEstimate: browserEstimate,
+      });
+    } catch (error) {
+      if (!isMountedRef.current || storageSummaryRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      commitStorageSummaryState({
+        status: 'failed',
+        errorMessage: getRecorderErrorMessage(
+          error,
+          'Unable to refresh the browser storage summary.',
+        ),
+        localStorageSummary: null,
+        browserStorageEstimate: null,
+      });
+    }
+  }
+
   function revokeRecoveredPreviewObjectUrl() {
     const currentPreviewUrl = recoveredPreviewUrlRef.current;
 
@@ -313,6 +400,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         errorMessage: null,
       });
       await refreshPersistedRecordingList();
+      await refreshLocalStorageSummary();
       return;
     }
 
@@ -324,6 +412,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         persistedRecordings: [],
         currentRecordingPersisted: false,
       });
+      await refreshLocalStorageSummary();
       return;
     }
 
@@ -334,6 +423,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       persistedRecordings: [],
       currentRecordingPersisted: false,
       });
+    await refreshLocalStorageSummary();
   }
 
   async function loadRecoveredPreview(recordingId: string): Promise<boolean> {
@@ -496,6 +586,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         }
 
         await refreshPersistedRecordingList(recordingId);
+        await refreshLocalStorageSummary();
       } catch (error) {
         if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
           return;
@@ -508,6 +599,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
             'Unable to save the local recording manifest to IndexedDB.',
           ),
         });
+        await refreshLocalStorageSummary();
       }
     });
   }
@@ -554,6 +646,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
       if (chunkSaveError === null && manifestSaveError === null) {
         await refreshPersistedRecordingList(recordingId);
+        await refreshLocalStorageSummary();
         return;
       }
 
@@ -566,6 +659,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       });
 
       await refreshPersistedRecordingList(recordingId);
+      await refreshLocalStorageSummary();
     });
   }
 
@@ -600,6 +694,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         }
 
         await refreshPersistedRecordingList();
+        await refreshLocalStorageSummary();
         commitPersistenceState({
           status: getIdlePersistenceStatus(persistenceState.supportStatus),
           currentRecordingPersisted: false,
@@ -614,6 +709,69 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
           errorMessage: getRecorderErrorMessage(
             error,
             'Unable to discard the persisted local recording.',
+          ),
+        });
+      }
+    })
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  function clearAllPersistedLocalRecordings(): Promise<boolean> {
+    if (persistenceState.supportStatus === 'unavailable') {
+      return Promise.resolve(false);
+    }
+
+    const hasPersistedRecordings = persistenceState.persistedRecordings.length > 0;
+    if (!hasPersistedRecordings) {
+      return Promise.resolve(false);
+    }
+
+    commitStorageSummaryState({
+      status: 'loading',
+      errorMessage: null,
+    });
+    commitPersistenceState({
+      status: 'persisting',
+      errorMessage: null,
+      currentRecordingPersisted: false,
+    });
+
+    return enqueuePersistenceTask(async () => {
+      try {
+        await deleteAllPersistedLocalRecordings();
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        if (recoveredPreviewRef.current.recordingId !== null) {
+          clearRecoveredPreviewState(recoveredPreviewRef.current.recordingId);
+        }
+
+        await refreshPersistedRecordingList();
+        await refreshLocalStorageSummary();
+        commitPersistenceState({
+          status: getIdlePersistenceStatus(persistenceState.supportStatus),
+          currentRecordingPersisted: false,
+        });
+      } catch (error) {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        commitStorageSummaryState({
+          status: 'failed',
+          errorMessage: getRecorderErrorMessage(
+            error,
+            'Unable to clear the persisted local recordings.',
+          ),
+        });
+        commitPersistenceState({
+          status: 'failed',
+          errorMessage: getRecorderErrorMessage(
+            error,
+            'Unable to clear the persisted local recordings.',
           ),
         });
       }
@@ -953,6 +1111,12 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     persistenceErrorMessage: persistenceState.errorMessage,
     persistedRecordings: persistenceState.persistedRecordings,
     discardPersistedRecording,
+    localStorageSummary,
+    browserStorageEstimate,
+    storageSummaryStatus: storageSummaryState.status,
+    storageSummaryError: storageSummaryState.errorMessage,
+    refreshLocalStorageSummary,
+    clearAllPersistedLocalRecordings,
     startRecording,
     stopRecording,
     resetRecording,

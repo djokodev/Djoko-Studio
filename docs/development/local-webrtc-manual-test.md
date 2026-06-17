@@ -32,6 +32,8 @@ DS-049 adds recovered playback preview from IndexedDB so a persisted local copy
 can be played back after refresh.
 DS-050 adds a raw local recording download safety copy for both the completed
 in-memory preview and the recovered IndexedDB-backed preview.
+DS-051 adds a local browser storage summary panel and a browser-local clear-all
+control for persisted recordings.
 
 The test is meant to verify the full local path:
 
@@ -87,7 +89,10 @@ prompt by themselves. No recording file is created yet.
 ## Local Recording Prototype
 
 The same panel also includes the local recording prototype for the active preview
-stream.
+stream. Use the sub-flows below in order so the recovery and cleanup cases stay
+coherent.
+
+### A. Current in-memory recording flow
 
 - click `Start local recording`
 - wait a few seconds so the `dataavailable` events can produce chunks
@@ -97,14 +102,40 @@ stream.
 - confirm the local playback preview appears after stop
 - click `Download raw local copy` on the completed preview and confirm the browser downloads the raw local recording with a safe filename
 - press play in the preview video if the browser allows it
-- click `Discard local recording / Reset`
-- confirm the recording ID, manifest details, chunk metadata, and preview clear
-- if IndexedDB is available, confirm the persistence support and status cards show the browser result and that the current recording persists after save
-- refresh the page and confirm the recovery panel lists the persisted local recording from this browser
+- inspect the `Local browser storage` panel and confirm it shows persistence support, approximate size, persisted chunk count, and browser storage usage or an unsupported state without crashing
+- click `Refresh storage summary` and confirm the counts and approximate size still render
+
+### B. Recovery flow after refresh
+
+- do not reset or discard the current recording before this step
+- refresh the page
+- confirm the recovery panel lists the persisted local recording from this browser
 - click `Preview local copy` on the persisted recording and confirm a recovered local browser preview appears with controls
 - confirm the preview is labeled as recovered from local browser storage and that the recovered playback details are populated
 - click `Download raw local copy` on the recovered preview and confirm the browser downloads the recovered raw local recording with a safe filename
-- click `Discard local copy` in the recovery panel and confirm the persisted recording disappears
+
+### C. Individual discard flow
+
+- with a persisted recovery item available, click `Discard local copy`
+- confirm that item disappears
+- confirm the storage summary updates
+
+### D. Clear-all flow
+
+- create or keep one or more persisted local recordings
+- click `Clear all local recordings`
+- confirm the confirmation dialog says it only affects local browser storage
+- accept the confirmation
+- confirm the recovery panel clears
+- confirm the storage summary shows zero persisted recordings, chunks, and bytes
+
+### E. Current recording reset flow
+
+- record another short local clip if needed
+- stop recording
+- click `Discard local recording / Reset`
+- confirm the current recording ID, manifest details, chunk metadata, and in-memory preview clear
+
 - no upload, export, or backend call is expected
 - the only local file write should be the explicit browser download from the raw local copy action
 
