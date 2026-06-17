@@ -17,7 +17,10 @@ from IndexedDB for persisted local recordings in this browser. DS-050 adds a raw
 local recording download safety copy for the completed in-memory preview and the
 recovered IndexedDB-backed preview.
 DS-051 adds local browser storage visibility and a browser-local cleanup control
-for persisted recordings.
+for persisted recordings. DS-052 adds local recording integrity diagnostics that
+compare persisted manifest and chunk metadata with stored `Blob` sizes so the app
+can describe whether the local copy looks complete, may be incomplete, or could
+not be verified.
 
 ## What this app does
 
@@ -42,6 +45,7 @@ for persisted recordings.
 - lets you preview a recovered local copy from IndexedDB after refresh
 - lets you download a raw local safety copy from the completed preview or the recovered browser copy
 - shows a local browser storage panel with approximate size, persisted chunk count, browser storage estimate, and a clear-all control for persisted local recordings
+- shows local recording integrity diagnostics for persisted copies, including manifest/chunk consistency checks, stored `Blob` sizes, missing chunk counts when available, and a local-only recheck action
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -56,6 +60,7 @@ for persisted recordings.
 
 - auth
 - full authorization
+- backend/database behavior
 - upload
 - export
 - cloud sync
@@ -73,9 +78,12 @@ browser. DS-049 adds recovered playback preview from IndexedDB so persisted loca
 recordings can be previewed after refresh. DS-050 adds a local-only raw download
 safety copy for both the current stopped preview and the recovered browser copy.
 DS-051 adds a browser-local storage summary with approximate usage and cleanup
-controls for persisted local recordings.
-Uploads, exports, recovery routing, cloud sync, and backend/database behavior are
-still out of scope.
+controls for persisted local recordings. DS-052 adds a local-only integrity check
+that compares the manifest and chunk metadata with stored `Blob` sizes without
+uploading, exporting, repairing, or calculating a cryptographic checksum. It is
+not final render validation.
+Uploads, exports, recovery routing, cloud sync, backend/database behavior, and
+final render validation are still out of scope.
 DS-047 adds a focused manifest model, derived summary fields, and more explicit
 lifecycle reset behavior while keeping the recording local-only and memory-backed.
 DS-048 layers in browser-local durability and recovery detection while keeping the
@@ -166,6 +174,7 @@ The local recording prototype is intentionally small and browser-only:
 - click `Discard local recording / Reset` to clear the in-memory chunks, metadata, preview URL, and persisted local copy when present
 - the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, preview availability, and IndexedDB persistence status
 - the local browser storage panel shows approximate size, persisted chunk count, browser storage usage when available, and a clear-all action for persisted recordings
+- the recovery area includes a local integrity check that compares persisted manifest and chunk metadata with stored `Blob` sizes, then reports expected chunks, stored chunks, expected size, stored size, missing chunk counts when available, and a last-checked time
 - the recovery panel lists persisted local recordings detected in this browser, lets you preview a local copy from IndexedDB, download the raw local copy after it loads, and lets you discard the local copy
 - the playback preview is still local-only, memory-backed, and temporary
 - recovered playback from IndexedDB is available through the recovery panel

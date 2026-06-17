@@ -61,6 +61,7 @@
 | DS-049 | v0.1 Recording Core | Recover persisted local recording playback preview from IndexedDB | merged | Merged in PR #49. |
 | DS-050 | v0.1 Recording Core | Add raw local recording download safety copy | merged | Merged in PR #50. |
 | DS-051 | v0.1 Recording Core | Add local recording storage usage and cleanup controls | merged | Merged in PR #51. |
+| DS-052 | v0.1 Recording Core | Add local recording integrity diagnostics | in_review | Draft PR. |
 
 ## Allowed Statuses
 

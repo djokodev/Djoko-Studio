@@ -34,6 +34,10 @@ DS-050 adds a raw local recording download safety copy for both the completed
 in-memory preview and the recovered IndexedDB-backed preview.
 DS-051 adds a local browser storage summary panel and a browser-local clear-all
 control for persisted recordings.
+DS-052 adds local recording integrity diagnostics that compare persisted
+manifest and chunk metadata with stored `Blob` sizes. It stays local-only and
+does not upload, export, repair, perform cryptographic verification, or act as
+final render validation.
 
 The test is meant to verify the full local path:
 
@@ -104,6 +108,9 @@ coherent.
 - press play in the preview video if the browser allows it
 - inspect the `Local browser storage` panel and confirm it shows persistence support, approximate size, persisted chunk count, and browser storage usage or an unsupported state without crashing
 - click `Refresh storage summary` and confirm the counts and approximate size still render
+- confirm the recovery panel shows a local integrity check block for the persisted recording
+- click `Check local copy` or `Recheck local copy` and confirm the integrity block shows expected chunks, stored chunks, expected size, stored size, missing chunk count when available, and a last checked timestamp
+- confirm the status label reads `Local copy looks complete`, `Local copy may be incomplete`, or `Could not verify local copy` based on the local data that is available
 
 ### B. Recovery flow after refresh
 
@@ -138,6 +145,7 @@ coherent.
 
 - no upload, export, or backend call is expected
 - the only local file write should be the explicit browser download from the raw local copy action
+- no backend, cloud sync, export, repair, checksum, or final render workflow is expected for DS-052
 
 ## Local Services
 

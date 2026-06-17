@@ -18,6 +18,7 @@ import {
   type LocalMediaRecorderController,
   useLocalMediaRecorder,
 } from '../recording/useLocalMediaRecorder';
+import type { LocalRecordingIntegrityReport } from '../recording/recordingIntegrity';
 import { buildLocalRecordingFilename } from '../recording/recordingDownload';
 import { formatBytes } from '../recording/formatBytes';
 
@@ -408,6 +409,9 @@ function LocalRecordingPrototype({
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
   const summary = recorder.summary;
   const recoveredPreview = recorder.recoveredPreview;
+  const integrityReportsByRecordingId = new Map(
+    recorder.localIntegrityReports.map((report) => [report.recordingId, report]),
+  );
   const recoveredRecording =
     recoveredPreview.recordingId === null
       ? null
@@ -690,6 +694,24 @@ function LocalRecordingPrototype({
           yet.
         </p>
 
+        <div className="recording-integrity__intro">
+          <p className="api-note recording-integrity__note">
+            Local integrity check: checks this browser&apos;s local copy. No upload is
+            performed, and this is not final export validation.
+          </p>
+          {recorder.integrityCheckStatus === 'checking' ? (
+            <div className="message recording-integrity__message" role="status">
+              Checking local copy integrity…
+            </div>
+          ) : null}
+          {recorder.integrityCheckStatus === 'failed' &&
+          recorder.integrityCheckError !== null ? (
+            <div className="message message--error recording-integrity__message" role="alert">
+              {recorder.integrityCheckError}
+            </div>
+          ) : null}
+        </div>
+
         <article className="recording-recovery__preview">
           <div className="panel__header recording-recovery__preview-header">
             <div>
@@ -834,6 +856,8 @@ function LocalRecordingPrototype({
               const isCurrentRecoveredRecording =
                 recoveredPreview.recordingId === record.recordingId &&
                 recoveredPreview.status !== 'idle';
+              const integrityReport =
+                integrityReportsByRecordingId.get(record.recordingId) ?? null;
 
               return (
                 <article className="recording-recovery__item" key={record.recordingId}>
@@ -910,6 +934,13 @@ function LocalRecordingPrototype({
                       <dd>{formatDiagnosticTimestamp(record.lastPersistedAt)}</dd>
                     </div>
                   </dl>
+
+                  <LocalRecordingIntegrityBlock
+                    recordingId={record.recordingId}
+                    report={integrityReport}
+                    integrityCheckStatus={recorder.integrityCheckStatus}
+                    onCheck={handleCheckPersistedRecordingIntegrity}
+                  />
                 </article>
               );
             })}
@@ -948,6 +979,118 @@ function LocalRecordingPrototype({
   async function handlePreviewPersistedRecording(recordingId: string) {
     await recorder.loadRecoveredPreview(recordingId);
   }
+
+  async function handleCheckPersistedRecordingIntegrity(recordingId: string) {
+    return recorder.checkLocalRecordingIntegrity(recordingId);
+  }
+}
+
+function LocalRecordingIntegrityBlock({
+  recordingId,
+  report,
+  integrityCheckStatus,
+  onCheck,
+}: {
+  recordingId: string;
+  report: LocalRecordingIntegrityReport | null;
+  integrityCheckStatus: LocalMediaRecorderController['integrityCheckStatus'];
+  onCheck: (recordingId: string) => Promise<LocalRecordingIntegrityReport | null>;
+}) {
+  const isChecking = integrityCheckStatus === 'checking';
+  const buttonLabel = isChecking
+    ? 'Checking local copy…'
+    : report === null
+      ? 'Check local copy'
+      : 'Recheck local copy';
+  const statusLabel = formatLocalRecordingIntegrityStatusLabel(report);
+
+  return (
+    <section
+      className="recording-integrity"
+      aria-labelledby={`recording-integrity-${recordingId}`}
+    >
+      <div className="panel__header recording-integrity__header">
+        <div>
+          <p className="eyebrow">Local integrity</p>
+          <h5 id={`recording-integrity-${recordingId}`}>Local recording integrity check</h5>
+        </div>
+        <span
+          className={`status-pill recording-integrity__status recording-integrity__status--${
+            report?.status ?? 'unknown'
+          }`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      <p className="api-note recording-integrity__note">
+        Checks this browser&apos;s local copy. No upload is performed, and this is not
+        final export validation.
+      </p>
+
+      <div className="recording-integrity__actions">
+        <button
+          className="submit-button signaling-button signaling-button--secondary"
+          type="button"
+          onClick={() => {
+            void onCheck(recordingId);
+          }}
+          disabled={isChecking}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+
+      <dl className="details-grid recording-integrity__details">
+        <div className="detail-card">
+          <dt>Expected chunks</dt>
+          <dd>{formatIntegrityNumber(report?.expectedChunkCount ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Stored chunks</dt>
+          <dd>{formatIntegrityNumber(report?.storedChunkCount ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Expected size</dt>
+          <dd>{formatIntegrityBytes(report?.expectedBytes ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Stored size</dt>
+          <dd>{formatIntegrityBytes(report?.storedBytes ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Missing chunk count</dt>
+          <dd>{formatIntegrityNumber(report?.missingChunkCount ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Last checked</dt>
+          <dd>{formatIntegrityCheckedAt(report?.checkedAt ?? null)}</dd>
+        </div>
+      </dl>
+
+      {report !== null && report.warnings.length > 0 ? (
+        <div
+          className={`message ${
+            report.status === 'healthy' ? 'recording-integrity__message' : 'message--warning'
+          }`}
+          role={report.status === 'healthy' ? 'status' : 'alert'}
+        >
+          <p className="recording-integrity__warnings-title">Local integrity notes</p>
+          <ul className="recording-integrity__warnings-list">
+            {report.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="message recording-integrity__message" role="status">
+          {report === null
+            ? 'This copy has not been checked yet.'
+            : 'The persisted local copy looks coherent so far.'}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function LocalBrowserStoragePanel({
@@ -1124,6 +1267,35 @@ function formatNullableNumber(value: number | null): string {
 
 function formatNullableByteCount(value: number | null): string {
   return value === null ? '—' : formatByteCount(value);
+}
+
+function formatLocalRecordingIntegrityStatusLabel(
+  report: LocalRecordingIntegrityReport | null,
+): string {
+  if (report === null) {
+    return 'Integrity not checked yet';
+  }
+
+  switch (report.status) {
+    case 'healthy':
+      return 'Local copy looks complete';
+    case 'warning':
+      return 'Local copy may be incomplete';
+    case 'unknown':
+      return 'Could not verify local copy';
+  }
+}
+
+function formatIntegrityNumber(value: number | null): string {
+  return value === null ? '—' : String(value);
+}
+
+function formatIntegrityBytes(value: number | null): string {
+  return value === null ? '—' : formatBytes(value);
+}
+
+function formatIntegrityCheckedAt(value: number | null): string {
+  return value === null ? '—' : formatDiagnosticTimestamp(value);
 }
 
 function formatRecordingEventList(events: RecordingEvent[]): string {
