@@ -54,10 +54,20 @@ interface StoredRecordingUploadSessionRecord extends PersistedRecordingUploadSes
 
 interface StoredUploadChunkRecord extends PersistedUploadChunkRecord {}
 
-let uploadQueueDatabasePromise: Promise<IDBDatabase> | null = null;
+let uploadQueueDatabasePromise: Promise<IDBDatabase | null> | null = null;
+let uploadQueuePersistenceSupported: boolean | null = null;
 
 export function isUploadQueuePersistenceSupported(): boolean {
-  return typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
+  if (uploadQueuePersistenceSupported !== null) {
+    return uploadQueuePersistenceSupported;
+  }
+
+  if (typeof window === 'undefined' || typeof window.indexedDB === 'undefined') {
+    uploadQueuePersistenceSupported = false;
+    return false;
+  }
+
+  return true;
 }
 
 export async function saveRecordingUploadState(state: RecordingUploadState): Promise<void> {
@@ -66,18 +76,22 @@ export async function saveRecordingUploadState(state: RecordingUploadState): Pro
   }
 
   const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return;
+  }
+
+  const normalizedState = normalizeRecordingUploadState(state);
+  const existingChunkKeys = await getPersistedUploadChunkKeys(
+    database,
+    normalizedState.recordingId,
+  );
+
   const transaction = database.transaction(
     [uploadSessionsStoreName, uploadChunksStoreName],
     'readwrite',
   );
   const sessionsStore = transaction.objectStore(uploadSessionsStoreName);
   const chunksStore = transaction.objectStore(uploadChunksStoreName);
-  const chunksByRecordingIdIndex = chunksStore.index(uploadChunksByRecordingIdIndexName);
-  const normalizedState = normalizeRecordingUploadState(state);
-
-  const existingChunkKeys = await requestToPromise<IDBValidKey[]>(
-    chunksByRecordingIdIndex.getAllKeys(IDBKeyRange.only(normalizedState.recordingId)),
-  );
 
   sessionsStore.put(createPersistedRecordingUploadSessionRecord(normalizedState));
 
@@ -100,6 +114,10 @@ export async function getPersistedRecordingUploadState(
   }
 
   const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return null;
+  }
+
   const transaction = database.transaction(
     [uploadSessionsStoreName, uploadChunksStoreName],
     'readonly',
@@ -130,6 +148,10 @@ export async function listPersistedRecordingUploadStates(): Promise<RecordingUpl
   }
 
   const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return [];
+  }
+
   const transaction = database.transaction(
     [uploadSessionsStoreName, uploadChunksStoreName],
     'readonly',
@@ -162,6 +184,10 @@ export async function deletePersistedRecordingUploadState(recordingId: string): 
   }
 
   const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return;
+  }
+
   const transaction = database.transaction(
     [uploadSessionsStoreName, uploadChunksStoreName],
     'readwrite',
@@ -189,6 +215,10 @@ export async function deleteAllPersistedRecordingUploadStates(): Promise<void> {
   }
 
   const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return;
+  }
+
   const transaction = database.transaction(
     [uploadSessionsStoreName, uploadChunksStoreName],
     'readwrite',
@@ -212,6 +242,16 @@ export async function getPersistedUploadQueueSummary(): Promise<UploadQueuePersi
   }
 
   const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return {
+      uploadSessionCount: 0,
+      uploadChunkCount: 0,
+      totalExpectedBytes: 0,
+      totalUploadedBytes: 0,
+      latestUpdatedAt: null,
+    };
+  }
+
   const transaction = database.transaction(
     [uploadSessionsStoreName, uploadChunksStoreName],
     'readonly',
@@ -252,27 +292,60 @@ export async function getPersistedUploadQueueSummary(): Promise<UploadQueuePersi
   };
 }
 
-async function getUploadQueueDatabase(): Promise<IDBDatabase> {
+async function getUploadQueueDatabase(): Promise<IDBDatabase | null> {
   if (uploadQueueDatabasePromise !== null) {
     return uploadQueueDatabasePromise;
   }
 
-  uploadQueueDatabasePromise = openUploadQueueDatabase().catch((error) => {
-    uploadQueueDatabasePromise = null;
-    throw error;
+  uploadQueueDatabasePromise = openUploadQueueDatabase().then((database) => {
+    if (database === null) {
+      uploadQueuePersistenceSupported = false;
+      return null;
+    }
+
+    uploadQueuePersistenceSupported = true;
+    return database;
   });
 
   return uploadQueueDatabasePromise;
 }
 
-function openUploadQueueDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+async function getPersistedUploadChunkKeys(
+  database: IDBDatabase,
+  recordingId: string,
+): Promise<IDBValidKey[]> {
+  const transaction = database.transaction(
+    [uploadSessionsStoreName, uploadChunksStoreName],
+    'readonly',
+  );
+  const chunksStore = transaction.objectStore(uploadChunksStoreName);
+  const chunksByRecordingIdIndex = chunksStore.index(uploadChunksByRecordingIdIndexName);
+
+  const chunkKeys = await requestToPromise<IDBValidKey[]>(
+    chunksByRecordingIdIndex.getAllKeys(IDBKeyRange.only(recordingId)),
+  );
+
+  await transactionDone(transaction);
+
+  return chunkKeys;
+}
+
+function openUploadQueueDatabase(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
     if (!isUploadQueuePersistenceSupported()) {
-      reject(new Error('IndexedDB is unavailable in this environment.'));
+      resolve(null);
       return;
     }
 
-    const request = window.indexedDB.open(uploadQueueDatabaseName, uploadQueueDatabaseVersion);
+    let request: IDBOpenDBRequest;
+
+    try {
+      request = window.indexedDB.open(uploadQueueDatabaseName, uploadQueueDatabaseVersion);
+    } catch {
+      uploadQueuePersistenceSupported = false;
+      resolve(null);
+      return;
+    }
 
     request.onupgradeneeded = () => {
       const database = request.result;
@@ -290,14 +363,13 @@ function openUploadQueueDatabase(): Promise<IDBDatabase> {
     };
 
     request.onblocked = () => {
-      reject(new Error('IndexedDB upgrade was blocked by another connection.'));
+      uploadQueuePersistenceSupported = false;
+      resolve(null);
     };
 
     request.onerror = () => {
-      reject(
-        request.error ??
-          new Error('IndexedDB persistence is available but the upload queue database could not be opened.'),
-      );
+      uploadQueuePersistenceSupported = false;
+      resolve(null);
     };
 
     request.onsuccess = () => {

@@ -54,6 +54,8 @@ confirms upload completion.
 DS-057 adds the first frontend-only upload metadata persistence adapter
 skeleton. It persists upload session and chunk metadata locally, but it does
 not add transport, backend, or UI integration yet.
+DS-058 hardens that adapter by treating IndexedDB open failures as unavailable
+persistence, without adding transport, backend, or UI integration.
 
 ## Proposed upload lifecycle
 
@@ -326,9 +328,12 @@ safety model as well as an explicit resumable upload session.
 
 - DS-055 - Add browser upload state model skeleton
 - DS-056 - Add upload queue persistence design
-- DS-057 - Add upload service API contract draft
-- DS-058 - Add frontend upload UI placeholder
-- DS-059 - Add local upload progress state foundation
+- DS-057 - Add frontend upload queue persistence adapter skeleton
+- DS-058 - Handle upload persistence IndexedDB open failures gracefully
+- DS-059 - Add upload service API contract draft
+- DS-060 - Add upload progress UI placeholder
+- DS-061 - Add upload session initialization client skeleton
+- DS-062 - Add chunk upload client skeleton behind disabled UI
 
 These slices are illustrative only. They are not added to the feature tracker in
 this PR.
