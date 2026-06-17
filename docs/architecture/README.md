@@ -21,3 +21,4 @@ Current documents:
 - [V0.1 API Domain Model](./v0.1-api-domain-model.md)
 - [Monorepo Structure](./monorepo-structure.md)
 - [Local Development Environment](./local-development-environment.md)
+- [Open-Source Technical Reference Map](./open-source-reference-map.md)
