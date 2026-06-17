@@ -968,10 +968,7 @@ function LocalBrowserStoragePanel({
     recorder.storageSummaryStatus === 'loading'
       ? 'Refreshing storage summary…'
       : 'Refresh storage summary';
-  const clearAllButtonLabel =
-    recorder.storageSummaryStatus === 'loading'
-      ? 'Clearing local recordings…'
-      : 'Clear all local recordings';
+  const clearAllButtonLabel = 'Clear all local recordings';
   const storageStatusLabel = formatStorageSummaryStatusLabel(recorder.storageSummaryStatus);
   const persistenceSupportLabel =
     storageSummary === null
