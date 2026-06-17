@@ -127,6 +127,7 @@ Recording, persistence, upload, and recovery should remain separate layers.
 - DS-051 keeps cleanup local-only by deleting persisted browser recordings from IndexedDB and does not introduce cloud or backend deletion behavior.
 - DS-052 keeps integrity checks local-only and read-only; it only compares manifest and chunk consistency in the browser and does not repair or upload anything.
 - This document does not introduce upload, cloud sync, or backend recovery behavior.
+- ADR-0017 defines the next resumable upload architecture that builds on this browser-local foundation without changing the local-first capture model.
 
 ## Testing strategy
 

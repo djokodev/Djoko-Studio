@@ -63,6 +63,7 @@
 | DS-051 | v0.1 Recording Core | Add local recording storage usage and cleanup controls | merged | Merged in PR #51. |
 | DS-052 | v0.1 Recording Core | Add local recording integrity diagnostics | merged | Merged in PR #52. |
 | DS-053 | v0.1 Recording Core | Add browser recording QA acceptance checklist | merged | Merged in PR #53. |
+| DS-054 | v0.1 Upload Foundation | Add resumable recording upload architecture ADR | in_review | Draft PR. |
 
 ## Allowed Statuses
 

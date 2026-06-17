@@ -52,3 +52,4 @@ Use a four-digit ADR number, keep the slug lowercase, and separate words with hy
 | ADR-0014 | Storage, queue and rendering stack | Accepted | [ADR-0014-storage-queue-and-rendering-stack.md](./ADR-0014-storage-queue-and-rendering-stack.md) |
 | ADR-0015 | Defer reverse proxy / gateway choice | Accepted | [ADR-0015-defer-reverse-proxy-gateway-choice.md](./ADR-0015-defer-reverse-proxy-gateway-choice.md) |
 | ADR-0016 | Browser local recording architecture | Proposed | [ADR-0016-browser-local-recording-architecture.md](./ADR-0016-browser-local-recording-architecture.md) |
+| ADR-0017 | Resumable recording upload architecture | Proposed | [ADR-0017-resumable-recording-upload-architecture.md](./ADR-0017-resumable-recording-upload-architecture.md) |
