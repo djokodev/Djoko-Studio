@@ -41,6 +41,24 @@ type wsSignalFrom struct {
 	Role          string `json:"role"`
 }
 
+type wsParticipantPayload struct {
+	ParticipantID string `json:"participant_id"`
+	Role          string `json:"role"`
+}
+
+type wsRoomStateMessage struct {
+	Type      string                `json:"type"`
+	SessionID string                `json:"session_id"`
+	Self      wsParticipantPayload  `json:"self"`
+	Peer      *wsParticipantPayload `json:"peer"`
+}
+
+type wsPeerEventMessage struct {
+	Type        string               `json:"type"`
+	SessionID   string               `json:"session_id"`
+	Participant wsParticipantPayload `json:"participant"`
+}
+
 type wsSignalMessage struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload"`
@@ -138,7 +156,23 @@ func roomHandler(roomManager *roomManager, w http.ResponseWriter, r *http.Reques
 		})
 		return
 	}
-	defer membership.leave()
+
+	notifyPeerOnLeave := false
+	defer func() {
+		if notifyPeerOnLeave {
+			_ = notifyPeerLeft(context.Background(), membership)
+		}
+		membership.leave()
+	}()
+
+	if err := writeRoomState(context.Background(), membership); err != nil {
+		return
+	}
+
+	if err := notifyPeerJoined(context.Background(), membership); err != nil {
+		return
+	}
+	notifyPeerOnLeave = true
 
 	for {
 		messageType, payload, err := conn.Read(context.Background())
@@ -202,6 +236,55 @@ func roomHandler(roomManager *roomManager, w http.ResponseWriter, r *http.Reques
 		}); err != nil {
 			return
 		}
+	}
+}
+
+func writeRoomState(ctx context.Context, membership *roomMembership) error {
+	peer := membership.peer()
+	var peerPayload *wsParticipantPayload
+	if peer != nil {
+		payload := participantPayload(peer.participant)
+		peerPayload = &payload
+	}
+
+	return writeWebSocketJSON(ctx, membership.conn, wsRoomStateMessage{
+		Type:      "room-state",
+		SessionID: membership.room.sessionID,
+		Self:      participantPayload(membership.participant),
+		Peer:      peerPayload,
+	})
+}
+
+func notifyPeerJoined(ctx context.Context, membership *roomMembership) error {
+	peer := membership.peer()
+	if peer == nil {
+		return nil
+	}
+
+	return writeWebSocketJSON(ctx, peer.conn, wsPeerEventMessage{
+		Type:        "peer-joined",
+		SessionID:   membership.room.sessionID,
+		Participant: participantPayload(membership.participant),
+	})
+}
+
+func notifyPeerLeft(ctx context.Context, membership *roomMembership) error {
+	peer := membership.peer()
+	if peer == nil {
+		return nil
+	}
+
+	return writeWebSocketJSON(ctx, peer.conn, wsPeerEventMessage{
+		Type:        "peer-left",
+		SessionID:   membership.room.sessionID,
+		Participant: participantPayload(membership.participant),
+	})
+}
+
+func participantPayload(participant wsParticipant) wsParticipantPayload {
+	return wsParticipantPayload{
+		ParticipantID: participant.participantID,
+		Role:          participant.role,
 	}
 }
 
