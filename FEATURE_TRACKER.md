@@ -64,7 +64,7 @@
 | DS-052 | v0.1 Recording Core | Add local recording integrity diagnostics | merged | Merged in PR #52. |
 | DS-053 | v0.1 Recording Core | Add browser recording QA acceptance checklist | merged | Merged in PR #53. |
 | DS-054 | v0.1 Upload Foundation | Add resumable recording upload architecture ADR | merged | Merged in PR #54. |
-| DS-055 | v0.1 Upload Foundation | Add browser upload state model skeleton | in_review | Draft PR. |
+| DS-055 | v0.1 Upload Foundation | Add browser upload state model skeleton | merged | Merged in PR #55. |
 
 ## Allowed Statuses
 
