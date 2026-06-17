@@ -19,6 +19,7 @@ import {
   useLocalMediaRecorder,
 } from '../recording/useLocalMediaRecorder';
 import { buildLocalRecordingFilename } from '../recording/recordingDownload';
+import { formatBytes } from '../recording/formatBytes';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -586,6 +587,8 @@ function LocalRecordingPrototype({
         </div>
       </dl>
 
+      <LocalBrowserStoragePanel recorder={recorder} />
+
       <section
         className="recording-prototype__preview"
         aria-labelledby="local-recording-playback-preview-title"
@@ -947,6 +950,165 @@ function LocalRecordingPrototype({
   }
 }
 
+function LocalBrowserStoragePanel({
+  recorder,
+}: {
+  recorder: LocalMediaRecorderController;
+}) {
+  const storageSummary = recorder.localStorageSummary;
+  const browserStorageEstimate = recorder.browserStorageEstimate;
+  const summaryReady = recorder.storageSummaryStatus === 'ready';
+  const hasPersistedRecordings = (storageSummary?.persistedRecordingCount ?? 0) > 0;
+  const clearAllDisabled =
+    recorder.storageSummaryStatus === 'loading' ||
+    !summaryReady ||
+    storageSummary?.supportStatus !== 'supported' ||
+    !hasPersistedRecordings;
+  const refreshButtonLabel =
+    recorder.storageSummaryStatus === 'loading'
+      ? 'Refreshing storage summary…'
+      : 'Refresh storage summary';
+  const clearAllButtonLabel =
+    recorder.storageSummaryStatus === 'loading'
+      ? 'Clearing local recordings…'
+      : 'Clear all local recordings';
+  const storageStatusLabel = formatStorageSummaryStatusLabel(recorder.storageSummaryStatus);
+  const persistenceSupportLabel =
+    storageSummary === null
+      ? 'Not checked'
+      : formatPersistenceSupportLabel(storageSummary.supportStatus);
+  const browserStorageStateLabel =
+    browserStorageEstimate === null
+      ? 'Not checked'
+      : formatBrowserStorageEstimateStateLabel(browserStorageEstimate.state);
+  const browserUsageLabel =
+    browserStorageEstimate?.state === 'available' &&
+    browserStorageEstimate.usageBytes !== null
+      ? formatBytes(browserStorageEstimate.usageBytes)
+      : browserStorageEstimate === null
+        ? 'Not checked'
+        : 'Unavailable';
+  const browserQuotaLabel =
+    browserStorageEstimate?.state === 'available' &&
+    browserStorageEstimate.quotaBytes !== null
+      ? formatBytes(browserStorageEstimate.quotaBytes)
+      : browserStorageEstimate === null
+        ? 'Not checked'
+        : 'Unavailable';
+
+  return (
+    <section
+      className="recording-storage"
+      aria-labelledby="local-browser-storage-title"
+    >
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Storage</p>
+          <h4 id="local-browser-storage-title">Local browser storage</h4>
+        </div>
+        <span
+          className={`status-pill ${
+            summaryReady && storageSummary?.supportStatus === 'supported' ? 'status-pill--live' : ''
+          }`}
+        >
+          {storageStatusLabel}
+        </span>
+      </div>
+
+      <p className="api-note recording-storage__note">
+        Stored only in this browser. No upload has been performed. Approximate size is
+        based on persisted manifest and chunk metadata, so it can help you understand
+        local browser usage without doing a full storage scan.
+      </p>
+
+      <div className="recording-storage__actions" aria-label="Local browser storage actions">
+        <button
+          className="submit-button signaling-button"
+          type="button"
+          onClick={() => {
+            void recorder.refreshLocalStorageSummary();
+          }}
+          disabled={recorder.storageSummaryStatus === 'loading'}
+        >
+          {refreshButtonLabel}
+        </button>
+        <button
+          className="submit-button signaling-button signaling-button--secondary"
+          type="button"
+          onClick={() => {
+            const confirmed = window.confirm(
+              'Clear all local recordings stored in this browser? This cannot be undone. This does not affect any cloud copy because upload is not implemented yet.',
+            );
+
+            if (!confirmed) {
+              return;
+            }
+
+            void recorder.clearAllPersistedLocalRecordings();
+          }}
+          disabled={clearAllDisabled}
+        >
+          {clearAllButtonLabel}
+        </button>
+      </div>
+
+      <dl className="details-grid recording-storage__details">
+        <div className="detail-card">
+          <dt>Persistence support</dt>
+          <dd className="mono">{persistenceSupportLabel}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Persisted local recordings</dt>
+          <dd>{storageSummary?.persistedRecordingCount ?? 0}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Approximate size</dt>
+          <dd>{formatBytes(storageSummary?.totalPersistedBytes ?? 0)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Persisted chunks</dt>
+          <dd>{storageSummary?.totalPersistedChunks ?? 0}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Browser estimate</dt>
+          <dd className="mono">{browserStorageStateLabel}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Browser usage</dt>
+          <dd>{browserUsageLabel}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Browser quota</dt>
+          <dd>{browserQuotaLabel}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Latest recording ID</dt>
+          <dd className="mono">{formatNullableText(storageSummary?.latestRecordingId ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Latest started at</dt>
+          <dd>{formatDiagnosticTimestamp(storageSummary?.latestRecordingStartedAt ?? null)}</dd>
+        </div>
+        <div className="detail-card">
+          <dt>Latest persisted at</dt>
+          <dd>{formatDiagnosticTimestamp(storageSummary?.latestPersistedAt ?? null)}</dd>
+        </div>
+      </dl>
+
+      {recorder.storageSummaryError ? (
+        <div className="message message--error" role="alert">
+          {recorder.storageSummaryError}
+        </div>
+      ) : browserStorageEstimate?.state === 'failed' &&
+        browserStorageEstimate.errorMessage !== null ? (
+        <div className="message message--warning" role="status">
+          {browserStorageEstimate.errorMessage}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function formatMimeTypeList(mimeTypes: RecordingCapabilityReport['supportedMimeTypes']): string {
   if (mimeTypes.length === 0) {
     return '—';
@@ -1026,6 +1188,34 @@ function formatPersistenceStatusLabel(
   }
 }
 
+function formatStorageSummaryStatusLabel(
+  status: LocalMediaRecorderController['storageSummaryStatus'],
+): string {
+  switch (status) {
+    case 'idle':
+      return 'Idle';
+    case 'loading':
+      return 'Loading';
+    case 'ready':
+      return 'Ready';
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function formatBrowserStorageEstimateStateLabel(
+  state: NonNullable<LocalMediaRecorderController['browserStorageEstimate']>['state'],
+): string {
+  switch (state) {
+    case 'available':
+      return 'Available';
+    case 'unavailable':
+      return 'Unavailable';
+    case 'failed':
+      return 'Failed';
+  }
+}
+
 function formatRecoveredPreviewStatusLabel(
   status: 'idle' | 'loading' | 'ready' | 'failed',
 ): string {
@@ -1053,7 +1243,7 @@ function formatDiagnosticTimestamp(epochMilliseconds: number | null): string {
 }
 
 function formatByteCount(byteCount: number): string {
-  return `${new Intl.NumberFormat('en').format(byteCount)} bytes`;
+  return formatBytes(byteCount);
 }
 
 function formatApproximateDuration(durationMs: number | null): string {

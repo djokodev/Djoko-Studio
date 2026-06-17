@@ -16,6 +16,8 @@ detection for persisted local recordings. DS-049 adds recovered playback preview
 from IndexedDB for persisted local recordings in this browser. DS-050 adds a raw
 local recording download safety copy for the completed in-memory preview and the
 recovered IndexedDB-backed preview.
+DS-051 adds local browser storage visibility and a browser-local cleanup control
+for persisted recordings.
 
 ## What this app does
 
@@ -39,6 +41,7 @@ recovered IndexedDB-backed preview.
 - detects persisted local recordings on load and lets you discard the local copy
 - lets you preview a recovered local copy from IndexedDB after refresh
 - lets you download a raw local safety copy from the completed preview or the recovered browser copy
+- shows a local browser storage panel with approximate size, persisted chunk count, browser storage estimate, and a clear-all control for persisted local recordings
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join
@@ -69,6 +72,8 @@ chunks, plus local recovery detection when persisted recordings are found in thi
 browser. DS-049 adds recovered playback preview from IndexedDB so persisted local
 recordings can be previewed after refresh. DS-050 adds a local-only raw download
 safety copy for both the current stopped preview and the recovered browser copy.
+DS-051 adds a browser-local storage summary with approximate usage and cleanup
+controls for persisted local recordings.
 Uploads, exports, recovery routing, cloud sync, and backend/database behavior are
 still out of scope.
 DS-047 adds a focused manifest model, derived summary fields, and more explicit
@@ -160,9 +165,11 @@ The local recording prototype is intentionally small and browser-only:
 - click `Download raw local copy` on the completed preview to download the raw browser recording as a local safety copy
 - click `Discard local recording / Reset` to clear the in-memory chunks, metadata, preview URL, and persisted local copy when present
 - the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, preview availability, and IndexedDB persistence status
+- the local browser storage panel shows approximate size, persisted chunk count, browser storage usage when available, and a clear-all action for persisted recordings
 - the recovery panel lists persisted local recordings detected in this browser, lets you preview a local copy from IndexedDB, download the raw local copy after it loads, and lets you discard the local copy
 - the playback preview is still local-only, memory-backed, and temporary
 - recovered playback from IndexedDB is available through the recovery panel
+- clear-all only deletes persisted local recordings in this browser and does not affect any backend or cloud copy
 - refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available
 
 ### WebRTC peer connection foundation

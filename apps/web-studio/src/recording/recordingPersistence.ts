@@ -19,6 +19,17 @@ export interface LocalRecordingPersistenceSupportResult {
   errorMessage: string | null;
 }
 
+export interface LocalRecordingStorageSummary {
+  supportStatus: LocalRecordingPersistenceSupportState;
+  supportErrorMessage: string | null;
+  persistedRecordingCount: number;
+  totalPersistedBytes: number;
+  totalPersistedChunks: number;
+  latestRecordingId: string | null;
+  latestRecordingStartedAt: number | null;
+  latestPersistedAt: number | null;
+}
+
 export interface PersistedLocalRecordingRecord {
   recordingId: string;
   manifest: LocalRecordingManifest;
@@ -89,6 +100,73 @@ export async function getLocalRecordingPersistenceSupport(): Promise<LocalRecord
   })();
 
   return localRecordingSupportPromise;
+}
+
+export async function getLocalRecordingStorageSummary(): Promise<LocalRecordingStorageSummary> {
+  const support = await getLocalRecordingPersistenceSupport();
+
+  if (support.state === 'unavailable') {
+    return {
+      supportStatus: 'unavailable',
+      supportErrorMessage: null,
+      persistedRecordingCount: 0,
+      totalPersistedBytes: 0,
+      totalPersistedChunks: 0,
+      latestRecordingId: null,
+      latestRecordingStartedAt: null,
+      latestPersistedAt: null,
+    };
+  }
+
+  if (support.state === 'failed') {
+    return {
+      supportStatus: 'failed',
+      supportErrorMessage: support.errorMessage,
+      persistedRecordingCount: 0,
+      totalPersistedBytes: 0,
+      totalPersistedChunks: 0,
+      latestRecordingId: null,
+      latestRecordingStartedAt: null,
+      latestPersistedAt: null,
+    };
+  }
+
+  try {
+    const recordings = await listPersistedLocalRecordings();
+    const latestRecording = recordings[0] ?? null;
+    let totalPersistedBytes = 0;
+    let totalPersistedChunks = 0;
+
+    for (const record of recordings) {
+      totalPersistedBytes += record.manifest.totalBytes;
+      totalPersistedChunks += record.manifest.chunkCount;
+    }
+
+    return {
+      supportStatus: 'supported',
+      supportErrorMessage: null,
+      persistedRecordingCount: recordings.length,
+      totalPersistedBytes,
+      totalPersistedChunks,
+      latestRecordingId: latestRecording?.recordingId ?? null,
+      latestRecordingStartedAt: latestRecording?.manifest.startedAt ?? null,
+      latestPersistedAt: latestRecording?.lastPersistedAt ?? null,
+    };
+  } catch (error) {
+    return {
+      supportStatus: 'failed',
+      supportErrorMessage: getPersistenceErrorMessage(
+        error,
+        'IndexedDB persistence is available but the local storage summary could not be read.',
+      ),
+      persistedRecordingCount: 0,
+      totalPersistedBytes: 0,
+      totalPersistedChunks: 0,
+      latestRecordingId: null,
+      latestRecordingStartedAt: null,
+      latestPersistedAt: null,
+    };
+  }
 }
 
 export async function saveLocalRecordingManifest(manifest: LocalRecordingManifest): Promise<void> {
@@ -233,6 +311,22 @@ export async function deletePersistedLocalRecording(recordingId: string): Promis
   for (const chunkKey of chunkKeys) {
     chunksStore.delete(chunkKey);
   }
+
+  await transactionDone(transaction);
+}
+
+export async function deleteAllPersistedLocalRecordings(): Promise<void> {
+  const support = await getLocalRecordingPersistenceSupport();
+
+  if (support.state !== 'supported') {
+    return;
+  }
+
+  const database = await getLocalRecordingDatabase();
+  const transaction = database.transaction([recordingsStoreName, chunksStoreName], 'readwrite');
+
+  transaction.objectStore(recordingsStoreName).clear();
+  transaction.objectStore(chunksStoreName).clear();
 
   await transactionDone(transaction);
 }

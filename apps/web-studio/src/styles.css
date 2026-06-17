@@ -375,6 +375,14 @@ dt {
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.recording-storage {
+  display: grid;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 .recording-recovery {
   display: grid;
   gap: 16px;
@@ -397,6 +405,20 @@ dt {
 
 .recording-prototype__note {
   margin-top: 0;
+}
+
+.recording-storage__details {
+  margin-top: 0;
+}
+
+.recording-storage__note {
+  margin-top: 0;
+}
+
+.recording-storage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .recording-prototype__preview {

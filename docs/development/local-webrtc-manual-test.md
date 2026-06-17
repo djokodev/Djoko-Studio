@@ -32,6 +32,8 @@ DS-049 adds recovered playback preview from IndexedDB so a persisted local copy
 can be played back after refresh.
 DS-050 adds a raw local recording download safety copy for both the completed
 in-memory preview and the recovered IndexedDB-backed preview.
+DS-051 adds a local browser storage summary panel and a browser-local clear-all
+control for persisted recordings.
 
 The test is meant to verify the full local path:
 
@@ -97,6 +99,8 @@ stream.
 - confirm the local playback preview appears after stop
 - click `Download raw local copy` on the completed preview and confirm the browser downloads the raw local recording with a safe filename
 - press play in the preview video if the browser allows it
+- inspect the `Local browser storage` panel and confirm it shows persistence support, approximate size, persisted chunk count, and browser storage usage or an unsupported state without crashing
+- click `Refresh storage summary` and confirm the counts and approximate size still render
 - click `Discard local recording / Reset`
 - confirm the recording ID, manifest details, chunk metadata, and preview clear
 - if IndexedDB is available, confirm the persistence support and status cards show the browser result and that the current recording persists after save
@@ -104,6 +108,8 @@ stream.
 - click `Preview local copy` on the persisted recording and confirm a recovered local browser preview appears with controls
 - confirm the preview is labeled as recovered from local browser storage and that the recovered playback details are populated
 - click `Download raw local copy` on the recovered preview and confirm the browser downloads the recovered raw local recording with a safe filename
+- click `Clear all local recordings` and confirm the confirmation dialog says the action only affects local browser storage
+- accept the confirmation and confirm the persisted recording disappears from the recovery panel and the storage summary clears
 - click `Discard local copy` in the recovery panel and confirm the persisted recording disappears
 - no upload, export, or backend call is expected
 - the only local file write should be the explicit browser download from the raw local copy action
