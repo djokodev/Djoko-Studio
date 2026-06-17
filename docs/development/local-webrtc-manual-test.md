@@ -39,6 +39,10 @@ manifest and chunk metadata with stored `Blob` sizes. It stays local-only and
 does not upload, export, repair, perform cryptographic verification, or act as
 final render validation.
 
+The manual flow in this guide is the operational test path. The formal browser
+recording acceptance checklist lives in
+[`docs/qa/browser-recording-acceptance-checklist.md`](../qa/browser-recording-acceptance-checklist.md).
+
 The test is meant to verify the full local path:
 
 - host session creation
