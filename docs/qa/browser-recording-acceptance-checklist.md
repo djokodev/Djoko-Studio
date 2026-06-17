@@ -243,3 +243,6 @@ Recording Core is acceptable for moving toward upload architecture when:
 ## Recommended Next Step
 
 After this checklist is accepted, the next project phase should be an upload and resumable upload architecture ADR.
+
+The resumable upload architecture is documented in
+[`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../adr/ADR-0017-resumable-recording-upload-architecture.md).
