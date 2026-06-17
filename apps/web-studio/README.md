@@ -21,6 +21,9 @@ for persisted recordings. DS-052 adds local recording integrity diagnostics that
 compare persisted manifest and chunk metadata with stored `Blob` sizes so the app
 can describe whether the local copy looks complete, may be incomplete, or could
 not be verified.
+DS-055 adds a frontend-only upload state model skeleton for future resumable
+uploads. It is metadata-only and local-first: no network upload is implemented
+yet, no upload UI is implemented yet, and no backend endpoint is called.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
@@ -186,6 +189,7 @@ The local recording prototype is intentionally small and browser-only:
 - recovered playback from IndexedDB is available through the recovery panel
 - clear-all only deletes persisted local recordings in this browser and does not affect any backend or cloud copy
 - refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available
+- DS-055 adds a pure TypeScript upload state model skeleton for future resumable uploads; it keeps upload metadata local-first and does not add upload transport, upload UI, backend endpoint calls, or IndexedDB wiring yet
 - the next upload phase is defined in ADR-0017 and keeps the browser-local copy until the user explicitly clears it
 
 ### WebRTC peer connection foundation
