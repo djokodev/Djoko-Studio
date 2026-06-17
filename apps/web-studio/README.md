@@ -196,6 +196,7 @@ The local recording prototype is intentionally small and browser-only:
 - recovered playback from IndexedDB is available through the recovery panel
 - clear-all only deletes persisted local recordings in this browser and does not affect any backend or cloud copy
 - refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available
+- DS-059 adds the upload API contract draft only. The web app still does not upload recordings yet.
 - DS-055 adds a pure TypeScript upload state model skeleton for future resumable uploads; it keeps upload metadata local-first and does not add upload transport, upload UI, backend endpoint calls, or IndexedDB wiring yet
 - DS-056 documents the browser-side upload queue persistence design that will later sit behind the upload state model; it does not add upload storage, transport, UI, or backend calls
 - the next upload phase is defined in ADR-0017 and keeps the browser-local copy until the user explicitly clears it

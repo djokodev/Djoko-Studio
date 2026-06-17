@@ -9,5 +9,9 @@ Expected future formats:
 
 These contracts define communication between the frontend and services.
 
-No contract files are added yet.
+Current draft contract documentation:
 
+- [`docs/contracts/recording-upload-api.md`](../../docs/contracts/recording-upload-api.md)
+
+This package remains the future home for generated or formalized contract
+artifacts.
