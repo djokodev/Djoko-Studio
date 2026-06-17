@@ -23,6 +23,21 @@ These projects are references for learning and design inspiration only.
 - Jitsi Meet is Apache-2.0, but it should still be treated as a reference
   unless a task explicitly approves reuse.
 
+## Current DNA STUDIO positioning
+
+Djoko Studio currently focuses on browser local recording foundations, local
+recovery, upload state, upload metadata persistence, and the upload API
+contract. Those areas are already documented in the existing architecture and
+contract files.
+
+Remote guest WebRTC implementation is future work.
+Studio source, scene, and output abstraction is future work.
+Multi-participant and SFU architecture is future work.
+
+These reference projects become important when those future sections are
+touched, because they show established patterns for the product areas Djoko
+Studio will eventually grow into.
+
 ## Reference map
 
 | DNA STUDIO area | Reference project | GitHub repository | What to study | When to consult it | What not to copy blindly |
@@ -39,3 +54,22 @@ These projects are references for learning and design inspiration only.
   implementation details.
 - Keep Djoko Studio's own product constraints and ADRs as the final source of
   truth.
+
+## Guidance for future agents
+
+- Remote guest and WebRTC work should consult VDO.Ninja first.
+- Studio, source, scene, and output work should consult OBS Studio first.
+- Multi-participant and SFU work should consult Jitsi Meet and Jitsi
+  Videobridge first.
+- Future Codex or Claude agents should summarize what they learned in the PR
+  body when the reference materially influenced the implementation.
+
+## Recommended PR body rule
+
+PRs that touch these areas should mention:
+
+- which reference project was consulted
+- which files or docs were inspected
+- what concept was borrowed or adapted
+- what was intentionally not copied
+- any licensing concern

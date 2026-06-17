@@ -34,6 +34,10 @@ persistence is unavailable instead of throwing.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
+For future WebRTC, studio, or multi-participant changes, consult
+[`docs/architecture/open-source-reference-map.md`](../../docs/architecture/open-source-reference-map.md)
+first.
+
 The formal browser recording acceptance checklist lives in
 [`docs/qa/browser-recording-acceptance-checklist.md`](../../docs/qa/browser-recording-acceptance-checklist.md).
 
