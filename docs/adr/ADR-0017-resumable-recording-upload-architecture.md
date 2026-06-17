@@ -162,8 +162,8 @@ as pure TypeScript state, types, and helpers. It does not implement transport,
 persistence, queueing, or UI, and it keeps the model metadata-only and
 local-first.
 
-DS-056 will add the browser upload queue persistence design that this model
-builds on, but it still will not implement browser storage, transport, backend
+DS-056 adds the browser upload queue persistence design that this model builds
+on, but it still does not implement browser storage, transport, backend
 endpoints, or UI.
 
 DS-054 does not implement this state model yet. It only documents the
