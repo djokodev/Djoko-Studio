@@ -2,6 +2,11 @@ import type {
   LocalRecordingChunkManifestEntry,
   LocalRecordingManifest,
 } from './recordingManifest';
+import {
+  createLocalRecordingIntegrityReport,
+  createUnknownLocalRecordingIntegrityReport,
+  type LocalRecordingIntegrityReport,
+} from './recordingIntegrity';
 
 const localRecordingDatabaseName = 'dna-studio-local-recordings';
 const localRecordingDatabaseVersion = 1;
@@ -64,6 +69,98 @@ export interface PersistedLocalRecordingBlobResult {
   recording: PersistedLocalRecordingRecord;
   chunks: PersistedLocalRecordingChunkRecord[];
   blob: Blob;
+}
+
+export async function verifyPersistedLocalRecording(
+  recordingId: string,
+): Promise<LocalRecordingIntegrityReport> {
+  const normalizedRecordingId = recordingId.trim();
+  const checkedAt = Date.now();
+
+  if (normalizedRecordingId === '') {
+    return createUnknownLocalRecordingIntegrityReport(
+      normalizedRecordingId,
+      ['A recording ID is required to verify local integrity.'],
+      checkedAt,
+    );
+  }
+
+  const support = await getLocalRecordingPersistenceSupport();
+
+  if (support.state === 'unavailable') {
+    return createUnknownLocalRecordingIntegrityReport(
+      normalizedRecordingId,
+      ['IndexedDB persistence is unavailable in this browser.'],
+      checkedAt,
+    );
+  }
+
+  if (support.state === 'failed') {
+    return createUnknownLocalRecordingIntegrityReport(
+      normalizedRecordingId,
+      [
+        support.errorMessage ??
+          'IndexedDB persistence is available but the local copy could not be verified.',
+      ],
+      checkedAt,
+    );
+  }
+
+  try {
+    const [recording, chunks] = await Promise.all([
+      getPersistedLocalRecording(normalizedRecordingId),
+      listPersistedLocalRecordingChunks(normalizedRecordingId),
+    ]);
+
+    if (recording === null) {
+      const storedBytes = getPersistedLocalRecordingChunkBytes(chunks);
+      const warnings = [
+        chunks.length > 0
+          ? 'Persisted chunks were found, but the manifest is missing.'
+          : 'Persisted local recording could not be found.',
+      ];
+
+      return createLocalRecordingIntegrityReport({
+        recordingId: normalizedRecordingId,
+        expectedChunkCount: 0,
+        storedChunkCount: chunks.length,
+        missingChunkCount: 0,
+        expectedBytes: 0,
+        storedBytes,
+        checkedAt,
+        verificationAvailable: false,
+        warnings,
+      });
+    }
+
+    return buildLocalRecordingIntegrityReport({
+      recording,
+      chunks,
+      checkedAt,
+    });
+  } catch (error) {
+    return createUnknownLocalRecordingIntegrityReport(
+      normalizedRecordingId,
+      [
+        getPersistenceErrorMessage(
+          error,
+          'IndexedDB persistence is available but the local copy could not be verified.',
+        ),
+      ],
+      checkedAt,
+    );
+  }
+}
+
+export async function verifyAllPersistedLocalRecordings(): Promise<LocalRecordingIntegrityReport[]> {
+  const support = await getLocalRecordingPersistenceSupport();
+
+  if (support.state !== 'supported') {
+    return [];
+  }
+
+  const recordings = await listPersistedLocalRecordings();
+  return Promise.all(recordings.map((record) => verifyPersistedLocalRecording(record.recordingId)));
 }
 
 let localRecordingDatabasePromise: Promise<IDBDatabase> | null = null;
@@ -445,4 +542,198 @@ function normalizeMimeType(mimeType: string | null | undefined): string | null {
   const trimmedMimeType = mimeType?.trim();
 
   return trimmedMimeType ? trimmedMimeType : null;
+}
+
+function buildLocalRecordingIntegrityReport({
+  recording,
+  chunks,
+  checkedAt,
+}: {
+  recording: PersistedLocalRecordingRecord;
+  chunks: PersistedLocalRecordingChunkRecord[];
+  checkedAt: number;
+}): LocalRecordingIntegrityReport {
+  const warnings: string[] = [];
+  const manifest = recording.manifest;
+  const expectedChunkCount = normalizeNonNegativeInteger(manifest.chunkCount);
+  const storedChunkCount = chunks.length;
+  const expectedBytes = normalizeNonNegativeInteger(manifest.totalBytes);
+  const storedBytes = getPersistedLocalRecordingChunkBytes(chunks);
+  const expectedChunkIndexes = new Set<number>();
+  const storedChunkIndexes = new Set<number>();
+  let manifestChunkBytes = 0;
+  let storedChunkMetadataSizeMismatchCount = 0;
+  let invalidManifestChunkIndexCount = 0;
+  let invalidStoredChunkIndexCount = 0;
+
+  if (manifest.chunks.length !== expectedChunkCount) {
+    warnings.push('The manifest chunk list does not match the manifest chunk count.');
+  }
+
+  for (const chunkEntry of manifest.chunks) {
+    const chunkIndex = normalizeChunkIndex(chunkEntry.chunkIndex);
+    if (chunkIndex === null) {
+      invalidManifestChunkIndexCount += 1;
+    } else {
+      expectedChunkIndexes.add(chunkIndex);
+    }
+
+    manifestChunkBytes += normalizeNonNegativeInteger(chunkEntry.sizeBytes);
+  }
+
+  for (const chunkRecord of chunks) {
+    const chunkIndex = normalizeChunkIndex(chunkRecord.chunkEntry.chunkIndex);
+    if (chunkIndex === null) {
+      invalidStoredChunkIndexCount += 1;
+    } else {
+      storedChunkIndexes.add(chunkIndex);
+    }
+
+    if (normalizeNonNegativeInteger(chunkRecord.chunkEntry.sizeBytes) !== chunkRecord.blob.size) {
+      storedChunkMetadataSizeMismatchCount += 1;
+    }
+  }
+
+  if (expectedChunkIndexes.size > 0) {
+    let missingChunkCount = 0;
+    for (const expectedChunkIndex of expectedChunkIndexes) {
+      if (!storedChunkIndexes.has(expectedChunkIndex)) {
+        missingChunkCount += 1;
+      }
+    }
+
+    if (missingChunkCount > 0) {
+      warnings.push(
+        formatMissingChunkWarning(missingChunkCount),
+      );
+    }
+
+    const unexpectedStoredChunkCount = countUnexpectedStoredChunkIndexes(
+      expectedChunkIndexes,
+      storedChunkIndexes,
+    );
+    if (unexpectedStoredChunkCount > 0) {
+      warnings.push(
+        formatUnexpectedStoredChunkWarning(unexpectedStoredChunkCount),
+      );
+    }
+
+    if (missingChunkCount === 0 && unexpectedStoredChunkCount === 0 && storedChunkCount !== expectedChunkCount) {
+      warnings.push('The stored chunk count does not match the manifest chunk count.');
+    }
+  } else if (storedChunkCount !== expectedChunkCount) {
+    warnings.push('The stored chunk count does not match the manifest chunk count.');
+  }
+
+  if (expectedBytes !== storedBytes) {
+    warnings.push('The stored chunk bytes do not match the manifest total.');
+  }
+
+  if (manifestChunkBytes !== expectedBytes) {
+    warnings.push('The manifest chunk metadata does not add up to the manifest total.');
+  }
+
+  if (invalidManifestChunkIndexCount > 0) {
+    warnings.push(
+      `${invalidManifestChunkIndexCount} manifest chunk entr${
+        invalidManifestChunkIndexCount === 1 ? 'y could' : 'ies could'
+      } not be verified by index.`,
+    );
+  }
+
+  if (invalidStoredChunkIndexCount > 0) {
+    warnings.push(
+      `${invalidStoredChunkIndexCount} stored chunk entr${
+        invalidStoredChunkIndexCount === 1 ? 'y could' : 'ies could'
+      } not be verified by index.`,
+    );
+  }
+
+  if (storedChunkMetadataSizeMismatchCount > 0) {
+    warnings.push(
+      `${storedChunkMetadataSizeMismatchCount} stored chunk${
+        storedChunkMetadataSizeMismatchCount === 1 ? ' has' : 's have'
+      } a byte size mismatch.`,
+    );
+  }
+
+  return createLocalRecordingIntegrityReport({
+    recordingId: recording.recordingId,
+    expectedChunkCount,
+    storedChunkCount,
+    missingChunkCount: countMissingStoredChunkIndexes(expectedChunkIndexes, storedChunkIndexes),
+    expectedBytes,
+    storedBytes,
+    checkedAt,
+    verificationAvailable: true,
+    warnings,
+  });
+}
+
+function countMissingStoredChunkIndexes(
+  expectedChunkIndexes: ReadonlySet<number>,
+  storedChunkIndexes: ReadonlySet<number>,
+): number {
+  let missingChunkCount = 0;
+
+  for (const expectedChunkIndex of expectedChunkIndexes) {
+    if (!storedChunkIndexes.has(expectedChunkIndex)) {
+      missingChunkCount += 1;
+    }
+  }
+
+  return missingChunkCount;
+}
+
+function countUnexpectedStoredChunkIndexes(
+  expectedChunkIndexes: ReadonlySet<number>,
+  storedChunkIndexes: ReadonlySet<number>,
+): number {
+  let unexpectedStoredChunkCount = 0;
+
+  for (const storedChunkIndex of storedChunkIndexes) {
+    if (!expectedChunkIndexes.has(storedChunkIndex)) {
+      unexpectedStoredChunkCount += 1;
+    }
+  }
+
+  return unexpectedStoredChunkCount;
+}
+
+function formatMissingChunkWarning(missingChunkCount: number): string {
+  return `${missingChunkCount} expected chunk${missingChunkCount === 1 ? ' is' : 's are'} missing from local storage.`;
+}
+
+function formatUnexpectedStoredChunkWarning(unexpectedStoredChunkCount: number): string {
+  return `${unexpectedStoredChunkCount} stored chunk${
+    unexpectedStoredChunkCount === 1 ? ' is' : 's are'
+  } not listed in the manifest.`;
+}
+
+function normalizeChunkIndex(chunkIndex: number): number | null {
+  if (!Number.isFinite(chunkIndex) || chunkIndex < 0) {
+    return null;
+  }
+
+  return Math.trunc(chunkIndex);
+}
+
+function normalizeNonNegativeInteger(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.trunc(value);
+}
+
+function getPersistedLocalRecordingChunkBytes(
+  chunks: PersistedLocalRecordingChunkRecord[],
+): number {
+  let totalBytes = 0;
+
+  for (const chunk of chunks) {
+    totalBytes += chunk.blob.size;
+  }
+
+  return totalBytes;
 }

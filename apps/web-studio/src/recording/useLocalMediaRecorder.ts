@@ -15,6 +15,9 @@ import {
   type LocalRecordingSummary,
 } from './recordingManifest';
 import {
+  type LocalRecordingIntegrityReport,
+} from './recordingIntegrity';
+import {
   buildPersistedLocalRecordingBlob,
   deleteAllPersistedLocalRecordings,
   deletePersistedLocalRecording,
@@ -25,6 +28,8 @@ import {
   listPersistedLocalRecordingChunks,
   saveLocalRecordingChunk,
   saveLocalRecordingManifest,
+  verifyAllPersistedLocalRecordings,
+  verifyPersistedLocalRecording,
   type LocalRecordingStorageSummary,
   type PersistedLocalRecordingRecord,
 } from './recordingPersistence';
@@ -42,6 +47,7 @@ import {
 const recordingTimesliceMs = 1000;
 
 export type LocalStorageSummaryStatus = 'idle' | 'loading' | 'ready' | 'failed';
+export type LocalIntegrityCheckStatus = 'idle' | 'checking' | 'ready' | 'failed';
 
 interface LocalRecordingPlaybackPreviewMetadata {
   previewAvailable: boolean;
@@ -77,6 +83,12 @@ interface LocalStorageSummaryState {
   browserStorageEstimate: BrowserStorageEstimate | null;
 }
 
+interface LocalIntegrityState {
+  status: LocalIntegrityCheckStatus;
+  errorMessage: string | null;
+  reportsByRecordingId: Record<string, LocalRecordingIntegrityReport>;
+}
+
 const initialRecordingPlaybackPreviewMetadata: LocalRecordingPlaybackPreviewMetadata = {
   previewAvailable: false,
   previewUrl: null,
@@ -109,6 +121,12 @@ const initialLocalStorageSummaryState: LocalStorageSummaryState = {
   browserStorageEstimate: null,
 };
 
+const initialLocalIntegrityState: LocalIntegrityState = {
+  status: 'idle',
+  errorMessage: null,
+  reportsByRecordingId: {},
+};
+
 export interface LocalMediaRecorderController {
   snapshot: RecordingStateSnapshot;
   manifest: LocalRecordingManifest | null;
@@ -121,6 +139,13 @@ export interface LocalMediaRecorderController {
   persistenceSupportStatus: LocalRecordingPersistenceSupportStatus;
   persistenceErrorMessage: string | null;
   persistedRecordings: PersistedLocalRecordingRecord[];
+  localIntegrityReports: LocalRecordingIntegrityReport[];
+  integrityCheckStatus: LocalIntegrityCheckStatus;
+  integrityCheckError: string | null;
+  checkLocalRecordingIntegrity: (
+    recordingId: string,
+  ) => Promise<LocalRecordingIntegrityReport | null>;
+  checkAllLocalRecordingIntegrity: () => Promise<LocalRecordingIntegrityReport[]>;
   discardPersistedRecording: (recordingId: string) => Promise<boolean>;
   localStorageSummary: LocalRecordingStorageSummary | null;
   browserStorageEstimate: BrowserStorageEstimate | null;
@@ -145,10 +170,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const [storageSummaryState, setStorageSummaryState] = useState<LocalStorageSummaryState>(
     initialLocalStorageSummaryState,
   );
+  const [integrityState, setIntegrityState] = useState<LocalIntegrityState>(
+    initialLocalIntegrityState,
+  );
   const snapshotRef = useRef(snapshot);
   const manifestRef = useRef(manifest);
   const recoveredPreviewRef = useRef(recoveredPreview);
   const storageSummaryRequestIdRef = useRef(0);
+  const integrityCheckRequestIdRef = useRef(0);
   const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
   const recoveredPreviewUrlRef = useRef<string | null>(null);
@@ -193,6 +222,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       setPreview(initialRecordingPlaybackPreviewMetadata);
       setRecoveredPreview(initialRecoveredPreviewMetadata);
       setStorageSummaryState(initialLocalStorageSummaryState);
+      setIntegrityState(initialLocalIntegrityState);
     };
     // The cleanup uses the current refs directly so it stays correct on unmount.
   }, []);
@@ -221,6 +251,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
   const localStorageSummary = storageSummaryState.localStorageSummary;
   const browserStorageEstimate = storageSummaryState.browserStorageEstimate;
+  const localIntegrityReports = Object.values(integrityState.reportsByRecordingId);
 
   function commitSnapshot(nextSnapshot: RecordingStateSnapshot) {
     snapshotRef.current = nextSnapshot;
@@ -251,6 +282,46 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     setStorageSummaryState((currentStorageSummaryState) => ({
       ...currentStorageSummaryState,
       ...nextStorageSummaryState,
+    }));
+  }
+
+  function commitIntegrityState(nextIntegrityState: Partial<LocalIntegrityState>) {
+    setIntegrityState((currentIntegrityState) => ({
+      ...currentIntegrityState,
+      ...nextIntegrityState,
+    }));
+  }
+
+  function upsertIntegrityReport(report: LocalRecordingIntegrityReport) {
+    setIntegrityState((currentIntegrityState) => ({
+      ...currentIntegrityState,
+      reportsByRecordingId: {
+        ...currentIntegrityState.reportsByRecordingId,
+        [report.recordingId]: report,
+      },
+    }));
+  }
+
+  function clearIntegrityReport(recordingId: string) {
+    setIntegrityState((currentIntegrityState) => {
+      if (!(recordingId in currentIntegrityState.reportsByRecordingId)) {
+        return currentIntegrityState;
+      }
+
+      const nextReportsByRecordingId = { ...currentIntegrityState.reportsByRecordingId };
+      delete nextReportsByRecordingId[recordingId];
+
+      return {
+        ...currentIntegrityState,
+        reportsByRecordingId: nextReportsByRecordingId,
+      };
+    });
+  }
+
+  function clearAllIntegrityReports() {
+    setIntegrityState((currentIntegrityState) => ({
+      ...currentIntegrityState,
+      reportsByRecordingId: {},
     }));
   }
 
@@ -351,6 +422,56 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         browserStorageEstimate: null,
       });
     }
+  }
+
+  async function verifyAndStoreIntegrityReport(
+    recordingId: string,
+  ): Promise<LocalRecordingIntegrityReport | null> {
+    const normalizedRecordingId = recordingId.trim();
+
+    if (normalizedRecordingId === '') {
+      return Promise.resolve(null);
+    }
+
+    try {
+      const report = await verifyPersistedLocalRecording(normalizedRecordingId);
+
+      if (!isMountedRef.current) {
+        return null;
+      }
+
+      upsertIntegrityReport(report);
+      return report;
+    } catch {
+      if (!isMountedRef.current) {
+        return null;
+      }
+
+      return null;
+    }
+  }
+
+  async function verifyAndStoreAllIntegrityReports(): Promise<LocalRecordingIntegrityReport[]> {
+    const reports = await verifyAllPersistedLocalRecordings();
+
+    if (!isMountedRef.current) {
+      return reports;
+    }
+
+    setIntegrityState((currentIntegrityState) => {
+      const nextReportsByRecordingId: Record<string, LocalRecordingIntegrityReport> = {};
+
+      for (const report of reports) {
+        nextReportsByRecordingId[report.recordingId] = report;
+      }
+
+      return {
+        ...currentIntegrityState,
+        reportsByRecordingId: nextReportsByRecordingId,
+      };
+    });
+
+    return reports;
   }
 
   function revokeRecoveredPreviewObjectUrl() {
@@ -553,9 +674,12 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     }
   }
 
-  function enqueuePersistenceTask(task: () => Promise<void>) {
+  function enqueuePersistenceTask<T>(task: () => Promise<T>): Promise<T> {
     const nextTask = persistenceQueueRef.current.then(task);
-    persistenceQueueRef.current = nextTask.catch(() => undefined);
+    persistenceQueueRef.current = nextTask.then(
+      () => undefined,
+      () => undefined,
+    );
 
     return nextTask;
   }
@@ -587,6 +711,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
         await refreshPersistedRecordingList(recordingId);
         await refreshLocalStorageSummary();
+        await verifyAndStoreIntegrityReport(recordingId);
       } catch (error) {
         if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
           return;
@@ -647,6 +772,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       if (chunkSaveError === null && manifestSaveError === null) {
         await refreshPersistedRecordingList(recordingId);
         await refreshLocalStorageSummary();
+        await verifyAndStoreIntegrityReport(recordingId);
         return;
       }
 
@@ -692,6 +818,12 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         if (currentRecordingIdRef.current === recordingId) {
           currentRecordingIdRef.current = null;
         }
+
+        clearIntegrityReport(recordingId);
+        commitIntegrityState({
+          status: 'idle',
+          errorMessage: null,
+        });
 
         await refreshPersistedRecordingList();
         await refreshLocalStorageSummary();
@@ -749,6 +881,12 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
           clearRecoveredPreviewState(recoveredPreviewRef.current.recordingId);
         }
 
+        clearAllIntegrityReports();
+        commitIntegrityState({
+          status: 'idle',
+          errorMessage: null,
+        });
+
         await refreshPersistedRecordingList();
         await refreshLocalStorageSummary();
         commitPersistenceState({
@@ -778,6 +916,99 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     })
       .then(() => true)
       .catch(() => false);
+  }
+
+  async function checkLocalRecordingIntegrity(
+    recordingId: string,
+  ): Promise<LocalRecordingIntegrityReport | null> {
+    const normalizedRecordingId = recordingId.trim();
+    if (normalizedRecordingId === '') {
+      return null;
+    }
+
+    const requestId = integrityCheckRequestIdRef.current + 1;
+    integrityCheckRequestIdRef.current = requestId;
+    commitIntegrityState({
+      status: 'checking',
+      errorMessage: null,
+    });
+
+    return enqueuePersistenceTask(async () => {
+      const report = await verifyAndStoreIntegrityReport(normalizedRecordingId);
+
+      if (!isMountedRef.current || integrityCheckRequestIdRef.current !== requestId) {
+        return report;
+      }
+
+      if (report === null) {
+        commitIntegrityState({
+          status: 'failed',
+          errorMessage: 'Unable to verify the persisted local recording.',
+        });
+        return null;
+      }
+
+      commitIntegrityState({
+        status: 'ready',
+        errorMessage: null,
+      });
+
+      return report;
+    });
+  }
+
+  async function checkAllLocalRecordingIntegrity(): Promise<LocalRecordingIntegrityReport[]> {
+    const support = await getLocalRecordingPersistenceSupport();
+    if (support.state !== 'supported') {
+      commitIntegrityState({
+        status: 'failed',
+        errorMessage:
+          support.state === 'unavailable'
+            ? 'IndexedDB persistence is unavailable in this browser.'
+            : support.errorMessage ??
+              'IndexedDB persistence is available but the local recordings could not be verified.',
+      });
+
+      return [];
+    }
+
+    const requestId = integrityCheckRequestIdRef.current + 1;
+    integrityCheckRequestIdRef.current = requestId;
+    commitIntegrityState({
+      status: 'checking',
+      errorMessage: null,
+    });
+
+    return enqueuePersistenceTask(async () => {
+      try {
+        const reports = await verifyAndStoreAllIntegrityReports();
+
+        if (!isMountedRef.current || integrityCheckRequestIdRef.current !== requestId) {
+          return reports;
+        }
+
+        commitIntegrityState({
+          status: 'ready',
+          errorMessage: null,
+        });
+
+        return reports;
+      } catch (error) {
+        if (!isMountedRef.current || integrityCheckRequestIdRef.current !== requestId) {
+          return [];
+        }
+
+        commitIntegrityState({
+          status: 'failed',
+          errorMessage: getRecorderErrorMessage(
+            error,
+            'Unable to verify the persisted local recordings.',
+          ),
+        });
+
+        return [];
+      }
+    });
   }
 
   function clearRecordingChunks() {
@@ -1110,6 +1341,11 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     persistenceSupportStatus: persistenceState.supportStatus,
     persistenceErrorMessage: persistenceState.errorMessage,
     persistedRecordings: persistenceState.persistedRecordings,
+    localIntegrityReports,
+    integrityCheckStatus: integrityState.status,
+    integrityCheckError: integrityState.errorMessage,
+    checkLocalRecordingIntegrity,
+    checkAllLocalRecordingIntegrity,
     discardPersistedRecording,
     localStorageSummary,
     browserStorageEstimate,

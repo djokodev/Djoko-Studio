@@ -113,6 +113,7 @@ The long-term recording system should preserve chunks locally so refreshes, cras
 - DS-049 adds recovered playback preview from IndexedDB so a persisted local copy can be viewed after refresh.
 - DS-050 adds a raw local recording download safety copy for both the current completed preview and the recovered browser copy without changing upload or export boundaries.
 - DS-051 adds user-facing browser-local storage visibility and cleanup controls on top of that IndexedDB foundation without changing the local-first architecture decision.
+- DS-052 adds local recording integrity diagnostics that compare persisted manifest and chunk metadata with stored `Blob` sizes, without introducing upload, export, repair, or cryptographic verification.
 
 ## Upload and recovery boundaries
 
@@ -124,6 +125,7 @@ Recording, persistence, upload, and recovery should remain separate layers.
 - A fuller recovery workflow is future work, but local preview recovery from IndexedDB is now implemented in DS-049.
 - DS-050 keeps downloads local-only by reusing the existing preview ObjectURLs as a safety copy, not as final export behavior.
 - DS-051 keeps cleanup local-only by deleting persisted browser recordings from IndexedDB and does not introduce cloud or backend deletion behavior.
+- DS-052 keeps integrity checks local-only and read-only; it only compares manifest and chunk consistency in the browser and does not repair or upload anything.
 - This document does not introduce upload, cloud sync, or backend recovery behavior.
 
 ## Testing strategy
