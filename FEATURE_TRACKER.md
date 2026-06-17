@@ -68,6 +68,7 @@
 | DS-056 | v0.1 Upload Foundation | Add browser upload queue persistence design | merged | Merged in PR #56. |
 | DS-057 | v0.1 Upload Foundation | Add frontend upload queue persistence adapter skeleton | merged | Merged in PR #57. |
 | DS-058 | v0.1 Upload Foundation | Handle upload persistence IndexedDB open failures gracefully | merged | Merged in PR #58. |
+| DS-059 | v0.1 Upload Foundation | Add upload service API contract draft | in_review | Draft PR. |
 
 ## Allowed Statuses
 

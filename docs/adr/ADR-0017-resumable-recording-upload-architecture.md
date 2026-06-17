@@ -56,6 +56,9 @@ skeleton. It persists upload session and chunk metadata locally, but it does
 not add transport, backend, or UI integration yet.
 DS-058 hardens that adapter by treating IndexedDB open failures as unavailable
 persistence, without adding transport, backend, or UI integration.
+DS-059 adds the first upload service API contract draft. It defines expected
+endpoints, idempotency behavior, error behavior, and safety constraints, but
+does not implement backend/client/upload UI.
 
 ## Proposed upload lifecycle
 
