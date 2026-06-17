@@ -16,6 +16,14 @@ future work.
 - Upload is still not implemented.
 - The browser remains local-first until the server confirms upload completion.
 
+## Implementation note
+
+DS-057 introduces the first frontend upload queue persistence adapter skeleton
+for metadata only. It stores upload session and chunk metadata in IndexedDB,
+but it does not store recording `Blob` chunks, it does not store ObjectURLs, it
+does not perform network upload, and it is not yet integrated into the
+recorder or UI flows.
+
 ## Persistence goals
 
 - preserve upload session metadata across refreshes and tab restarts
@@ -160,4 +168,3 @@ Recommended follow-on sequence after DS-056:
 - DS-059 - Add upload progress UI placeholder
 - DS-060 - Add upload session initialization client skeleton
 - DS-061 - Add chunk upload client skeleton behind disabled UI
-

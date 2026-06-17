@@ -26,6 +26,9 @@ uploads. It is metadata-only and local-first: no network upload is implemented
 yet, no upload UI is implemented yet, and no backend endpoint is called.
 DS-056 documents the future browser upload queue persistence design that will
 sit behind that state model, but the app still does not perform upload yet.
+DS-057 adds the first upload metadata persistence adapter skeleton for future
+resumable uploads. It stores upload metadata locally, but upload itself is
+still not implemented and no upload UI exists yet.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
