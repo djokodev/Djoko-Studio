@@ -210,6 +210,10 @@ export function markChunkFailed(
     errorMessage: normalizedErrorMessage,
   }));
 
+  if (nextState === state) {
+    return state;
+  }
+
   const hasInFlightChunks = nextState.chunks.some((chunk) =>
     chunk.status === 'pending' || chunk.status === 'uploading',
   );
