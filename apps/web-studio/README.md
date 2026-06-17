@@ -29,6 +29,8 @@ sit behind that state model, but the app still does not perform upload yet.
 DS-057 adds the first upload metadata persistence adapter skeleton for future
 resumable uploads. It stores upload metadata locally, but upload itself is
 still not implemented and no upload UI exists yet.
+DS-058 hardens that metadata adapter so IndexedDB open failures behave like
+persistence is unavailable instead of throwing.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 

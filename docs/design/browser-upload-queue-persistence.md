@@ -23,6 +23,9 @@ for metadata only. It stores upload session and chunk metadata in IndexedDB,
 but it does not store recording `Blob` chunks, it does not store ObjectURLs, it
 does not perform network upload, and it is not yet integrated into the
 recorder or UI flows.
+DS-058 hardens that adapter so IndexedDB open failures behave like persistence
+is unavailable, keeping the metadata layer resilient without adding upload
+transport, backend, or UI integration.
 
 ## Persistence goals
 
@@ -164,7 +167,8 @@ DS-056 does not include:
 Recommended follow-on sequence after DS-056:
 
 - DS-057 - Add frontend upload queue persistence adapter skeleton
-- DS-058 - Add upload service API contract draft
-- DS-059 - Add upload progress UI placeholder
-- DS-060 - Add upload session initialization client skeleton
-- DS-061 - Add chunk upload client skeleton behind disabled UI
+- DS-058 - Handle upload persistence IndexedDB open failures gracefully
+- DS-059 - Add upload service API contract draft
+- DS-060 - Add upload progress UI placeholder
+- DS-061 - Add upload session initialization client skeleton
+- DS-062 - Add chunk upload client skeleton behind disabled UI
