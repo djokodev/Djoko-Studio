@@ -49,6 +49,12 @@ confirms upload completion.
 - The browser does not delete the local copy automatically in the first MVP
   version.
 
+## Implementation note
+
+DS-057 adds the first frontend-only upload metadata persistence adapter
+skeleton. It persists upload session and chunk metadata locally, but it does
+not add transport, backend, or UI integration yet.
+
 ## Proposed upload lifecycle
 
 ### A. Local recording completed
