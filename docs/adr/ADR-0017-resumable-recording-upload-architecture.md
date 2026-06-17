@@ -157,6 +157,11 @@ Suggested upload-facing statuses for that future model:
 - `failed`
 - `canceled`
 
+DS-055 adds the first implementation slice for this state model in the browser
+as pure TypeScript state, types, and helpers. It does not implement transport,
+persistence, queueing, or UI, and it keeps the model metadata-only and
+local-first.
+
 DS-054 does not implement this state model yet. It only documents the
 architecture for later work.
 
