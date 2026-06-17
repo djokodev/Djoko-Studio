@@ -414,7 +414,7 @@ Notes on the error model:
 ## Client and server alignment
 
 The browser upload state model in
-[`apps/web-studio/src/upload/recordingUploadState.ts`](/Users/jeotech/Desktop/projects/Djoko Studio/apps/web-studio/src/upload/recordingUploadState.ts)
+`apps/web-studio/src/upload/recordingUploadState.ts`
 already models:
 
 - session lifecycle
@@ -439,6 +439,51 @@ Practical mapping guidance:
 - `failed` maps to a session that needs intervention or a new attempt
 - `canceled` maps to a terminal canceled session
 
+## Client integration notes
+
+Future frontend slices are expected to:
+
+- create an upload session from the browser once a local recording is ready
+- persist the returned `uploadId` in IndexedDB metadata alongside the local
+  recording state
+- compare server `missingChunkIndexes` with local chunk availability before
+  retrying work
+- upload only the missing chunks instead of replaying the whole recording
+- mark the upload complete only after the server has verified the session
+- keep the local safety copy intact and never delete it automatically in the
+  MVP
+
+## Security / privacy notes
+
+Future production behavior should account for:
+
+- authentication and authorization before public release
+- per-upload expiration so abandoned sessions do not remain open forever
+- no public unauthenticated upload endpoints in production
+- MIME and content validation on both session creation and chunk upload
+- request and object size limits
+- rate limits and abuse protection
+- uploaded media is sensitive and should be treated accordingly
+- avoid exposing unnecessary local metadata, especially browser-only details
+
+## Backend implementation notes
+
+DS-059 adds only a contract draft. No backend implementation is added here.
+The implementation work remains future work and may be split across several
+services depending on the final architecture.
+
+Likely future backend pieces include:
+
+- a Go API for session orchestration if the final architecture keeps upload
+  session management there
+- a Rust upload service for streaming chunk upload if and when that split is
+  introduced
+- S3-compatible storage, with MinIO or another local compatible backend in
+  development
+- PostgreSQL later for durable upload sessions and related metadata
+
+The concrete service split is intentionally left open in this draft.
+
 ## Non-goals
 
 - no backend implementation in this document
@@ -457,4 +502,3 @@ Practical mapping guidance:
 - whether the upload service should emit more granular status transition events
 - whether `paused` is server-managed, client-managed, or both
 - whether upload session expiry should be fixed or negotiated
-
