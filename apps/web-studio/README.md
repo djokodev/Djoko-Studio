@@ -22,6 +22,9 @@ compare persisted manifest and chunk metadata with stored `Blob` sizes so the ap
 can describe whether the local copy looks complete, may be incomplete, or could
 not be verified.
 
+The formal browser recording acceptance checklist lives in
+[`docs/qa/browser-recording-acceptance-checklist.md`](../../docs/qa/browser-recording-acceptance-checklist.md).
+
 ## What this app does
 
 - shows the DNA Studio / Djoko Studio title and short product description
@@ -46,6 +49,7 @@ not be verified.
 - lets you download a raw local safety copy from the completed preview or the recovered browser copy
 - shows a local browser storage panel with approximate size, persisted chunk count, browser storage estimate, and a clear-all control for persisted local recordings
 - shows local recording integrity diagnostics for persisted copies, including manifest/chunk consistency checks, stored `Blob` sizes, missing chunk counts when available, and a local-only recheck action
+- pairs with the browser recording acceptance checklist for QA sign-off before resumable upload work
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
 - shows a minimal signaling panel after guest join

@@ -139,6 +139,8 @@ Future tests should cover the recording lifecycle and the browser capability bou
 - manual test for permission denied
 - manual test for refresh or crash recovery once persistence exists
 - future upload resume tests
+- the formal browser recording acceptance checklist lives in
+  `docs/qa/browser-recording-acceptance-checklist.md`
 
 ## Staged implementation proposal
 
