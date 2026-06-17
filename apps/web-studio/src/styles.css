@@ -247,6 +247,30 @@ h5 {
   color: #fecaca;
 }
 
+.peer-presence-pill--unknown {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
+.peer-presence-pill--waiting {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fef3c7;
+}
+
+.peer-presence-pill--connected {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #d1fae5;
+}
+
+.peer-presence-pill--disconnected {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fecaca;
+}
+
 .api-note {
   margin: 20px 0 0;
   color: rgba(226, 232, 240, 0.7);
@@ -855,6 +879,11 @@ dt {
 .signaling-log__item--signal {
   border-color: rgba(56, 189, 248, 0.24);
   background: rgba(8, 47, 73, 0.28);
+}
+
+.signaling-log__item--presence {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(120, 53, 15, 0.2);
 }
 
 .signaling-log__item--state {
