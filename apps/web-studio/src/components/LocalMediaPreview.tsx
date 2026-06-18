@@ -635,7 +635,7 @@ function LocalRecordingPrototype({
         <div className="detail-card">
           <dt>Upload status</dt>
           <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
-            Not uploaded (Local only)
+            Local copy only
           </dd>
         </div>
         {recorder.manifest?.sessionId && (
@@ -1009,7 +1009,7 @@ function LocalRecordingPrototype({
                     <div className="detail-card">
                       <dt>Upload status</dt>
                       <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
-                        Not uploaded (Local only)
+                        Local copy only
                       </dd>
                     </div>
                     {record.manifest.sessionId && (

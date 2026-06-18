@@ -27,6 +27,9 @@ Implemented local infrastructure baseline:
 - `docker-compose.yml`
 - `.env.example`
 
+The MinIO service can be used by the upload backend through the `S3_*`
+environment variables in `.env`.
+
 ## How To Start
 
 ```bash

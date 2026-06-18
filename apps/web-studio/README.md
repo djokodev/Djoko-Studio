@@ -32,10 +32,14 @@ still not implemented and no upload UI exists yet.
 DS-058 hardens that metadata adapter so IndexedDB open failures behave like
 persistence is unavailable instead of throwing.
 DS-061 adds the upload readiness panel and disabled upload client foundation.
-Upload remains disabled in this build, and no network upload occurs.
+DS-064 turns that readiness panel into a live resumable upload flow.
 DS-062 adds signaling presence events (`room-state`, `peer-joined`, and
 `peer-left`) plus the local host/guest WebRTC smoke test guide.
 DS-063 integrates the local recording session and IndexedDB persistence system with active WebRTC sessions, binding recordings to specific sessions and participants (sessionId, participantId, role), keeping chunk blobs out of long-lived memory by rebuilding preview/download from IndexedDB, and adding an unload warning UX when recording is in progress or unsaved local copies exist. It also sets up a Vitest unit test suite.
+DS-064 adds the real resumable upload path on top of that local recording
+foundation. It uploads persisted chunks one by one, resumes after refresh by
+checking server status, tracks upload progress separately from local recording
+persistence, and uses the Rust upload service backed by MinIO/S3 storage.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
@@ -71,6 +75,7 @@ The formal browser recording acceptance checklist lives in
 - lets you download a raw local safety copy from the completed preview or the recovered browser copy
 - shows a local browser storage panel with approximate size, persisted chunk count, browser storage estimate, and a clear-all control for persisted local recordings
 - shows local recording integrity diagnostics for persisted copies, including manifest/chunk consistency checks, stored `Blob` sizes, missing chunk counts when available, and a local-only recheck action
+- shows a real upload readiness panel for persisted local recordings, including queue status, chunk progress, byte progress, retry/pause/resume/cancel actions, and last upload error visibility
 - pairs with the browser recording acceptance checklist for QA sign-off before resumable upload work
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
@@ -87,7 +92,6 @@ The formal browser recording acceptance checklist lives in
 - auth
 - full authorization
 - backend/database behavior
-- upload
 - export
 - cloud sync
 - recovery routing
@@ -171,7 +175,7 @@ This is signaling relay plus peer connection foundation only.
 
 No auth.
 No full authorization.
-No upload/export behavior.
+No upload/export behavior in this signaling-only test.
 
 ### Local camera and microphone preview
 
@@ -206,8 +210,8 @@ The local recording prototype is intentionally small and browser-only:
 - recovered playback from IndexedDB is available through the recovery panel
 - clear-all only deletes persisted local recordings in this browser and does not affect any backend or cloud copy
 - refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available
-- DS-059 adds the upload API contract draft only. The web app still does not upload recordings yet.
-- DS-061 adds the upload readiness panel and disabled upload client foundation. The web app still does not upload recordings yet, and the upload controls remain disabled.
+- DS-059 adds the upload API contract draft, which DS-064 now implements against the Rust upload service.
+- DS-061 adds the upload readiness panel and disabled upload client foundation. DS-064 replaces that foundation with the real resumable upload flow.
 - DS-055 adds a pure TypeScript upload state model skeleton for future resumable uploads; it keeps upload metadata local-first and does not add upload transport, upload UI, backend endpoint calls, or IndexedDB wiring yet
 - DS-056 documents the browser-side upload queue persistence design that will later sit behind the upload state model; it does not add upload storage, transport, UI, or backend calls
 - the next upload phase is defined in ADR-0017 and keeps the browser-local copy until the user explicitly clears it
@@ -250,14 +254,25 @@ The API client uses that base URL for host create, guest lookup, and guest join 
 
 The app also reads `VITE_SIGNALING_BASE_URL` for the signaling client.
 
+The upload panel reads `VITE_UPLOAD_BASE_URL` for the Rust upload service.
+
+If `VITE_UPLOAD_BASE_URL` is not set, the app falls back to:
+
+```text
+http://localhost:8082
+```
+
 Example local setup:
 
 ```bash
 cd apps/web-studio
-VITE_API_BASE_URL=http://localhost:8080 npm run dev
+VITE_API_BASE_URL=http://localhost:8080 \
+VITE_UPLOAD_BASE_URL=http://localhost:8082 \
+npm run dev
 ```
 
 If you do not set the variable, the app still talks to the local API fallback.
+The upload client still talks to the local upload fallback.
 
 To point the app at a different signaling service URL:
 
