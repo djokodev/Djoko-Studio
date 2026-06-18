@@ -40,6 +40,8 @@ DS-064 adds the real resumable upload path on top of that local recording
 foundation. It uploads persisted chunks one by one, resumes after refresh by
 checking server status, tracks upload progress separately from local recording
 persistence, and uses the Rust upload service backed by MinIO/S3 storage.
+MediaRecorder chunks are treated as variable-sized pieces, not a fixed-size
+stream.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 

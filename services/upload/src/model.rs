@@ -419,10 +419,8 @@ impl UploadSessionRecord {
         self.completed_at = if complete { Some(now) } else { None };
         self.status = if complete {
             UploadSessionStatus::Uploaded
-        } else if !rejected.is_empty() || self.uploaded_bytes > 0 {
-            UploadSessionStatus::Incomplete
         } else {
-            UploadSessionStatus::Failed
+            UploadSessionStatus::Incomplete
         };
 
         CompleteUploadSessionResponse {
@@ -573,15 +571,6 @@ pub fn create_upload_id() -> String {
     format!("upl_{}", Uuid::new_v4().simple())
 }
 
-pub fn compute_expected_chunk_count(total_bytes: u64, chunk_size_bytes: u64) -> Option<u32> {
-    if total_bytes == 0 || chunk_size_bytes == 0 {
-        return None;
-    }
-
-    let count = total_bytes.div_ceil(chunk_size_bytes);
-    u32::try_from(count).ok()
-}
-
 pub fn validate_create_request(
     request: &CreateUploadSessionRequest,
 ) -> Result<(), UploadServiceError> {
@@ -629,20 +618,10 @@ pub fn validate_create_request(
         ));
     }
 
-    let Some(expected_chunk_count) =
-        compute_expected_chunk_count(request.total_bytes, request.chunk_size_bytes)
-    else {
+    if request.expected_chunk_count == 0 {
         return Err(UploadServiceError::validation(
-            "chunk_size_mismatch",
-            "Expected chunk count is too large.",
-            false,
-        ));
-    };
-
-    if expected_chunk_count != request.expected_chunk_count {
-        return Err(UploadServiceError::validation(
-            "chunk_size_mismatch",
-            "Expected chunk count does not match the total bytes and chunk size.",
+            "invalid_expected_chunk_count",
+            "Expected chunk count must be greater than zero.",
             false,
         ));
     }

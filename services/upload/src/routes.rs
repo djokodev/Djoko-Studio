@@ -297,9 +297,9 @@ mod tests {
                     "sessionId": "session-1",
                     "participantId": "participant-1",
                     "role": "host",
-                    "totalBytes": 6,
+                    "totalBytes": 5,
                     "expectedChunkCount": 2,
-                    "chunkSizeBytes": 3,
+                    "chunkSizeBytes": 2,
                     "mimeType": "video/webm",
                     "manifestVersion": 1,
                     "clientCreatedAt": Utc::now(),
@@ -365,9 +365,9 @@ mod tests {
                     "sessionId": "session-1",
                     "participantId": "participant-1",
                     "role": "host",
-                    "totalBytes": 6,
+                    "totalBytes": 5,
                     "expectedChunkCount": 2,
-                    "chunkSizeBytes": 3,
+                    "chunkSizeBytes": 2,
                     "mimeType": "video/webm",
                     "manifestVersion": 1,
                     "clientCreatedAt": Utc::now(),
@@ -393,7 +393,7 @@ mod tests {
         let created = create_upload_session().await;
         let headers = [
             ("content-type", "video/webm"),
-            ("x-dna-total-bytes", "6"),
+            ("x-dna-total-bytes", "5"),
             ("x-dna-chunk-size", "3"),
             ("x-dna-idempotency-key", "idempotency-1"),
             (
@@ -456,10 +456,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn complete_upload_returns_incomplete_when_chunks_are_missing() {
+        let created = create_upload_session().await;
+        let response = request(
+            Method::POST,
+            &format!(
+                "/api/recordings/{}/uploads/{}/complete",
+                created.recording_id, created.upload_id
+            ),
+            &[],
+            Body::empty(),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let payload: CompleteUploadSessionResponse =
+            serde_json::from_slice(&body).expect("parse response");
+        assert!(!payload.complete);
+        assert_eq!(
+            payload.status,
+            crate::model::UploadSessionStatus::Incomplete
+        );
+        assert_eq!(payload.missing_chunk_indexes, vec![0, 1]);
+    }
+
+    #[tokio::test]
+    async fn invalid_chunk_index_returns_bad_request() {
+        let created = create_upload_session().await;
+        let response = request(
+            Method::PUT,
+            &format!(
+                "/api/recordings/{}/uploads/{}/chunks/2",
+                created.recording_id, created.upload_id
+            ),
+            &[
+                ("content-type", "video/webm"),
+                ("x-dna-total-bytes", "5"),
+                ("x-dna-chunk-size", "2"),
+                ("x-dna-idempotency-key", "idempotency-invalid-index"),
+            ],
+            Body::from("z"),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn empty_chunk_returns_bad_request() {
+        let created = create_upload_session().await;
+        let response = request(
+            Method::PUT,
+            &format!(
+                "/api/recordings/{}/uploads/{}/chunks/0",
+                created.recording_id, created.upload_id
+            ),
+            &[
+                ("content-type", "video/webm"),
+                ("x-dna-total-bytes", "5"),
+                ("x-dna-chunk-size", "2"),
+                ("x-dna-idempotency-key", "idempotency-empty-body"),
+            ],
+            Body::empty(),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn complete_upload_marks_session_uploaded_when_all_chunks_present() {
         let created = create_upload_session().await;
-        let checksum_a = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-        let checksum_b = "8c55ff95a660f37cb05c6b85d0d8c3c5d5e4c53eb5c8d4c6c4b53f8d2ec0f6f4";
 
         let _ = request(
             Method::PUT,
@@ -469,12 +539,12 @@ mod tests {
             ),
             &[
                 ("content-type", "video/webm"),
-                ("x-dna-total-bytes", "6"),
-                ("x-dna-chunk-size", "3"),
+                ("x-dna-total-bytes", "5"),
+                ("x-dna-chunk-size", "2"),
                 ("x-dna-idempotency-key", "idempotency-1"),
-                ("x-dna-chunk-checksum", checksum_a),
+                ("x-dna-chunk-checksum", "checksum-a"),
             ],
-            Body::from("abc"),
+            Body::from("ab"),
         )
         .await;
 
@@ -486,12 +556,12 @@ mod tests {
             ),
             &[
                 ("content-type", "video/webm"),
-                ("x-dna-total-bytes", "6"),
+                ("x-dna-total-bytes", "5"),
                 ("x-dna-chunk-size", "3"),
                 ("x-dna-idempotency-key", "idempotency-2"),
-                ("x-dna-chunk-checksum", checksum_b),
+                ("x-dna-chunk-checksum", "checksum-b"),
             ],
-            Body::from("def"),
+            Body::from("cde"),
         )
         .await;
 
@@ -514,6 +584,7 @@ mod tests {
             serde_json::from_slice(&body).expect("parse response");
         assert!(payload.complete);
         assert_eq!(payload.status, crate::model::UploadSessionStatus::Uploaded);
+        assert_eq!(payload.uploaded_bytes, 5);
     }
 
     #[tokio::test]

@@ -171,31 +171,24 @@ export function getUploadBaseUrl(): string {
   return import.meta.env.VITE_UPLOAD_BASE_URL?.trim() || defaultUploadBaseUrl;
 }
 
-export function createRecordingUploadApiPaths(baseUrl?: string): RecordingUploadApiPaths {
+export function createRecordingUploadApiPaths(): RecordingUploadApiPaths {
   return {
     createUploadSessionPath: (recordingId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
-        `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads`,
-      ),
+      buildUploadPath(`${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads`),
     getUploadSessionStatusPath: (recordingId: string, uploadId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}`,
       ),
     uploadChunkPath: (recordingId: string, uploadId: string, chunkIndex: number) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}/chunks/${encodeChunkIndex(chunkIndex)}`,
       ),
     completeUploadSessionPath: (recordingId: string, uploadId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}/complete`,
       ),
     cancelUploadSessionPath: (recordingId: string, uploadId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}/cancel`,
       ),
   };
@@ -203,7 +196,7 @@ export function createRecordingUploadApiPaths(baseUrl?: string): RecordingUpload
 
 export function createRecordingUploadApiClient(baseUrl?: string): RecordingUploadClient {
   const resolvedBaseUrl = baseUrl ?? getUploadBaseUrl();
-  const paths = createRecordingUploadApiPaths(resolvedBaseUrl);
+  const paths = createRecordingUploadApiPaths();
 
   return {
     paths,
@@ -280,7 +273,7 @@ export async function computeBlobSha256Hex(blob: Blob): Promise<string> {
 }
 
 async function requestJson<T>(baseUrl: string, path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, init);
+  const response = await fetch(buildUploadUrl(baseUrl, path), init);
   const payload = await readJsonPayload(response);
 
   if (!response.ok) {
@@ -361,14 +354,23 @@ function toHex(bytes: ArrayBuffer): string {
   return Array.from(view, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function joinRecordingUploadApiPath(baseUrl: string | undefined, path: string): string {
+export function buildUploadUrl(baseUrl: string | undefined, path: string): string {
   const trimmedBaseUrl = baseUrl?.trim();
+  const trimmedPath = path.trim();
 
   if (!trimmedBaseUrl) {
-    return path;
+    return trimmedPath;
   }
 
-  return `${trimmedBaseUrl.replace(/\/+$/, '')}${path}`;
+  return new URL(trimmedPath, ensureTrailingSlash(trimmedBaseUrl)).toString();
+}
+
+function buildUploadPath(path: string): string {
+  return path.startsWith('/') ? path : `/${path}`;
+}
+
+function ensureTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value : `${value}/`;
 }
 
 function encodePathSegment(value: string): string {

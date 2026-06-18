@@ -14,6 +14,10 @@ Upload state is tracked separately from local recording persistence so a refresh
 can resume from the last confirmed chunk without rebuilding the full recording
 Blob.
 
+Chunks may vary in size. MediaRecorder output is not guaranteed to be uniform,
+so the protocol treats `chunkSizeBytes` on session creation as a nominal hint,
+while each uploaded chunk carries its own actual `chunkSizeBytes` header.
+
 ## Base URL
 
 The browser talks to the upload service through `VITE_UPLOAD_BASE_URL`.
@@ -72,6 +76,9 @@ Request body:
 }
 ```
 
+`chunkSizeBytes` in the create request is a nominal size hint. It does not
+promise that every chunk will use the same size.
+
 Response body:
 
 ```json
@@ -99,7 +106,7 @@ Validation rules:
 - `recordingId`, `sessionId`, and `participantId` are required
 - `totalBytes` must be greater than zero
 - `chunkSizeBytes` must be greater than zero
-- `expectedChunkCount` must match `ceil(totalBytes / chunkSizeBytes)`
+- `expectedChunkCount` must be greater than zero
 - `manifestVersion` must be `1`
 
 ### Get upload status
@@ -166,6 +173,8 @@ Response body:
 Behavior:
 
 - the service stores each chunk independently
+- each chunk may be a different size, and the final chunk may be smaller than
+  the others
 - repeat uploads with the same content are idempotent
 - duplicate uploads with the same checksum are reported as
   `already_present`
@@ -197,6 +206,8 @@ Response body:
 ```
 
 If chunks are missing or rejected, the service returns `incomplete` and `complete: false`.
+The backend finalizes only when every expected chunk is present and the sum of
+stored chunk bytes matches `totalBytes`.
 
 ### Cancel upload
 

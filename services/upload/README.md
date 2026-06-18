@@ -16,6 +16,7 @@ recordings.
 - local in-memory storage for tests
 - S3/MinIO-backed storage for runtime
 - CORS enabled for the browser client
+- variable-size chunk uploads supported; the create request only carries a nominal chunk-size hint
 
 ## Storage configuration
 

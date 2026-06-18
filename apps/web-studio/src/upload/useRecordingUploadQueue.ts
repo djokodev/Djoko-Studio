@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PersistedLocalRecordingChunkRecord, PersistedLocalRecordingRecord } from '../recording/recordingPersistence';
+import type { PersistedLocalRecordingRecord } from '../recording/recordingPersistence';
 import { listPersistedLocalRecordingChunks } from '../recording/recordingPersistence';
 import { computeBlobSha256Hex, createRecordingUploadApiClient, RecordingUploadClientError } from './recordingUploadApiClient';
 import {
@@ -232,7 +232,10 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
     const token = nextRunToken(recording.recordingId);
 
     try {
-      const chunkSizeBytes = deriveNominalChunkSizeBytes(localChunks);
+      const chunkSizeBytes = deriveNominalChunkSizeBytes(
+        recording.manifest.totalBytes,
+        recording.manifest.chunkCount,
+      );
       if (!options.resumeExisting || nextState.uploadId === null) {
         const createResponse = await uploadClient.createUploadSession({
           recordingId: recording.recordingId,
@@ -377,8 +380,12 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
   }
 }
 
-function deriveNominalChunkSizeBytes(chunks: readonly PersistedLocalRecordingChunkRecord[]): number {
-  return chunks[0]?.blob.size ?? 1;
+function deriveNominalChunkSizeBytes(totalBytes: number, chunkCount: number): number {
+  if (chunkCount <= 0) {
+    return 1;
+  }
+
+  return Math.max(1, Math.ceil(totalBytes / chunkCount));
 }
 
 function formatBytes(value: number): string {
