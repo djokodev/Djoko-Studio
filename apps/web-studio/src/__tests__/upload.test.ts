@@ -11,6 +11,7 @@ import {
 } from '../upload/recordingUploadApiClient';
 import {
   applyRecordingUploadChunkResponse,
+  applyRecordingUploadFailureResponse,
   buildLocalRecordingChunkSizeByIndex,
   canApplyLateUploadResponse,
   deriveServerConfirmedUploadChunkIndexes,
@@ -34,6 +35,8 @@ import {
   deleteAllPersistedRecordingUploadStates,
   getPersistedRecordingUploadState,
   saveRecordingUploadState,
+  saveRecordingUploadStateIncremental,
+  getChangedUploadChunkIndexes,
 } from '../upload/recordingUploadPersistence';
 import { createLocalRecordingManifest } from '../recording/recordingManifest';
 import type {
@@ -566,6 +569,52 @@ describe('upload state', () => {
     expect(state.uploadedBytes).toBe(5);
   });
 
+  it('detects only the modified upload chunks between persisted states', () => {
+    const previousState = createInitialRecordingUploadState({
+      recordingId: 'recording-10',
+      sessionId: 'session-10',
+      participantId: 'participant-10',
+      role: 'host',
+      expectedChunkCount: 3,
+      expectedTotalBytes: 9,
+      now: 1000,
+    });
+
+    const nextState = markChunkUploading(previousState, 1, 1001);
+
+    expect(getChangedUploadChunkIndexes(previousState, nextState)).toEqual([1]);
+  });
+
+  it('persists upload chunk updates incrementally without dropping untouched chunks', async () => {
+    const previousState = createInitialRecordingUploadState({
+      recordingId: 'recording-11',
+      sessionId: 'session-11',
+      participantId: 'participant-11',
+      role: 'guest',
+      expectedChunkCount: 2,
+      expectedTotalBytes: 5,
+      now: 1000,
+    });
+
+    const initialState = setRecordingUploadSessionReady(previousState, {
+      uploadId: 'upl_11',
+      sessionId: 'session-11',
+      participantId: 'participant-11',
+      role: 'guest',
+      now: 1001,
+    });
+
+    await saveRecordingUploadState(initialState);
+
+    const nextState = markChunkUploading(initialState, 0, 1002);
+    await saveRecordingUploadStateIncremental(initialState, nextState);
+
+    const restored = await getPersistedRecordingUploadState('recording-11');
+    expect(restored).not.toBeNull();
+    expect(restored?.chunks[0]?.status).toBe('uploading');
+    expect(restored?.chunks[1]?.status).toBe('pending');
+  });
+
   it('does not apply a late chunk response after cancel', () => {
     let state = createInitialRecordingUploadState({
       recordingId: 'recording-8',
@@ -618,6 +667,54 @@ describe('upload state', () => {
     expect(canApplyLateUploadResponse(resolved.status)).toBe(false);
     expect(resolved.status).toBe('paused');
     expect(resolved.chunks[0]?.status).toBe('uploading');
+  });
+
+  it('does not overwrite a paused upload when a late failure arrives', () => {
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-12',
+      sessionId: 'session-12',
+      participantId: 'participant-12',
+      role: 'host',
+      expectedChunkCount: 1,
+      expectedTotalBytes: 2,
+      now: 1000,
+    });
+
+    state = markChunkUploading(state, 0, 1001);
+    state = setRecordingUploadPaused(state, 1002);
+
+    const resolved = applyRecordingUploadFailureResponse({
+      state,
+      errorMessage: 'Network error.',
+      retryable: true,
+      now: 1003,
+    });
+
+    expect(resolved.status).toBe('paused');
+  });
+
+  it('does not overwrite a canceled upload when a late failure arrives', () => {
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-13',
+      sessionId: 'session-13',
+      participantId: 'participant-13',
+      role: 'guest',
+      expectedChunkCount: 1,
+      expectedTotalBytes: 2,
+      now: 1000,
+    });
+
+    state = markChunkUploading(state, 0, 1001);
+    state = markRecordingUploadCanceled(state, 1002);
+
+    const resolved = applyRecordingUploadFailureResponse({
+      state,
+      errorMessage: 'Network error.',
+      retryable: false,
+      now: 1003,
+    });
+
+    expect(resolved.status).toBe('canceled');
   });
 });
 

@@ -110,6 +110,59 @@ export async function saveRecordingUploadState(state: RecordingUploadState): Pro
   await transactionDone(transaction);
 }
 
+export async function saveRecordingUploadStateIncremental(
+  previousState: RecordingUploadState | null,
+  nextState: RecordingUploadState,
+): Promise<void> {
+  if (!isUploadQueuePersistenceSupported()) {
+    return;
+  }
+
+  const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return;
+  }
+
+  const normalizedNextState = normalizeRecordingUploadState(nextState);
+  const normalizedPreviousState =
+    previousState === null ? null : normalizeRecordingUploadState(previousState);
+
+  if (
+    normalizedPreviousState === null ||
+    normalizedPreviousState.recordingId !== normalizedNextState.recordingId ||
+    normalizedPreviousState.expectedChunkCount !== normalizedNextState.expectedChunkCount ||
+    normalizedPreviousState.uploadId !== normalizedNextState.uploadId
+  ) {
+    await saveRecordingUploadState(normalizedNextState);
+    return;
+  }
+
+  const changedChunkIndexes = getChangedUploadChunkIndexes(
+    normalizedPreviousState,
+    normalizedNextState,
+  );
+
+  const transaction = database.transaction(
+    [uploadSessionsStoreName, uploadChunksStoreName],
+    'readwrite',
+  );
+  const sessionsStore = transaction.objectStore(uploadSessionsStoreName);
+  const chunksStore = transaction.objectStore(uploadChunksStoreName);
+
+  sessionsStore.put(createPersistedRecordingUploadSessionRecord(normalizedNextState));
+
+  for (const chunkIndex of changedChunkIndexes) {
+    const chunk = normalizedNextState.chunks.find((entry) => entry.chunkIndex === chunkIndex);
+    if (chunk === undefined) {
+      continue;
+    }
+
+    chunksStore.put(createPersistedUploadChunkRecord(normalizedNextState, chunk));
+  }
+
+  await transactionDone(transaction);
+}
+
 export async function getPersistedRecordingUploadState(
   recordingId: string,
 ): Promise<RecordingUploadState | null> {
@@ -232,6 +285,35 @@ export async function deleteAllPersistedRecordingUploadStates(): Promise<void> {
   transaction.objectStore(uploadChunksStoreName).clear();
 
   await transactionDone(transaction);
+}
+
+export function getChangedUploadChunkIndexes(
+  previousState: RecordingUploadState | null,
+  nextState: RecordingUploadState,
+): number[] {
+  if (
+    previousState === null ||
+    previousState.recordingId !== nextState.recordingId ||
+    previousState.expectedChunkCount !== nextState.expectedChunkCount ||
+    previousState.uploadId !== nextState.uploadId ||
+    previousState.chunks.length !== nextState.chunks.length
+  ) {
+    return nextState.chunks.map((chunk) => chunk.chunkIndex);
+  }
+
+  const previousChunksByIndex = new Map(
+    previousState.chunks.map((chunk) => [chunk.chunkIndex, chunk] as const),
+  );
+  const changedChunkIndexes: number[] = [];
+
+  for (const nextChunk of nextState.chunks) {
+    const previousChunk = previousChunksByIndex.get(nextChunk.chunkIndex);
+    if (previousChunk === undefined || hasPersistedUploadChunkChanged(previousChunk, nextChunk)) {
+      changedChunkIndexes.push(nextChunk.chunkIndex);
+    }
+  }
+
+  return changedChunkIndexes;
 }
 
 export async function getPersistedUploadQueueSummary(): Promise<UploadQueuePersistenceSummary> {
@@ -458,6 +540,19 @@ function createPersistedUploadChunkRecord(
     lastUpdatedAt: normalizeTimestamp(chunk.lastUpdatedAt) ?? normalizeTimestamp(state.updatedAt) ?? 0,
     errorMessage: chunk.errorMessage,
   };
+}
+
+function hasPersistedUploadChunkChanged(
+  previousChunk: UploadChunkState,
+  nextChunk: UploadChunkState,
+): boolean {
+  return (
+    previousChunk.expectedBytes !== nextChunk.expectedBytes ||
+    previousChunk.uploadedBytes !== nextChunk.uploadedBytes ||
+    previousChunk.status !== nextChunk.status ||
+    previousChunk.lastUpdatedAt !== nextChunk.lastUpdatedAt ||
+    previousChunk.errorMessage !== nextChunk.errorMessage
+  );
 }
 
 function createUploadChunkState(chunkRecord: StoredUploadChunkRecord): UploadChunkState {

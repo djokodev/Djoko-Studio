@@ -6,6 +6,8 @@ import {
   markChunkAlreadyPresent,
   markChunkUploaded,
   createInitialRecordingUploadState,
+  markRecordingUploadFailed,
+  setRecordingUploadRetrying,
   type RecordingUploadState,
   type RecordingUploadStatus,
 } from './recordingUploadState';
@@ -37,6 +39,13 @@ export interface ApplyRecordingUploadChunkResponseInput {
   chunkIndex: number;
   uploadedBytes: number;
   alreadyPresent: boolean;
+  now: number;
+}
+
+export interface ApplyRecordingUploadFailureResponseInput {
+  state: RecordingUploadState;
+  errorMessage: string;
+  retryable: boolean;
   now: number;
 }
 
@@ -111,6 +120,18 @@ export function applyRecordingUploadChunkResponse(
   return input.alreadyPresent
     ? markChunkAlreadyPresent(input.state, input.chunkIndex, input.uploadedBytes, input.now)
     : markChunkUploaded(input.state, input.chunkIndex, input.uploadedBytes, input.now);
+}
+
+export function applyRecordingUploadFailureResponse(
+  input: ApplyRecordingUploadFailureResponseInput,
+): RecordingUploadState {
+  if (!canApplyLateUploadResponse(input.state.status)) {
+    return input.state;
+  }
+
+  return input.retryable
+    ? setRecordingUploadRetrying(input.state, input.now)
+    : markRecordingUploadFailed(input.state, input.errorMessage, input.now);
 }
 
 function normalizeChunkIndexes(chunkIndexes: readonly number[]): number[] {

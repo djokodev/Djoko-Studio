@@ -4,6 +4,7 @@ import { listPersistedLocalRecordingChunks } from '../recording/recordingPersist
 import { computeBlobSha256Hex, createRecordingUploadApiClient, RecordingUploadClientError } from './recordingUploadApiClient';
 import {
   applyRecordingUploadChunkResponse,
+  applyRecordingUploadFailureResponse,
   buildLocalRecordingChunkSizeByIndex,
   deriveServerConfirmedUploadChunkIndexes,
   canApplyLateUploadResponse,
@@ -13,11 +14,9 @@ import {
   markChunkUploading,
   markRecordingUploadCanceled,
   markRecordingUploadComplete,
-  markRecordingUploadFailed,
   mergeRecordingUploadServerStatus,
   setRecordingUploadInitializing,
   setRecordingUploadPaused,
-  setRecordingUploadRetrying,
   setRecordingUploadSessionReady,
   summarizeRecordingUploadProgress,
   type RecordingUploadState,
@@ -26,7 +25,7 @@ import {
   deletePersistedRecordingUploadState,
   getPersistedRecordingUploadState,
   listPersistedRecordingUploadStates,
-  saveRecordingUploadState,
+  saveRecordingUploadStateIncremental,
 } from './recordingUploadPersistence';
 
 const uploadClient = createRecordingUploadApiClient();
@@ -59,6 +58,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
     summaryRevision: 0,
   });
   const runTokensRef = useRef<Record<string, number>>({});
+  const statesByRecordingIdRef = useRef<Record<string, RecordingUploadState>>({});
 
   useEffect(() => {
     let isActive = true;
@@ -81,6 +81,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           errorMessage: null,
           summaryRevision: 0,
         });
+        statesByRecordingIdRef.current = statesByRecordingId;
       })
       .catch((error: unknown) => {
         if (!isActive) {
@@ -145,7 +146,12 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
   }
 
   async function persistState(state: RecordingUploadState): Promise<RecordingUploadState> {
-    await saveRecordingUploadState(state);
+    const previousState = statesByRecordingIdRef.current[state.recordingId] ?? null;
+    await saveRecordingUploadStateIncremental(previousState, state);
+    statesByRecordingIdRef.current = {
+      ...statesByRecordingIdRef.current,
+      [state.recordingId]: state,
+    };
     setQueueState((current) => ({
       ...current,
       statesByRecordingId: {
@@ -201,6 +207,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
     summaryRevision: queueState.summaryRevision,
     refreshUploadStates: async () => {
       const statesByRecordingId = await refreshUploadStates();
+      statesByRecordingIdRef.current = statesByRecordingId;
       setQueueState((current) => ({
         ...current,
         statesByRecordingId,
@@ -442,12 +449,22 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
 
       await persistState(nextState);
     } catch (error) {
+      if (!isCurrentRun(recording.recordingId, token)) {
+        return;
+      }
+
       const currentState = (await getPersistedRecordingUploadState(recording.recordingId)) ?? nextState;
+      if (!canApplyLateUploadResponse(currentState.status)) {
+        return;
+      }
+
       const message = getErrorMessage(error, 'Upload failed.');
-      const nextFailure =
-        error instanceof RecordingUploadClientError && error.retryable
-          ? setRecordingUploadRetrying(currentState, Date.now())
-          : markRecordingUploadFailed(currentState, message, Date.now());
+      const nextFailure = applyRecordingUploadFailureResponse({
+        state: currentState,
+        errorMessage: message,
+        retryable: error instanceof RecordingUploadClientError && error.retryable,
+        now: Date.now(),
+      });
 
       await persistState(nextFailure);
     } finally {

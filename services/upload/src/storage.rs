@@ -453,6 +453,33 @@ impl S3UploadRepository {
         let chunk_key = record.key().chunk_key(request.chunk_index);
         let existing = self.head_chunk(&chunk_key).await?;
         if let Some(existing) = existing {
+            if chunk_head_matches_request(&existing, &checksum, request.body.len() as u64) {
+                record.chunks[request.chunk_index as usize].status =
+                    UploadChunkStatus::AlreadyPresent;
+                record.chunks[request.chunk_index as usize].uploaded_bytes =
+                    request.body.len() as u64;
+                record.chunks[request.chunk_index as usize].expected_bytes = record.chunks
+                    [request.chunk_index as usize]
+                    .expected_bytes
+                    .max(request.body.len() as u64);
+                record.chunks[request.chunk_index as usize].checksum = Some(checksum.clone());
+                record.chunks[request.chunk_index as usize].error_message = None;
+                record.chunks[request.chunk_index as usize].updated_at = now;
+                record.status = UploadSessionStatus::Uploading;
+                record.updated_at = now;
+                record.last_error = None;
+                record.uploaded_bytes = record.uploaded_bytes_total();
+                record.uploaded_chunk_count = record.uploaded_chunk_count_total();
+                self.save_manifest(&record).await?;
+                return Ok(record.chunk_response(
+                    request.chunk_index,
+                    UploadChunkStatus::AlreadyPresent,
+                    request.body.len() as u64,
+                    true,
+                    now,
+                ));
+            }
+
             let existing_checksum = existing.checksum.unwrap_or_default();
             if existing_checksum != checksum || existing.size_bytes != request.body.len() as u64 {
                 record.chunks[request.chunk_index as usize].status = UploadChunkStatus::Rejected;
@@ -633,6 +660,10 @@ struct ChunkHead {
     checksum: Option<String>,
 }
 
+fn chunk_head_matches_request(existing: &ChunkHead, checksum: &str, uploaded_bytes: u64) -> bool {
+    existing.size_bytes == uploaded_bytes && existing.checksum.as_deref() == Some(checksum)
+}
+
 fn manifest_lookup_key(recording_id: &str, upload_id: &str) -> String {
     format!("recordings/{recording_id}/uploads/{upload_id}/manifest.json")
 }
@@ -687,5 +718,22 @@ pub fn status_code_for_error(error: &UploadServiceError) -> axum::http::StatusCo
         UploadServiceError::NotFound { .. } => axum::http::StatusCode::NOT_FOUND,
         UploadServiceError::Unavailable { .. } => axum::http::StatusCode::SERVICE_UNAVAILABLE,
         UploadServiceError::Storage { .. } => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{chunk_head_matches_request, ChunkHead};
+
+    #[test]
+    fn chunk_head_matches_request_requires_same_size_and_checksum() {
+        let existing = ChunkHead {
+            size_bytes: 3,
+            checksum: Some("abc".to_string()),
+        };
+
+        assert!(chunk_head_matches_request(&existing, "abc", 3));
+        assert!(!chunk_head_matches_request(&existing, "abc", 2));
+        assert!(!chunk_head_matches_request(&existing, "def", 3));
     }
 }
