@@ -25,9 +25,17 @@ import { UploadReadinessPanel } from './UploadReadinessPanel';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
+  sessionId?: string | null;
+  participantId?: string | null;
+  role?: 'host' | 'guest' | null;
 }
 
-export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
+export function LocalMediaPreview({
+  onStreamChange,
+  sessionId,
+  participantId,
+  role,
+}: LocalMediaPreviewProps) {
   const [status, setStatus] = useState<LocalMediaPreviewStatus>('idle');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -279,6 +287,9 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
         stream={stream}
         recordingCapability={recordingCapabilityReport}
         recorder={localRecording}
+        sessionId={sessionId}
+        participantId={participantId}
+        role={role}
       />
 
       {diagnostics.errorMessage ? (
@@ -401,10 +412,16 @@ function LocalRecordingPrototype({
   stream,
   recordingCapability,
   recorder,
+  sessionId,
+  participantId,
+  role,
 }: {
   stream: MediaStream | null;
   recordingCapability: RecordingCapabilityReport;
   recorder: LocalMediaRecorderController;
+  sessionId?: string | null;
+  participantId?: string | null;
+  role?: 'host' | 'guest' | null;
 }) {
   const [discardingRecordingId, setDiscardingRecordingId] = useState<string | null>(null);
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
@@ -473,7 +490,11 @@ function LocalRecordingPrototype({
           className="submit-button signaling-button"
           type="button"
           onClick={() =>
-            recorder.startRecording(stream, recordingCapability.preferredMimeType)
+            recorder.startRecording(stream, recordingCapability.preferredMimeType, {
+              sessionId: sessionId || undefined,
+              participantId: participantId || undefined,
+              role: role || undefined,
+            })
           }
           disabled={startDisabled}
         >
@@ -584,8 +605,28 @@ function LocalRecordingPrototype({
         </div>
         <div className="detail-card">
           <dt>Upload status</dt>
-          <dd className="mono">{summary.uploadStatus}</dd>
+          <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
+            Not uploaded (Local only)
+          </dd>
         </div>
+        {recorder.manifest?.sessionId && (
+          <div className="detail-card">
+            <dt>Session ID</dt>
+            <dd className="mono">{recorder.manifest.sessionId}</dd>
+          </div>
+        )}
+        {recorder.manifest?.participantId && (
+          <div className="detail-card">
+            <dt>Participant ID</dt>
+            <dd className="mono">{recorder.manifest.participantId}</dd>
+          </div>
+        )}
+        {recorder.manifest?.role && (
+          <div className="detail-card">
+            <dt>Role</dt>
+            <dd className="mono">{recorder.manifest.role}</dd>
+          </div>
+        )}
         <div className="detail-card">
           <dt>Available next actions</dt>
           <dd className="mono">{formatRecordingEventList(allowedEvents)}</dd>
@@ -936,6 +977,30 @@ function LocalRecordingPrototype({
                       <dt>Last persisted at</dt>
                       <dd>{formatDiagnosticTimestamp(record.lastPersistedAt)}</dd>
                     </div>
+                    <div className="detail-card">
+                      <dt>Upload status</dt>
+                      <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
+                        Not uploaded (Local only)
+                      </dd>
+                    </div>
+                    {record.manifest.sessionId && (
+                      <div className="detail-card">
+                        <dt>Session ID</dt>
+                        <dd className="mono">{record.manifest.sessionId}</dd>
+                      </div>
+                    )}
+                    {record.manifest.participantId && (
+                      <div className="detail-card">
+                        <dt>Participant ID</dt>
+                        <dd className="mono">{record.manifest.participantId}</dd>
+                      </div>
+                    )}
+                    {record.manifest.role && (
+                      <div className="detail-card">
+                        <dt>Role</dt>
+                        <dd className="mono">{record.manifest.role}</dd>
+                      </div>
+                    )}
                   </dl>
 
                   <LocalRecordingIntegrityBlock

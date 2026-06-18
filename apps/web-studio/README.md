@@ -1,6 +1,6 @@
 # Web Studio
 
-`apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
+`apps/web-studio` is the React + TypeScript + Vite frontend for DNA Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
 a local camera and microphone preview foundation with local mic/camera toggle controls,
 the first local MediaRecorder in-memory prototype for the preview stream,
@@ -34,8 +34,8 @@ persistence is unavailable instead of throwing.
 DS-061 adds the upload readiness panel and disabled upload client foundation.
 Upload remains disabled in this build, and no network upload occurs.
 DS-062 adds signaling presence events (`room-state`, `peer-joined`, and
-`peer-left`) plus the local host/guest WebRTC smoke test guide in
-[`docs/qa/local-host-guest-webrtc-smoke-test.md`](../../docs/qa/local-host-guest-webrtc-smoke-test.md).
+`peer-left`) plus the local host/guest WebRTC smoke test guide.
+DS-063 integrates the local recording session and IndexedDB persistence system with active WebRTC sessions, binding recordings to specific sessions and participants (sessionId, participantId, role), and adds an unload warning UX when recording is in progress or unsaved local copies exist. It also sets up a Vitest unit test suite.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
@@ -48,7 +48,7 @@ The formal browser recording acceptance checklist lives in
 
 ## What this app does
 
-- shows the DNA Studio / Djoko Studio title and short product description
+- shows the DNA Studio title and short product description
 - keeps the existing host session creation screen on the default route
 - supports guest join URLs like `http://localhost:5173/guest/{invite_token}`
 - reads the invite token from the `/guest/{invite_token}` path segment

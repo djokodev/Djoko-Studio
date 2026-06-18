@@ -153,7 +153,11 @@ export interface LocalMediaRecorderController {
   storageSummaryError: string | null;
   refreshLocalStorageSummary: () => Promise<void>;
   clearAllPersistedLocalRecordings: () => Promise<boolean>;
-  startRecording: (stream: MediaStream | null, preferredMimeType?: string | null) => boolean;
+  startRecording: (
+    stream: MediaStream | null,
+    preferredMimeType?: string | null,
+    options?: { sessionId?: string; participantId?: string; role?: 'host' | 'guest' }
+  ) => boolean;
   stopRecording: () => boolean;
   resetRecording: () => boolean;
 }
@@ -240,6 +244,28 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       window.clearInterval(intervalId);
     };
   }, [snapshot.state]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const shouldWarn = shouldWarnBeforeUnload({
+        recordingState: snapshot.state,
+        previewAvailable: summary.previewAvailable,
+        persistedRecordingCount: persistenceState.persistedRecordings.length,
+      });
+
+      if (shouldWarn) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved local recordings that are not uploaded. Are you sure you want to leave?';
+        return event.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [snapshot.state, persistenceState.persistedRecordings.length]);
+
 
   const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
     supportStatus: persistenceState.supportStatus,
@@ -1172,7 +1198,11 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     );
   }
 
-  function startRecording(stream: MediaStream | null, preferredMimeType?: string | null): boolean {
+  function startRecording(
+    stream: MediaStream | null,
+    preferredMimeType?: string | null,
+    options?: { sessionId?: string; participantId?: string; role?: 'host' | 'guest' }
+  ): boolean {
     if (!canTransitionRecordingState(snapshotRef.current.state, 'prepare')) {
       return false;
     }
@@ -1216,6 +1246,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         selectedMimeType: recorder.mimeType.trim() === '' ? mimeType : recorder.mimeType,
         startedAt,
         sourceKind: localRecordingSourceKind,
+        sessionId: options?.sessionId,
+        participantId: options?.participantId,
+        role: options?.role,
       });
 
       currentRecordingIdRef.current = recordingId;
@@ -1357,6 +1390,19 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     stopRecording,
     resetRecording,
   };
+}
+
+export function shouldWarnBeforeUnload(input: {
+  recordingState: RecordingStateSnapshot['state'];
+  previewAvailable: boolean;
+  persistedRecordingCount: number;
+}): boolean {
+  return (
+    input.recordingState === 'recording' ||
+    input.recordingState === 'stopping' ||
+    input.previewAvailable ||
+    input.persistedRecordingCount > 0
+  );
 }
 
 function getRecorderErrorMessage(error: unknown, fallbackMessage: string): string {

@@ -42,6 +42,9 @@ export interface LocalRecordingManifest {
   latestChunkAt: number | null;
   approximateDurationMs: number | null;
   chunks: LocalRecordingChunkManifestEntry[];
+  sessionId?: string;
+  participantId?: string;
+  role?: 'host' | 'guest';
 }
 
 export interface LocalRecordingSummary {
@@ -85,6 +88,9 @@ export interface CreateLocalRecordingManifestInput {
   selectedMimeType: string | null;
   startedAt: number;
   sourceKind?: LocalRecordingSourceKind;
+  sessionId?: string;
+  participantId?: string;
+  role?: 'host' | 'guest';
 }
 
 export function createLocalRecordingId(): string {
@@ -103,6 +109,9 @@ export function createLocalRecordingManifest({
   selectedMimeType,
   startedAt,
   sourceKind = localRecordingSourceKind,
+  sessionId,
+  participantId,
+  role,
 }: CreateLocalRecordingManifestInput): LocalRecordingManifest {
   return {
     recordingId,
@@ -116,6 +125,9 @@ export function createLocalRecordingManifest({
     latestChunkAt: null,
     approximateDurationMs: 0,
     chunks: [],
+    sessionId,
+    participantId,
+    role,
   };
 }
 

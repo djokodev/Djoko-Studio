@@ -279,7 +279,7 @@ function HostSessionPage() {
   return (
     <main className="layout">
       <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA Studio / Djoko Studio</p>
+        <p className="eyebrow">DNA Studio</p>
         <h1 id="page-title">Create a host session from the web studio.</h1>
         <p className="lede">
           This first pass lets a host create a session, send the request to the API,
@@ -364,7 +364,12 @@ function HostSessionPage() {
           </div>
         ) : null}
 
-        <LocalMediaPreview onStreamChange={setLocalMediaStream} />
+        <LocalMediaPreview
+          onStreamChange={setLocalMediaStream}
+          sessionId={sessionResult?.session.id}
+          participantId={sessionResult?.session.host_user_id}
+          role="host"
+        />
       </section>
 
       {sessionResult ? (
@@ -465,7 +470,7 @@ function GuestSessionPage() {
   return (
     <main className="layout">
       <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA Studio / Djoko Studio</p>
+        <p className="eyebrow">DNA Studio</p>
         <h1 id="page-title">Join a guest session in the web studio.</h1>
         <p className="lede">
           Open the invite link, look up the session, enter a display name, and join
@@ -514,7 +519,12 @@ function GuestSessionPage() {
           </div>
         ) : null}
 
-        <LocalMediaPreview onStreamChange={setLocalMediaStream} />
+        <LocalMediaPreview
+          onStreamChange={setLocalMediaStream}
+          sessionId={joinedResult?.session.id ?? session?.id}
+          participantId={joinedResult?.participant.id}
+          role="guest"
+        />
 
         {session ? (
           <>
