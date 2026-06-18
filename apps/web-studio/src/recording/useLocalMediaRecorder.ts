@@ -4,11 +4,14 @@ import {
   buildLocalRecordingSummary,
   createLocalRecordingId,
   createLocalRecordingManifest,
+  getLocalRecordingMetadataBlockingReasons,
+  getLocalRecordingParticipantMetadata,
   finalizeLocalRecordingManifest,
   localRecordingSourceKind,
   markLocalRecordingManifestFailed,
   transitionLocalRecordingManifestStatus,
   type LocalRecordingChunkManifestEntry,
+  type LocalRecordingParticipantMetadata,
   type LocalRecordingPersistenceStatus,
   type LocalRecordingPersistenceSupportStatus,
   type LocalRecordingManifest,
@@ -156,7 +159,7 @@ export interface LocalMediaRecorderController {
   startRecording: (
     stream: MediaStream | null,
     preferredMimeType?: string | null,
-    options?: { sessionId?: string; participantId?: string; role?: 'host' | 'guest' }
+    options?: LocalRecordingParticipantMetadata | null,
   ) => boolean;
   stopRecording: () => boolean;
   resetRecording: () => boolean;
@@ -182,7 +185,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const recoveredPreviewRef = useRef(recoveredPreview);
   const storageSummaryRequestIdRef = useRef(0);
   const integrityCheckRequestIdRef = useRef(0);
-  const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
   const recoveredPreviewUrlRef = useRef<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -220,7 +222,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       disposePreviewObjectUrl();
       disposeRecoveredPreviewObjectUrl();
       stopAndDisposeRecorder();
-      clearRecordingChunks();
       currentRecordingIdRef.current = null;
       setManifest(null);
       setPreview(initialRecordingPlaybackPreviewMetadata);
@@ -1037,10 +1038,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     });
   }
 
-  function clearRecordingChunks() {
-    chunksRef.current = [];
-  }
-
   function revokePreviewObjectUrl() {
     const currentPreviewUrl = previewUrlRef.current;
 
@@ -1063,7 +1060,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   }
 
   function clearRecordingArtifacts() {
-    clearRecordingChunks();
     resetPreview();
     commitManifest(null);
     currentRecordingIdRef.current = null;
@@ -1072,17 +1068,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     });
   }
 
-  function createPlaybackPreview() {
+  async function createPlaybackPreviewFromPersistence(recordingId: string) {
     revokePreviewObjectUrl();
 
     try {
-      const selectedMimeType = manifestRef.current?.selectedMimeType?.trim() || null;
-      const previewBlob =
-        selectedMimeType === null
-          ? new Blob(chunksRef.current)
-          : new Blob(chunksRef.current, { type: selectedMimeType });
+      const previewBlob = await buildPersistedLocalRecordingBlob(recordingId);
+      const currentManifest = manifestRef.current;
 
-      if (previewBlob.size === 0) {
+      if (previewBlob === null || previewBlob.size === 0) {
         commitPreview(initialRecordingPlaybackPreviewMetadata);
         return;
       }
@@ -1093,11 +1086,24 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         previewAvailable: true,
         previewUrl,
         previewBlobSizeBytes: previewBlob.size,
-        previewMimeType: previewBlob.type.trim() === '' ? selectedMimeType : previewBlob.type,
+        previewMimeType:
+          previewBlob.type.trim() === ''
+            ? currentManifest?.selectedMimeType ?? null
+            : previewBlob.type,
       });
     } catch {
       commitPreview(initialRecordingPlaybackPreviewMetadata);
     }
+  }
+
+  async function finalizeCurrentRecordingPreview(recordingId: string) {
+    await persistenceQueueRef.current;
+
+    if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
+      return;
+    }
+
+    await createPlaybackPreviewFromPersistence(recordingId);
   }
 
   function detachRecorderEventHandlers(recorder: MediaRecorder | null) {
@@ -1136,7 +1142,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return;
     }
 
-    chunksRef.current.push(blob);
     const nextManifest = appendLocalRecordingChunkManifestEntry(
       currentManifest,
       blob,
@@ -1168,7 +1173,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     }
 
     commitSnapshot(transitionRecordingState(snapshotRef.current, 'stopped').snapshot);
-    createPlaybackPreview();
+
+    if (currentManifest !== null) {
+      void finalizeCurrentRecordingPreview(currentManifest.recordingId);
+    }
   }
 
   function handleRecorderError(event: Event) {
@@ -1201,14 +1209,11 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   function startRecording(
     stream: MediaStream | null,
     preferredMimeType?: string | null,
-    options?: { sessionId?: string; participantId?: string; role?: 'host' | 'guest' }
+    options?: LocalRecordingParticipantMetadata | null,
   ): boolean {
     if (!canTransitionRecordingState(snapshotRef.current.state, 'prepare')) {
       return false;
     }
-
-    commitSnapshot(transitionRecordingState(snapshotRef.current, 'prepare').snapshot);
-    clearRecordingArtifacts();
 
     if (stream === null) {
       failRecording('Start local preview before starting local recording.');
@@ -1223,10 +1228,20 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return false;
     }
 
+    const metadataBlockingReasons = getLocalRecordingMetadataBlockingReasons(options);
+    const metadata = getLocalRecordingParticipantMetadata(options);
+    if (metadata === null) {
+      failRecording(metadataBlockingReasons.join(' '));
+      return false;
+    }
+
     if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') {
       failRecording('MediaRecorder is unavailable in this browser.');
       return false;
     }
+
+    commitSnapshot(transitionRecordingState(snapshotRef.current, 'prepare').snapshot);
+    clearRecordingArtifacts();
 
     const mimeType = preferredMimeType?.trim() || null;
     let recorder: MediaRecorder | null = null;
@@ -1246,9 +1261,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         selectedMimeType: recorder.mimeType.trim() === '' ? mimeType : recorder.mimeType,
         startedAt,
         sourceKind: localRecordingSourceKind,
-        sessionId: options?.sessionId,
-        participantId: options?.participantId,
-        role: options?.role,
+        sessionId: metadata.sessionId,
+        participantId: metadata.participantId,
+        role: metadata.role,
       });
 
       currentRecordingIdRef.current = recordingId;

@@ -13,6 +13,10 @@ import {
   getRecordingCapabilityReport,
   type RecordingCapabilityReport,
 } from '../recording/recordingCapabilities';
+import {
+  getLocalRecordingMetadataBlockingReasons,
+  getLocalRecordingParticipantMetadata,
+} from '../recording/recordingManifest';
 import { getAllowedRecordingEvents, type RecordingEvent } from '../recording/recordingStateMachine';
 import {
   type LocalMediaRecorderController,
@@ -427,6 +431,16 @@ function LocalRecordingPrototype({
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
   const summary = recorder.summary;
   const recoveredPreview = recorder.recoveredPreview;
+  const recordingMetadata = getLocalRecordingParticipantMetadata({
+    sessionId,
+    participantId,
+    role,
+  });
+  const recordingMetadataBlockingReasons = getLocalRecordingMetadataBlockingReasons({
+    sessionId,
+    participantId,
+    role,
+  });
   const integrityReportsByRecordingId = new Map(
     recorder.localIntegrityReports.map((report) => [report.recordingId, report]),
   );
@@ -454,7 +468,8 @@ function LocalRecordingPrototype({
     recorder.snapshot.state !== 'idle' ||
     !recordingCapability.mediaRecorderAvailable ||
     !hasLocalPreviewStream ||
-    !hasAudioAndVideoTracks;
+    !hasAudioAndVideoTracks ||
+    recordingMetadata === null;
   const stopDisabled = recorder.snapshot.state !== 'recording';
   const resetDisabled =
     recorder.snapshot.state !== 'stopped' && recorder.snapshot.state !== 'failed';
@@ -489,13 +504,13 @@ function LocalRecordingPrototype({
         <button
           className="submit-button signaling-button"
           type="button"
-          onClick={() =>
-            recorder.startRecording(stream, recordingCapability.preferredMimeType, {
-              sessionId: sessionId || undefined,
-              participantId: participantId || undefined,
-              role: role || undefined,
-            })
-          }
+          onClick={() => {
+            if (recordingMetadata === null) {
+              return;
+            }
+
+            recorder.startRecording(stream, recordingCapability.preferredMimeType, recordingMetadata);
+          }}
           disabled={startDisabled}
         >
           {recorder.snapshot.state === 'preparing'
@@ -521,6 +536,19 @@ function LocalRecordingPrototype({
           Discard local recording / Reset
         </button>
       </div>
+
+      {recordingMetadataBlockingReasons.length > 0 ? (
+        <div className="message message--warning recording-prototype__metadata-warning" role="status">
+          <p className="recording-prototype__metadata-warning-title">
+            Create or join a session before recording.
+          </p>
+          <ul className="recording-prototype__metadata-warning-list">
+            {recordingMetadataBlockingReasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <dl className="details-grid recording-prototype__details">
         <div className="detail-card">
@@ -773,8 +801,8 @@ function LocalRecordingPrototype({
 
           <p className="api-note recording-recovery__preview-note">
             Recovered playback is read from local browser storage only. It is labeled
-            here as a browser copy so it is easy to distinguish from the live in-memory
-            playback preview.
+            here as a browser copy so it is easy to distinguish from the live preview
+            rebuilt from IndexedDB.
           </p>
 
           {recoveredPreview.status === 'idle' ? (
@@ -1021,7 +1049,7 @@ function LocalRecordingPrototype({
       </section>
 
       <div className="message message--warning recording-prototype__warning" role="status">
-        Prototype only: the in-memory playback preview stays separate from the recovered
+        Prototype only: the local playback preview stays separate from the recovered
         browser copy. IndexedDB keeps a local manifest/chunk copy for recovery
         detection and local preview when available.
       </div>

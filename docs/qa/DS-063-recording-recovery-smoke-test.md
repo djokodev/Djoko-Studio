@@ -30,6 +30,7 @@ cd apps/web-studio && npm run dev
 
 - [ ] **3. Local recording start/stop (Host)**
   - Click "Start local recording" on the Host page.
+  - If the button is disabled, confirm the page has a `sessionId`, `participantId`, and `role` before recording.
   - Verify that the status transitions to "Recording" and the timer increments.
   - Confirm that metadata (Session ID, Participant ID, Role: host) is displayed.
   - Let it record for 5-10 seconds.
@@ -38,6 +39,7 @@ cd apps/web-studio && npm run dev
 
 - [ ] **4. Local recording start/stop (Guest)**
   - Click "Start local recording" on the Guest page.
+  - If the button is disabled, confirm the page has a `sessionId`, `participantId`, and `role` before recording.
   - Verify that the status transitions to "Recording" and the timer increments.
   - Confirm that metadata (Session ID, Participant ID, Role: guest) is displayed.
   - Let it record for 5-10 seconds.

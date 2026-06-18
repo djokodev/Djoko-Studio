@@ -46,6 +46,8 @@
 - `stopping` : Arrêt en cours, finalisation du blob final et du manifest.
 - `stopped` (ou `saved locally`) : Enregistrement terminé avec succès et persistant localement.
 - `failed` (ou `error`) : Une erreur est survenue lors de la capture ou de la persistance.
+- Le chemin de production DS-063 exige aussi `sessionId`, `participantId`, et `role` avant le démarrage.
+- Les chunks sont persistés au fil de l'eau dans IndexedDB, puis le preview/download est reconstruit à la demande depuis le stockage local.
 
 ### Recovery lifecycle retenu :
 - Au chargement du studio ou du lien guest, l'application vérifie la présence de sessions/participants enregistrés localement dans IndexedDB.

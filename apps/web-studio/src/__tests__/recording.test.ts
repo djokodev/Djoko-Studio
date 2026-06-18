@@ -11,6 +11,8 @@ import {
   appendLocalRecordingChunkManifestEntry,
   finalizeLocalRecordingManifest,
   markLocalRecordingManifestFailed,
+  getLocalRecordingMetadataBlockingReasons,
+  getLocalRecordingParticipantMetadata,
 } from '../recording/recordingManifest';
 import {
   saveLocalRecordingManifest,
@@ -18,6 +20,7 @@ import {
   getPersistedLocalRecording,
   listPersistedLocalRecordings,
   listPersistedLocalRecordingChunks,
+  buildPersistedLocalRecordingBlob,
   deletePersistedLocalRecording,
   deleteAllPersistedLocalRecordings,
 } from '../recording/recordingPersistence';
@@ -80,6 +83,40 @@ describe('Recording State Machine', () => {
 });
 
 describe('Recording Manifest', () => {
+  it('should block recording until session metadata is present', () => {
+    expect(
+      getLocalRecordingMetadataBlockingReasons({
+        sessionId: null,
+        participantId: null,
+        role: null,
+      }),
+    ).toEqual([
+      'Create or join a session before recording.',
+      'Participant metadata required.',
+      'Recording role required.',
+    ]);
+
+    const metadata = getLocalRecordingParticipantMetadata({
+      sessionId: 'session-456',
+      participantId: 'part-789',
+      role: 'guest',
+    });
+
+    expect(
+      getLocalRecordingMetadataBlockingReasons({
+        sessionId: 'session-456',
+        participantId: 'part-789',
+        role: 'guest',
+      }),
+    ).toEqual([]);
+
+    expect(metadata).toEqual({
+      sessionId: 'session-456',
+      participantId: 'part-789',
+      role: 'guest',
+    });
+  });
+
   it('should embed sessionId, participantId, and role', () => {
     const manifest = createLocalRecordingManifest({
       recordingId: 'rec-123',
@@ -105,6 +142,9 @@ describe('Recording Manifest', () => {
       recordingId: 'rec-123',
       selectedMimeType: 'video/webm',
       startedAt: 1000,
+      sessionId: 'session-123',
+      participantId: 'participant-123',
+      role: 'host',
     });
 
     const chunk1 = new Blob(['chunk1_data'], { type: 'video/webm' });
@@ -129,6 +169,9 @@ describe('Recording Manifest', () => {
       recordingId: 'rec-123',
       selectedMimeType: 'video/webm',
       startedAt: 1000,
+      sessionId: 'session-123',
+      participantId: 'participant-123',
+      role: 'host',
     });
 
     manifest = finalizeLocalRecordingManifest(manifest, 5000);
@@ -140,6 +183,9 @@ describe('Recording Manifest', () => {
       recordingId: 'rec-456',
       selectedMimeType: 'video/webm',
       startedAt: 1000,
+      sessionId: 'session-456',
+      participantId: 'participant-456',
+      role: 'guest',
     });
 
     failManifest = markLocalRecordingManifestFailed(failManifest, 3000);
@@ -184,6 +230,9 @@ describe('IndexedDB Recording Persistence', () => {
       recordingId,
       selectedMimeType: 'video/webm',
       startedAt: 1000,
+      sessionId: 'session-persist-2',
+      participantId: 'part-persist-2',
+      role: 'host',
     });
 
     await saveLocalRecordingManifest(manifest);
@@ -214,6 +263,9 @@ describe('IndexedDB Recording Persistence', () => {
       recordingId,
       selectedMimeType: 'video/webm',
       startedAt: 1000,
+      sessionId: 'session-persist-3',
+      participantId: 'part-persist-3',
+      role: 'guest',
     });
 
     await saveLocalRecordingManifest(manifest);
@@ -245,6 +297,58 @@ describe('IndexedDB Recording Persistence', () => {
     chunks = await listPersistedLocalRecordingChunks(recordingId);
     expect(recordings.length).toBe(0);
     expect(chunks.length).toBe(0);
+  });
+
+  it('should rebuild a preview blob from persisted chunks', async () => {
+    const recordingId = 'rec-persist-4';
+    const manifest = createLocalRecordingManifest({
+      recordingId,
+      selectedMimeType: 'video/webm',
+      startedAt: 1000,
+      sessionId: 'session-persist-4',
+      participantId: 'part-persist-4',
+      role: 'host',
+    });
+
+    await saveLocalRecordingManifest(manifest);
+
+    const chunk1 = new Blob(['first'], { type: 'video/webm' });
+    const chunk2 = new Blob(['second-chunk'], { type: 'video/webm' });
+
+    await saveLocalRecordingChunk(
+      recordingId,
+      {
+        chunkId: `${recordingId}-chunk-0000`,
+        recordingId,
+        chunkIndex: 0,
+        mimeType: 'video/webm',
+        sizeBytes: chunk1.size,
+        capturedAt: 1500,
+        elapsedMsFromStart: 500,
+        uploadStatus: 'local_only',
+      },
+      chunk1,
+    );
+
+    await saveLocalRecordingChunk(
+      recordingId,
+      {
+        chunkId: `${recordingId}-chunk-0001`,
+        recordingId,
+        chunkIndex: 1,
+        mimeType: 'video/webm',
+        sizeBytes: chunk2.size,
+        capturedAt: 2500,
+        elapsedMsFromStart: 1500,
+        uploadStatus: 'local_only',
+      },
+      chunk2,
+    );
+
+    const previewBlob = await buildPersistedLocalRecordingBlob(recordingId);
+    expect(previewBlob).not.toBeNull();
+    expect(previewBlob?.type).toBe('video/webm');
+    expect(previewBlob?.size).toBe(chunk1.size + chunk2.size);
   });
 });
 
