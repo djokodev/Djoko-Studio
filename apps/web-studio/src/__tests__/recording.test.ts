@@ -13,6 +13,7 @@ import {
   markLocalRecordingManifestFailed,
   getLocalRecordingMetadataBlockingReasons,
   getLocalRecordingParticipantMetadata,
+  doesLocalRecordingMatchParticipantMetadata,
 } from '../recording/recordingManifest';
 import {
   saveLocalRecordingManifest,
@@ -299,6 +300,71 @@ describe('IndexedDB Recording Persistence', () => {
     expect(chunks.length).toBe(0);
   });
 
+  it('should delete only the targeted recording and its chunks when multiple recordings exist', async () => {
+    const hostRecordingId = 'rec-persist-host';
+    const guestRecordingId = 'rec-persist-guest';
+    const hostManifest = createLocalRecordingManifest({
+      recordingId: hostRecordingId,
+      selectedMimeType: 'video/webm',
+      startedAt: 1000,
+      sessionId: 'session-shared',
+      participantId: 'participant-host',
+      role: 'host',
+    });
+    const guestManifest = createLocalRecordingManifest({
+      recordingId: guestRecordingId,
+      selectedMimeType: 'video/webm',
+      startedAt: 2000,
+      sessionId: 'session-shared',
+      participantId: 'participant-guest',
+      role: 'guest',
+    });
+
+    await saveLocalRecordingManifest(hostManifest);
+    await saveLocalRecordingManifest(guestManifest);
+
+    const hostChunk = new Blob(['host-chunk'], { type: 'video/webm' });
+    const guestChunk = new Blob(['guest-chunk'], { type: 'video/webm' });
+
+    await saveLocalRecordingChunk(
+      hostRecordingId,
+      {
+        chunkId: `${hostRecordingId}-chunk-0000`,
+        recordingId: hostRecordingId,
+        chunkIndex: 0,
+        mimeType: 'video/webm',
+        sizeBytes: hostChunk.size,
+        capturedAt: 1500,
+        elapsedMsFromStart: 500,
+        uploadStatus: 'local_only',
+      },
+      hostChunk,
+    );
+
+    await saveLocalRecordingChunk(
+      guestRecordingId,
+      {
+        chunkId: `${guestRecordingId}-chunk-0000`,
+        recordingId: guestRecordingId,
+        chunkIndex: 0,
+        mimeType: 'video/webm',
+        sizeBytes: guestChunk.size,
+        capturedAt: 2500,
+        elapsedMsFromStart: 500,
+        uploadStatus: 'local_only',
+      },
+      guestChunk,
+    );
+
+    await deletePersistedLocalRecording(guestRecordingId);
+
+    const recordings = await listPersistedLocalRecordings();
+    expect(recordings).toHaveLength(1);
+    expect(recordings[0].recordingId).toBe(hostRecordingId);
+    await expect(listPersistedLocalRecordingChunks(hostRecordingId)).resolves.toHaveLength(1);
+    await expect(listPersistedLocalRecordingChunks(guestRecordingId)).resolves.toHaveLength(0);
+  });
+
   it('should rebuild a preview blob from persisted chunks', async () => {
     const recordingId = 'rec-persist-4';
     const manifest = createLocalRecordingManifest({
@@ -349,6 +415,43 @@ describe('IndexedDB Recording Persistence', () => {
     expect(previewBlob).not.toBeNull();
     expect(previewBlob?.type).toBe('video/webm');
     expect(previewBlob?.size).toBe(chunk1.size + chunk2.size);
+  });
+
+  it('should keep recordings visible only for the matching session participant context', () => {
+    const hostManifest = createLocalRecordingManifest({
+      recordingId: 'rec-context-host',
+      selectedMimeType: 'video/webm',
+      startedAt: 1000,
+      sessionId: 'session-shared',
+      participantId: 'participant-host',
+      role: 'host',
+    });
+    const guestManifest = createLocalRecordingManifest({
+      recordingId: 'rec-context-guest',
+      selectedMimeType: 'video/webm',
+      startedAt: 2000,
+      sessionId: 'session-shared',
+      participantId: 'participant-guest',
+      role: 'guest',
+    });
+    const hostMetadata = getLocalRecordingParticipantMetadata({
+      sessionId: 'session-shared',
+      participantId: 'participant-host',
+      role: 'host',
+    });
+    const guestMetadata = getLocalRecordingParticipantMetadata({
+      sessionId: 'session-shared',
+      participantId: 'participant-guest',
+      role: 'guest',
+    });
+
+    expect(doesLocalRecordingMatchParticipantMetadata(hostManifest, hostMetadata)).toBe(true);
+    expect(doesLocalRecordingMatchParticipantMetadata(guestManifest, hostMetadata)).toBe(false);
+    expect(doesLocalRecordingMatchParticipantMetadata(hostManifest, guestMetadata)).toBe(false);
+    expect(doesLocalRecordingMatchParticipantMetadata(guestManifest, guestMetadata)).toBe(true);
+    expect(
+      doesLocalRecordingMatchParticipantMetadata(hostManifest, null),
+    ).toBe(true);
   });
 });
 

@@ -6,12 +6,14 @@ import {
   createLocalRecordingManifest,
   getLocalRecordingMetadataBlockingReasons,
   getLocalRecordingParticipantMetadata,
+  doesLocalRecordingMatchParticipantMetadata,
   finalizeLocalRecordingManifest,
   localRecordingSourceKind,
   markLocalRecordingManifestFailed,
   transitionLocalRecordingManifestStatus,
   type LocalRecordingChunkManifestEntry,
   type LocalRecordingParticipantMetadata,
+  type LocalRecordingParticipantMetadataInput,
   type LocalRecordingPersistenceStatus,
   type LocalRecordingPersistenceSupportStatus,
   type LocalRecordingManifest,
@@ -172,7 +174,9 @@ export interface LocalMediaRecorderController {
   resetRecording: () => boolean;
 }
 
-export function useLocalMediaRecorder(): LocalMediaRecorderController {
+export function useLocalMediaRecorder(
+  recordingContext?: LocalRecordingParticipantMetadataInput | null,
+): LocalMediaRecorderController {
   const [snapshot, setSnapshot] = useState<RecordingStateSnapshot>(createInitialRecordingSnapshot());
   const [manifest, setManifest] = useState<LocalRecordingManifest | null>(null);
   const [preview, setPreview] = useState<LocalRecordingPlaybackPreviewMetadata>(
@@ -203,6 +207,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     initialPersistenceState,
   );
   const [, setDurationTick] = useState(0);
+  const currentRecordingContext = getLocalRecordingParticipantMetadata(recordingContext);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -220,11 +225,16 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     recoveredPreviewUrlRef.current = recoveredPreview.previewUrl;
   }, [recoveredPreview.previewUrl]);
 
+  const visiblePersistedRecordings = persistenceState.persistedRecordings.filter((record) =>
+    doesLocalRecordingMatchParticipantMetadata(record.manifest, currentRecordingContext),
+  );
+  const visiblePersistedRecordingCount = visiblePersistedRecordings.length;
+
   const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
     supportStatus: persistenceState.supportStatus,
     status: persistenceState.status,
     errorMessage: persistenceState.errorMessage,
-    persistedRecordingCount: persistenceState.persistedRecordings.length,
+    persistedRecordingCount: visiblePersistedRecordingCount,
     currentRecordingPersisted: persistenceState.currentRecordingPersisted,
   });
 
@@ -232,7 +242,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     recordingState: snapshot.state,
     persistenceStatus: persistenceState.status,
     previewAvailable: summary.previewAvailable,
-    persistedRecordingCount: persistenceState.persistedRecordings.length,
+    persistedRecordingCount: visiblePersistedRecordingCount,
   });
 
   useEffect(() => {
@@ -273,13 +283,13 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       recordingState: snapshot.state,
       persistenceStatus: persistenceState.status,
       previewAvailable: summary.previewAvailable,
-      persistedRecordingCount: persistenceState.persistedRecordings.length,
+      persistedRecordingCount: visiblePersistedRecordingCount,
     };
   }, [
     snapshot.state,
     summary.previewAvailable,
     persistenceState.status,
-    persistenceState.persistedRecordings.length,
+    visiblePersistedRecordingCount,
   ]);
 
   useEffect(() => {
@@ -406,7 +416,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
         const currentRecordingPersisted =
           activeRecordingId !== null
-            ? records.some((record) => record.recordingId === activeRecordingId)
+            ? records.some(
+                (record) =>
+                  record.recordingId === activeRecordingId &&
+                  doesLocalRecordingMatchParticipantMetadata(
+                    record.manifest,
+                    currentRecordingContext,
+                  ),
+              )
             : false;
 
         commitPersistenceState({
@@ -1411,7 +1428,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     clearRecoveredPreview: clearRecoveredPreviewState,
     persistenceSupportStatus: persistenceState.supportStatus,
     persistenceErrorMessage: persistenceState.errorMessage,
-    persistedRecordings: persistenceState.persistedRecordings,
+    persistedRecordings: visiblePersistedRecordings,
     localIntegrityReports,
     integrityCheckStatus: integrityState.status,
     integrityCheckError: integrityState.errorMessage,

@@ -45,7 +45,7 @@ export function LocalMediaPreview({
   const [errorMessage, setErrorMessage] = useState('');
   const [, refreshDiagnostics] = useReducer((value: number) => value + 1, 0);
   const recordingCapabilityReport = getRecordingCapabilityReport(stream);
-  const localRecording = useLocalMediaRecorder();
+  const localRecording = useLocalMediaRecorder({ sessionId, participantId, role });
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const onStreamChangeRef = useRef(onStreamChange);
@@ -762,9 +762,9 @@ function LocalRecordingPrototype({
 
         <p className="api-note recording-recovery__note">
           Local recording recovery stays browser-only. The app can detect persisted
-          recordings in IndexedDB after refresh, preview a local copy from browser
-          storage, and discard the local copy. Upload/recovery sync is not implemented
-          yet.
+          recordings in IndexedDB after refresh for the current session, participant,
+          and role context, preview a local copy from browser storage, and discard the
+          local copy. Upload/recovery sync is not implemented yet.
         </p>
 
         <div className="recording-integrity__intro">
@@ -1198,12 +1198,23 @@ function LocalBrowserStoragePanel({
   const storageSummary = recorder.localStorageSummary;
   const browserStorageEstimate = recorder.browserStorageEstimate;
   const summaryReady = recorder.storageSummaryStatus === 'ready';
-  const hasPersistedRecordings = (storageSummary?.persistedRecordingCount ?? 0) > 0;
+  const visiblePersistedRecordings = recorder.persistedRecordings;
+  const visiblePersistedRecordingCount = visiblePersistedRecordings.length;
+  const visiblePersistedChunkCount = visiblePersistedRecordings.reduce(
+    (total, record) => total + record.manifest.chunkCount,
+    0,
+  );
+  const visiblePersistedBytes = visiblePersistedRecordings.reduce(
+    (total, record) => total + record.manifest.totalBytes,
+    0,
+  );
+  const visibleLatestRecording = visiblePersistedRecordings[0] ?? null;
+  const hasAnyPersistedRecordings = (storageSummary?.persistedRecordingCount ?? 0) > 0;
   const clearAllDisabled =
     recorder.storageSummaryStatus === 'loading' ||
     !summaryReady ||
     storageSummary?.supportStatus !== 'supported' ||
-    !hasPersistedRecordings;
+    !hasAnyPersistedRecordings;
   const refreshButtonLabel =
     recorder.storageSummaryStatus === 'loading'
       ? 'Refreshing storage summary…'
@@ -1253,9 +1264,9 @@ function LocalBrowserStoragePanel({
       </div>
 
       <p className="api-note recording-storage__note">
-        Stored only in this browser. No upload has been performed. Approximate size is
-        based on persisted manifest and chunk metadata, so it can help you understand
-        local browser usage without doing a full storage scan.
+        Stored only in this browser for the current session, participant, and role
+        context. No upload has been performed. Other browser-local copies may exist in
+        IndexedDB for different contexts.
       </p>
 
       <div className="recording-storage__actions" aria-label="Local browser storage actions">
@@ -1296,15 +1307,15 @@ function LocalBrowserStoragePanel({
         </div>
         <div className="detail-card">
           <dt>Persisted local recordings</dt>
-          <dd>{storageSummary?.persistedRecordingCount ?? 0}</dd>
+          <dd>{visiblePersistedRecordingCount}</dd>
         </div>
         <div className="detail-card">
           <dt>Approximate size</dt>
-          <dd>{formatBytes(storageSummary?.totalPersistedBytes ?? 0)}</dd>
+          <dd>{formatBytes(visiblePersistedBytes)}</dd>
         </div>
         <div className="detail-card">
           <dt>Persisted chunks</dt>
-          <dd>{storageSummary?.totalPersistedChunks ?? 0}</dd>
+          <dd>{visiblePersistedChunkCount}</dd>
         </div>
         <div className="detail-card">
           <dt>Browser estimate</dt>
@@ -1320,15 +1331,15 @@ function LocalBrowserStoragePanel({
         </div>
         <div className="detail-card">
           <dt>Latest recording ID</dt>
-          <dd className="mono">{formatNullableText(storageSummary?.latestRecordingId ?? null)}</dd>
+          <dd className="mono">{formatNullableText(visibleLatestRecording?.recordingId ?? null)}</dd>
         </div>
         <div className="detail-card">
           <dt>Latest started at</dt>
-          <dd>{formatDiagnosticTimestamp(storageSummary?.latestRecordingStartedAt ?? null)}</dd>
+          <dd>{formatDiagnosticTimestamp(visibleLatestRecording?.manifest.startedAt ?? null)}</dd>
         </div>
         <div className="detail-card">
           <dt>Latest persisted at</dt>
-          <dd>{formatDiagnosticTimestamp(storageSummary?.latestPersistedAt ?? null)}</dd>
+          <dd>{formatDiagnosticTimestamp(visibleLatestRecording?.lastPersistedAt ?? null)}</dd>
         </div>
       </dl>
 

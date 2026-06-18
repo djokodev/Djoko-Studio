@@ -179,6 +179,21 @@ export function getLocalRecordingParticipantMetadata(
   };
 }
 
+export function doesLocalRecordingMatchParticipantMetadata(
+  manifest: Pick<LocalRecordingManifest, 'sessionId' | 'participantId' | 'role'>,
+  metadata: LocalRecordingParticipantMetadata | null | undefined,
+): boolean {
+  if (metadata === null || metadata === undefined) {
+    return true;
+  }
+
+  return (
+    manifest.sessionId === metadata.sessionId &&
+    manifest.participantId === metadata.participantId &&
+    manifest.role === metadata.role
+  );
+}
+
 export function appendLocalRecordingChunkManifestEntry(
   manifest: LocalRecordingManifest,
   chunk: Blob,
