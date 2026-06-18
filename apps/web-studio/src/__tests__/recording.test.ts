@@ -357,6 +357,7 @@ describe('Recording unload warning', () => {
     expect(
       shouldWarnBeforeUnload({
         recordingState: 'recording',
+        persistenceStatus: 'available',
         previewAvailable: false,
         persistedRecordingCount: 0,
       }),
@@ -365,6 +366,7 @@ describe('Recording unload warning', () => {
     expect(
       shouldWarnBeforeUnload({
         recordingState: 'stopping',
+        persistenceStatus: 'available',
         previewAvailable: false,
         persistedRecordingCount: 0,
       }),
@@ -373,6 +375,7 @@ describe('Recording unload warning', () => {
     expect(
       shouldWarnBeforeUnload({
         recordingState: 'idle',
+        persistenceStatus: 'available',
         previewAvailable: true,
         persistedRecordingCount: 0,
       }),
@@ -381,6 +384,7 @@ describe('Recording unload warning', () => {
     expect(
       shouldWarnBeforeUnload({
         recordingState: 'idle',
+        persistenceStatus: 'available',
         previewAvailable: false,
         persistedRecordingCount: 1,
       }),
@@ -389,6 +393,47 @@ describe('Recording unload warning', () => {
     expect(
       shouldWarnBeforeUnload({
         recordingState: 'idle',
+        persistenceStatus: 'available',
+        previewAvailable: false,
+        persistedRecordingCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('should warn while persistence is still finalizing after stop', () => {
+    expect(
+      shouldWarnBeforeUnload({
+        recordingState: 'stopped',
+        persistenceStatus: 'persisting',
+        previewAvailable: false,
+        persistedRecordingCount: 0,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldWarnBeforeUnload({
+        recordingState: 'idle',
+        persistenceStatus: 'persisting',
+        previewAvailable: false,
+        persistedRecordingCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('should stop warning after persistence is finished and the local copy is cleared', () => {
+    expect(
+      shouldWarnBeforeUnload({
+        recordingState: 'idle',
+        persistenceStatus: 'available',
+        previewAvailable: false,
+        persistedRecordingCount: 1,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldWarnBeforeUnload({
+        recordingState: 'idle',
+        persistenceStatus: 'available',
         previewAvailable: false,
         persistedRecordingCount: 0,
       }),
@@ -399,6 +444,7 @@ describe('Recording unload warning', () => {
     const warningInputs = {
       current: {
         recordingState: 'idle' as const,
+        persistenceStatus: 'available' as 'available' | 'persisting',
         previewAvailable: false,
         persistedRecordingCount: 0,
       },
@@ -417,6 +463,25 @@ describe('Recording unload warning', () => {
 
     warningInputs.current = {
       recordingState: 'idle',
+      persistenceStatus: 'available',
+      previewAvailable: false,
+      persistedRecordingCount: 0,
+    };
+
+    expect(readWarning()).toBe(false);
+
+    warningInputs.current = {
+      recordingState: 'idle',
+      persistenceStatus: 'persisting',
+      previewAvailable: false,
+      persistedRecordingCount: 0,
+    };
+
+    expect(readWarning()).toBe(true);
+
+    warningInputs.current = {
+      recordingState: 'idle',
+      persistenceStatus: 'available',
       previewAvailable: false,
       persistedRecordingCount: 0,
     };

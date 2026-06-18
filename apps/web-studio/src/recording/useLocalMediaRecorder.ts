@@ -94,6 +94,7 @@ interface LocalIntegrityState {
 
 interface BeforeUnloadWarningInputs {
   recordingState: RecordingStateSnapshot['state'];
+  persistenceStatus: LocalRecordingPersistenceStatus;
   previewAvailable: boolean;
   persistedRecordingCount: number;
 }
@@ -229,6 +230,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
   const beforeUnloadWarningInputsRef = useRef<BeforeUnloadWarningInputs>({
     recordingState: snapshot.state,
+    persistenceStatus: persistenceState.status,
     previewAvailable: summary.previewAvailable,
     persistedRecordingCount: persistenceState.persistedRecordings.length,
   });
@@ -269,10 +271,16 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   useEffect(() => {
     beforeUnloadWarningInputsRef.current = {
       recordingState: snapshot.state,
+      persistenceStatus: persistenceState.status,
       previewAvailable: summary.previewAvailable,
       persistedRecordingCount: persistenceState.persistedRecordings.length,
     };
-  }, [snapshot.state, summary.previewAvailable, persistenceState.persistedRecordings.length]);
+  }, [
+    snapshot.state,
+    summary.previewAvailable,
+    persistenceState.status,
+    persistenceState.persistedRecordings.length,
+  ]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -1424,12 +1432,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
 export function shouldWarnBeforeUnload(input: {
   recordingState: RecordingStateSnapshot['state'];
+  persistenceStatus: LocalRecordingPersistenceStatus;
   previewAvailable: boolean;
   persistedRecordingCount: number;
 }): boolean {
   return (
     input.recordingState === 'recording' ||
     input.recordingState === 'stopping' ||
+    input.persistenceStatus === 'persisting' ||
     input.previewAvailable ||
     input.persistedRecordingCount > 0
   );
