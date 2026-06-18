@@ -22,6 +22,9 @@ export interface UploadQueuePersistenceSummary {
 
 interface PersistedRecordingUploadSessionRecord {
   recordingId: string;
+  sessionId: string | null;
+  participantId: string | null;
+  role: 'host' | 'guest' | null;
   uploadId: string | null;
   status: RecordingUploadStatus;
   expectedChunkCount: number;
@@ -31,6 +34,7 @@ interface PersistedRecordingUploadSessionRecord {
   createdAt: number;
   updatedAt: number;
   completedAt: number | null;
+  lastSyncedAt: number | null;
   errorMessage: string | null;
   retryAttemptCount: number;
   retryLastAttemptAt: number | null;
@@ -101,6 +105,59 @@ export async function saveRecordingUploadState(state: RecordingUploadState): Pro
 
   for (const chunk of normalizedState.chunks) {
     chunksStore.put(createPersistedUploadChunkRecord(normalizedState, chunk));
+  }
+
+  await transactionDone(transaction);
+}
+
+export async function saveRecordingUploadStateIncremental(
+  previousState: RecordingUploadState | null,
+  nextState: RecordingUploadState,
+): Promise<void> {
+  if (!isUploadQueuePersistenceSupported()) {
+    return;
+  }
+
+  const database = await getUploadQueueDatabase();
+  if (database === null) {
+    return;
+  }
+
+  const normalizedNextState = normalizeRecordingUploadState(nextState);
+  const normalizedPreviousState =
+    previousState === null ? null : normalizeRecordingUploadState(previousState);
+
+  if (
+    normalizedPreviousState === null ||
+    normalizedPreviousState.recordingId !== normalizedNextState.recordingId ||
+    normalizedPreviousState.expectedChunkCount !== normalizedNextState.expectedChunkCount ||
+    normalizedPreviousState.uploadId !== normalizedNextState.uploadId
+  ) {
+    await saveRecordingUploadState(normalizedNextState);
+    return;
+  }
+
+  const changedChunkIndexes = getChangedUploadChunkIndexes(
+    normalizedPreviousState,
+    normalizedNextState,
+  );
+
+  const transaction = database.transaction(
+    [uploadSessionsStoreName, uploadChunksStoreName],
+    'readwrite',
+  );
+  const sessionsStore = transaction.objectStore(uploadSessionsStoreName);
+  const chunksStore = transaction.objectStore(uploadChunksStoreName);
+
+  sessionsStore.put(createPersistedRecordingUploadSessionRecord(normalizedNextState));
+
+  for (const chunkIndex of changedChunkIndexes) {
+    const chunk = normalizedNextState.chunks.find((entry) => entry.chunkIndex === chunkIndex);
+    if (chunk === undefined) {
+      continue;
+    }
+
+    chunksStore.put(createPersistedUploadChunkRecord(normalizedNextState, chunk));
   }
 
   await transactionDone(transaction);
@@ -228,6 +285,35 @@ export async function deleteAllPersistedRecordingUploadStates(): Promise<void> {
   transaction.objectStore(uploadChunksStoreName).clear();
 
   await transactionDone(transaction);
+}
+
+export function getChangedUploadChunkIndexes(
+  previousState: RecordingUploadState | null,
+  nextState: RecordingUploadState,
+): number[] {
+  if (
+    previousState === null ||
+    previousState.recordingId !== nextState.recordingId ||
+    previousState.expectedChunkCount !== nextState.expectedChunkCount ||
+    previousState.uploadId !== nextState.uploadId ||
+    previousState.chunks.length !== nextState.chunks.length
+  ) {
+    return nextState.chunks.map((chunk) => chunk.chunkIndex);
+  }
+
+  const previousChunksByIndex = new Map(
+    previousState.chunks.map((chunk) => [chunk.chunkIndex, chunk] as const),
+  );
+  const changedChunkIndexes: number[] = [];
+
+  for (const nextChunk of nextState.chunks) {
+    const previousChunk = previousChunksByIndex.get(nextChunk.chunkIndex);
+    if (previousChunk === undefined || hasPersistedUploadChunkChanged(previousChunk, nextChunk)) {
+      changedChunkIndexes.push(nextChunk.chunkIndex);
+    }
+  }
+
+  return changedChunkIndexes;
 }
 
 export async function getPersistedUploadQueueSummary(): Promise<UploadQueuePersistenceSummary> {
@@ -389,17 +475,22 @@ function rebuildRecordingUploadState(
 
   return {
     recordingId: sessionRecord.recordingId,
+    sessionId: sessionRecord.sessionId,
+    participantId: sessionRecord.participantId,
+    role: sessionRecord.role,
     uploadId: sessionRecord.uploadId,
     status: sessionRecord.status,
     expectedChunkCount: normalizeNonNegativeInteger(sessionRecord.expectedChunkCount),
     expectedTotalBytes: normalizeNonNegativeInteger(sessionRecord.expectedTotalBytes),
     uploadedChunkCount: uploadedChunkSummary.uploadedChunkCount,
     uploadedBytes: uploadedChunkSummary.uploadedBytes,
+    failedChunkCount: summarizeFailedUploadChunks(chunks),
     chunks,
     retry: createUploadRetryState(sessionRecord),
     createdAt: normalizeTimestamp(sessionRecord.createdAt) ?? 0,
     updatedAt: normalizeTimestamp(sessionRecord.updatedAt) ?? 0,
     completedAt: normalizeNullableTimestamp(sessionRecord.completedAt),
+    lastSyncedAt: normalizeNullableTimestamp(sessionRecord.lastSyncedAt),
     errorMessage: sessionRecord.errorMessage,
   };
 }
@@ -411,6 +502,9 @@ function createPersistedRecordingUploadSessionRecord(
 
   return {
     recordingId: state.recordingId,
+    sessionId: normalizeTextValue(state.sessionId),
+    participantId: normalizeTextValue(state.participantId),
+    role: state.role,
     uploadId: state.uploadId,
     status: state.status,
     expectedChunkCount: normalizeNonNegativeInteger(state.expectedChunkCount),
@@ -420,6 +514,7 @@ function createPersistedRecordingUploadSessionRecord(
     createdAt: normalizeTimestamp(state.createdAt) ?? 0,
     updatedAt: normalizeTimestamp(state.updatedAt) ?? 0,
     completedAt: normalizeNullableTimestamp(state.completedAt),
+    lastSyncedAt: normalizeNullableTimestamp(state.lastSyncedAt),
     errorMessage: state.errorMessage,
     retryAttemptCount: normalizeNonNegativeInteger(state.retry.attemptCount),
     retryLastAttemptAt: normalizeNullableTimestamp(state.retry.lastAttemptAt),
@@ -445,6 +540,19 @@ function createPersistedUploadChunkRecord(
     lastUpdatedAt: normalizeTimestamp(chunk.lastUpdatedAt) ?? normalizeTimestamp(state.updatedAt) ?? 0,
     errorMessage: chunk.errorMessage,
   };
+}
+
+function hasPersistedUploadChunkChanged(
+  previousChunk: UploadChunkState,
+  nextChunk: UploadChunkState,
+): boolean {
+  return (
+    previousChunk.expectedBytes !== nextChunk.expectedBytes ||
+    previousChunk.uploadedBytes !== nextChunk.uploadedBytes ||
+    previousChunk.status !== nextChunk.status ||
+    previousChunk.lastUpdatedAt !== nextChunk.lastUpdatedAt ||
+    previousChunk.errorMessage !== nextChunk.errorMessage
+  );
 }
 
 function createUploadChunkState(chunkRecord: StoredUploadChunkRecord): UploadChunkState {
@@ -489,6 +597,18 @@ function summarizePersistedUploadChunks(chunks: readonly UploadChunkState[]): {
     uploadedChunkCount,
     uploadedBytes,
   };
+}
+
+function summarizeFailedUploadChunks(chunks: readonly UploadChunkState[]): number {
+  let failedChunkCount = 0;
+
+  for (const chunk of chunks) {
+    if (chunk.status === 'failed' || chunk.status === 'rejected') {
+      failedChunkCount += 1;
+    }
+  }
+
+  return failedChunkCount;
 }
 
 function groupUploadChunkRecordsByRecordingId(
@@ -571,15 +691,19 @@ function isCompletedUploadChunkStatus(status: ChunkUploadStatus): boolean {
 function normalizeRecordingUploadState(state: RecordingUploadState): RecordingUploadState {
   return {
     ...state,
+    sessionId: normalizeTextValue(state.sessionId),
+    participantId: normalizeTextValue(state.participantId),
     expectedChunkCount: normalizeNonNegativeInteger(state.expectedChunkCount),
     expectedTotalBytes: normalizeNonNegativeInteger(state.expectedTotalBytes),
     uploadedChunkCount: normalizeNonNegativeInteger(state.uploadedChunkCount),
     uploadedBytes: normalizeNonNegativeInteger(state.uploadedBytes),
+    failedChunkCount: normalizeNonNegativeInteger(state.failedChunkCount),
     chunks: [...state.chunks],
     retry: normalizeUploadRetryState(state.retry),
     createdAt: normalizeTimestamp(state.createdAt) ?? 0,
     updatedAt: normalizeTimestamp(state.updatedAt) ?? 0,
     completedAt: normalizeNullableTimestamp(state.completedAt),
+    lastSyncedAt: normalizeNullableTimestamp(state.lastSyncedAt),
   };
 }
 
@@ -610,6 +734,11 @@ function normalizeTimestamp(value: number | null | undefined): number | null {
 
 function normalizeNullableTimestamp(value: number | null | undefined): number | null {
   return normalizeTimestamp(value);
+}
+
+function normalizeTextValue(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim();
+  return trimmedValue === undefined || trimmedValue === '' ? null : trimmedValue;
 }
 
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {

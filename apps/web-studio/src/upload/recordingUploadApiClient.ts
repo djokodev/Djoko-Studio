@@ -27,6 +27,9 @@ export interface RecordingUploadErrorEnvelope {
 
 export interface CreateRecordingUploadSessionRequest {
   recordingId: string;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
   totalBytes: number;
   expectedChunkCount: number;
   chunkSizeBytes: number;
@@ -37,14 +40,27 @@ export interface CreateRecordingUploadSessionRequest {
 
 export interface CreateRecordingUploadSessionResponse {
   recordingId: string;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
   uploadId: string;
   status: Extract<RecordingUploadSessionStatus, 'initializing' | 'ready'>;
   acceptedChunkSizeBytes: number;
+  expectedChunkCount: number;
+  uploadedChunkCount: number;
+  totalBytes: number;
+  uploadedBytes: number;
+  missingChunkIndexes: number[];
+  rejectedChunkIndexes: number[];
+  updatedAt: string;
   expiresAt: string;
 }
 
 export interface GetRecordingUploadSessionStatusResponse {
   recordingId: string;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
   uploadId: string;
   status: RecordingUploadSessionStatus;
   expectedChunkCount: number;
@@ -54,6 +70,7 @@ export interface GetRecordingUploadSessionStatusResponse {
   missingChunkIndexes: number[];
   rejectedChunkIndexes: number[];
   updatedAt: string;
+  completedAt: string | null;
 }
 
 export interface UploadRecordingChunkRequest {
@@ -73,22 +90,35 @@ export interface UploadRecordingChunkResponse {
   uploadId: string;
   chunkIndex: number;
   status: RecordingUploadChunkStatus;
+  /** Size of the accepted chunk in bytes, not the total session bytes. */
   uploadedBytes: number;
   alreadyPresent: boolean;
-}
-
-export interface CompleteRecordingUploadSessionResponse {
-  recordingId: string;
-  uploadId: string;
-  status: Extract<RecordingUploadSessionStatus, 'uploaded' | 'incomplete' | 'failed'>;
-  complete: boolean;
+  uploadedChunkCount: number;
   missingChunkIndexes: number[];
   rejectedChunkIndexes: number[];
   updatedAt: string;
 }
 
+export interface CompleteRecordingUploadSessionResponse {
+  recordingId: string;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
+  uploadId: string;
+  status: Extract<RecordingUploadSessionStatus, 'uploaded' | 'incomplete' | 'failed'>;
+  complete: boolean;
+  missingChunkIndexes: number[];
+  rejectedChunkIndexes: number[];
+  uploadedChunkCount: number;
+  uploadedBytes: number;
+  updatedAt: string;
+}
+
 export interface CancelRecordingUploadSessionResponse {
   recordingId: string;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
   uploadId: string;
   status: Extract<RecordingUploadSessionStatus, 'canceled'>;
   complete: boolean;
@@ -103,7 +133,7 @@ export interface RecordingUploadApiPaths {
   cancelUploadSessionPath: (recordingId: string, uploadId: string) => string;
 }
 
-export interface DisabledRecordingUploadClient {
+export interface RecordingUploadClient {
   paths: RecordingUploadApiPaths;
   createUploadSession: (
     request: CreateRecordingUploadSessionRequest,
@@ -112,9 +142,7 @@ export interface DisabledRecordingUploadClient {
     recordingId: string,
     uploadId: string,
   ) => Promise<GetRecordingUploadSessionStatusResponse>;
-  uploadChunk: (
-    request: UploadRecordingChunkRequest,
-  ) => Promise<UploadRecordingChunkResponse>;
+  uploadChunk: (request: UploadRecordingChunkRequest) => Promise<UploadRecordingChunkResponse>;
   completeUploadSession: (
     recordingId: string,
     uploadId: string,
@@ -126,79 +154,224 @@ export interface DisabledRecordingUploadClient {
 }
 
 const recordingUploadApiPrefix = '/api/recordings';
+const defaultUploadBaseUrl = 'http://localhost:8082';
 
-export class RecordingUploadClientDisabledError extends Error {
-  constructor(methodName: string) {
-    super(
-      `Recording uploads are disabled in this build. ${methodName} cannot perform network I/O.`,
-    );
-    this.name = 'RecordingUploadClientDisabledError';
+export class RecordingUploadClientError extends Error {
+  readonly code: string;
+  readonly retryable: boolean;
+
+  constructor(code: string, message: string, retryable: boolean) {
+    super(message);
+    this.name = 'RecordingUploadClientError';
+    this.code = code;
+    this.retryable = retryable;
   }
 }
 
-export function createRecordingUploadApiPaths(baseUrl?: string): RecordingUploadApiPaths {
+export function getUploadBaseUrl(): string {
+  return import.meta.env.VITE_UPLOAD_BASE_URL?.trim() || defaultUploadBaseUrl;
+}
+
+export function createRecordingUploadApiPaths(): RecordingUploadApiPaths {
   return {
     createUploadSessionPath: (recordingId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
-        `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads`,
-      ),
+      buildUploadPath(`${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads`),
     getUploadSessionStatusPath: (recordingId: string, uploadId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}`,
       ),
     uploadChunkPath: (recordingId: string, uploadId: string, chunkIndex: number) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}/chunks/${encodeChunkIndex(chunkIndex)}`,
       ),
     completeUploadSessionPath: (recordingId: string, uploadId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}/complete`,
       ),
     cancelUploadSessionPath: (recordingId: string, uploadId: string) =>
-      joinRecordingUploadApiPath(
-        baseUrl,
+      buildUploadPath(
         `${recordingUploadApiPrefix}/${encodePathSegment(recordingId)}/uploads/${encodePathSegment(uploadId)}/cancel`,
       ),
   };
 }
 
-export function createDisabledRecordingUploadClient(
-  baseUrl?: string,
-): DisabledRecordingUploadClient {
-  const paths = createRecordingUploadApiPaths(baseUrl);
+export function createRecordingUploadApiClient(baseUrl?: string): RecordingUploadClient {
+  const resolvedBaseUrl = baseUrl ?? getUploadBaseUrl();
+  const paths = createRecordingUploadApiPaths();
 
   return {
     paths,
-    createUploadSession: async () => {
-      throw new RecordingUploadClientDisabledError('createUploadSession');
+    createUploadSession: async (request) => {
+      return requestJson<CreateRecordingUploadSessionResponse>(
+        resolvedBaseUrl,
+        paths.createUploadSessionPath(request.recordingId),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(request),
+        },
+      );
     },
-    getUploadSessionStatus: async () => {
-      throw new RecordingUploadClientDisabledError('getUploadSessionStatus');
+    getUploadSessionStatus: async (recordingId, uploadId) => {
+      return requestJson<GetRecordingUploadSessionStatusResponse>(
+        resolvedBaseUrl,
+        paths.getUploadSessionStatusPath(recordingId, uploadId),
+        {
+          method: 'GET',
+        },
+      );
     },
-    uploadChunk: async () => {
-      throw new RecordingUploadClientDisabledError('uploadChunk');
+    uploadChunk: async (request) => {
+      const headers = new Headers({
+        'Content-Type': request.mimeType,
+        'X-DNA-Chunk-Index': String(Math.trunc(request.chunkIndex)),
+        'X-DNA-Chunk-Size': String(Math.trunc(request.chunkSizeBytes)),
+        'X-DNA-Total-Bytes': String(Math.trunc(request.totalBytes)),
+        'X-DNA-Idempotency-Key': request.idempotencyKey,
+      });
+
+      const chunkChecksum = request.chunkChecksum ?? (await computeBlobSha256Hex(request.body));
+      if (chunkChecksum.trim() !== '') {
+        headers.set('X-DNA-Chunk-Checksum', chunkChecksum);
+      }
+
+      return requestJson<UploadRecordingChunkResponse>(
+        resolvedBaseUrl,
+        paths.uploadChunkPath(request.recordingId, request.uploadId, request.chunkIndex),
+        {
+          method: 'PUT',
+          headers,
+          body: request.body,
+        },
+      );
     },
-    completeUploadSession: async () => {
-      throw new RecordingUploadClientDisabledError('completeUploadSession');
+    completeUploadSession: async (recordingId, uploadId) => {
+      return requestJson<CompleteRecordingUploadSessionResponse>(
+        resolvedBaseUrl,
+        paths.completeUploadSessionPath(recordingId, uploadId),
+        {
+          method: 'POST',
+        },
+      );
     },
-    cancelUploadSession: async () => {
-      throw new RecordingUploadClientDisabledError('cancelUploadSession');
+    cancelUploadSession: async (recordingId, uploadId) => {
+      return requestJson<CancelRecordingUploadSessionResponse>(
+        resolvedBaseUrl,
+        paths.cancelUploadSessionPath(recordingId, uploadId),
+        {
+          method: 'POST',
+        },
+      );
     },
   };
 }
 
-function joinRecordingUploadApiPath(baseUrl: string | undefined, path: string): string {
-  const trimmedBaseUrl = baseUrl?.trim();
+export async function computeBlobSha256Hex(blob: Blob): Promise<string> {
+  const digest = await computeSha256(await blob.arrayBuffer());
+  return toHex(digest);
+}
 
-  if (!trimmedBaseUrl) {
-    return path;
+async function requestJson<T>(baseUrl: string, path: string, init: RequestInit): Promise<T> {
+  const response = await fetch(buildUploadUrl(baseUrl, path), init);
+  const payload = await readJsonPayload(response);
+
+  if (!response.ok) {
+    const errorDetails = parseErrorEnvelope(payload, response);
+    throw new RecordingUploadClientError(
+      errorDetails.code,
+      errorDetails.message,
+      errorDetails.retryable,
+    );
   }
 
-  return `${trimmedBaseUrl.replace(/\/+$/, '')}${path}`;
+  if (!isRecord(payload)) {
+    throw new RecordingUploadClientError(
+      'unexpected_response',
+      'Unexpected response format.',
+      false,
+    );
+  }
+
+  return payload as T;
+}
+
+async function readJsonPayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+
+  if (text.trim() === '') {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function parseErrorEnvelope(
+  payload: unknown,
+  response: Response,
+): RecordingUploadErrorDetails {
+  if (isRecord(payload)) {
+    const maybeError = payload.error;
+
+    if (isRecord(maybeError)) {
+      const code = typeof maybeError.code === 'string' ? maybeError.code : 'upload_failed';
+      const message =
+        typeof maybeError.message === 'string' && maybeError.message.trim() !== ''
+          ? maybeError.message
+          : `Request failed with status ${response.status}`;
+      const retryable = typeof maybeError.retryable === 'boolean' ? maybeError.retryable : false;
+
+      return { code, message, retryable };
+    }
+  }
+
+  const message =
+    response.statusText.trim() !== ''
+      ? `Request failed with status ${response.status} ${response.statusText}`
+      : `Request failed with status ${response.status}`;
+
+  return {
+    code: 'upload_failed',
+    message,
+    retryable: response.status >= 500,
+  };
+}
+
+async function computeSha256(bytes: ArrayBuffer): Promise<ArrayBuffer> {
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.subtle !== undefined) {
+    return globalThis.crypto.subtle.digest('SHA-256', bytes);
+  }
+
+  throw new Error('Web Crypto API is unavailable.');
+}
+
+function toHex(bytes: ArrayBuffer): string {
+  const view = new Uint8Array(bytes);
+  return Array.from(view, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function buildUploadUrl(baseUrl: string | undefined, path: string): string {
+  const trimmedBaseUrl = baseUrl?.trim();
+  const trimmedPath = path.trim();
+
+  if (!trimmedBaseUrl) {
+    return trimmedPath;
+  }
+
+  return new URL(trimmedPath, ensureTrailingSlash(trimmedBaseUrl)).toString();
+}
+
+function buildUploadPath(path: string): string {
+  return path.startsWith('/') ? path : `/${path}`;
+}
+
+function ensureTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value : `${value}/`;
 }
 
 function encodePathSegment(value: string): string {
@@ -207,4 +380,8 @@ function encodePathSegment(value: string): string {
 
 function encodeChunkIndex(value: number): string {
   return encodeURIComponent(String(Math.trunc(value)));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

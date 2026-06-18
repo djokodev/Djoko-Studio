@@ -36,17 +36,22 @@ export interface UploadChunkState {
 
 export interface RecordingUploadState {
   recordingId: string;
+  sessionId: string | null;
+  participantId: string | null;
+  role: 'host' | 'guest' | null;
   uploadId: string | null;
   status: RecordingUploadStatus;
   expectedChunkCount: number;
   expectedTotalBytes: number;
   uploadedChunkCount: number;
   uploadedBytes: number;
+  failedChunkCount: number;
   chunks: UploadChunkState[];
   retry: UploadRetryState;
   createdAt: number;
   updatedAt: number;
   completedAt: number | null;
+  lastSyncedAt: number | null;
   errorMessage: string | null;
 }
 
@@ -62,6 +67,9 @@ export interface UploadProgressSummary {
 
 export interface CreateInitialRecordingUploadStateInput {
   recordingId: string;
+  sessionId: string | null;
+  participantId: string | null;
+  role: 'host' | 'guest' | null;
   expectedChunkCount: number;
   expectedTotalBytes: number;
   now?: number;
@@ -69,6 +77,9 @@ export interface CreateInitialRecordingUploadStateInput {
 
 export interface SetRecordingUploadSessionReadyInput {
   uploadId: string;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
   now: number;
 }
 
@@ -83,17 +94,22 @@ export function createInitialRecordingUploadState(
 
   return {
     recordingId: normalizeTextValue(input.recordingId) ?? input.recordingId,
+    sessionId: normalizeTextValue(input.sessionId),
+    participantId: normalizeTextValue(input.participantId),
+    role: input.role,
     uploadId: null,
     status: 'not_started',
     expectedChunkCount,
     expectedTotalBytes,
     uploadedChunkCount: 0,
     uploadedBytes: 0,
+    failedChunkCount: 0,
     chunks: createPendingUploadChunks(expectedChunkCount, createdAt),
     retry: createInitialUploadRetryState(),
     createdAt,
     updatedAt: createdAt,
     completedAt: null,
+    lastSyncedAt: null,
     errorMessage: null,
   };
 }
@@ -130,10 +146,145 @@ export function setRecordingUploadSessionReady(
 
   return rebuildRecordingUploadState(state, {
     uploadId: normalizeTextValue(input.uploadId) ?? input.uploadId,
+    sessionId: normalizeTextValue(input.sessionId) ?? input.sessionId,
+    participantId: normalizeTextValue(input.participantId) ?? input.participantId,
+    role: input.role,
     status: 'ready',
     updatedAt,
     completedAt: null,
+    lastSyncedAt: updatedAt,
     errorMessage: null,
+  });
+}
+
+export function setRecordingUploadInitializing(
+  state: RecordingUploadState,
+  now: number,
+): RecordingUploadState {
+  if (isTerminalUploadState(state.status)) {
+    return state;
+  }
+
+  const updatedAt = normalizeTimestamp(now) ?? state.updatedAt;
+
+  return rebuildRecordingUploadState(state, {
+    status: 'initializing',
+    updatedAt,
+    lastSyncedAt: updatedAt,
+    errorMessage: null,
+    completedAt: null,
+  });
+}
+
+export function setRecordingUploadPaused(
+  state: RecordingUploadState,
+  now: number,
+): RecordingUploadState {
+  if (isTerminalUploadState(state.status)) {
+    return state;
+  }
+
+  const updatedAt = normalizeTimestamp(now) ?? state.updatedAt;
+
+  return rebuildRecordingUploadState(state, {
+    status: 'paused',
+    updatedAt,
+    lastSyncedAt: updatedAt,
+    errorMessage: null,
+  });
+}
+
+export function setRecordingUploadRetrying(
+  state: RecordingUploadState,
+  now: number,
+  errorMessage: string | null = null,
+): RecordingUploadState {
+  if (isTerminalUploadState(state.status)) {
+    return state;
+  }
+
+  const updatedAt = normalizeTimestamp(now) ?? state.updatedAt;
+
+  return rebuildRecordingUploadState(state, {
+    status: 'retrying',
+    updatedAt,
+    lastSyncedAt: updatedAt,
+    errorMessage: normalizeTextValue(errorMessage) ?? state.errorMessage,
+  });
+}
+
+export function mergeRecordingUploadServerStatus(
+  state: RecordingUploadState,
+  input: {
+    status: Exclude<RecordingUploadStatus, 'not_started' | 'retrying'>;
+    uploadId: string;
+    sessionId: string;
+    participantId: string;
+    role: 'host' | 'guest';
+    uploadedChunkIndexes: number[];
+    rejectedChunkIndexes: number[];
+    uploadedChunkSizeByIndex?: Record<number, number>;
+    uploadedBytes: number;
+    completedAt: number | null;
+    now: number;
+    errorMessage?: string | null;
+  },
+): RecordingUploadState {
+  if (isTerminalUploadState(state.status) && state.status !== 'uploaded') {
+    return state;
+  }
+
+  const updatedAt = normalizeTimestamp(input.now) ?? state.updatedAt;
+  const uploadedIndexes = new Set(input.uploadedChunkIndexes.map(normalizeNonNegativeInteger));
+  const rejectedIndexes = new Set(input.rejectedChunkIndexes.map(normalizeNonNegativeInteger));
+  const chunks = state.chunks.map((chunk) => {
+    if (uploadedIndexes.has(chunk.chunkIndex)) {
+      const normalizedUploadedBytes = normalizeNonNegativeInteger(
+        input.uploadedChunkSizeByIndex?.[chunk.chunkIndex] ?? chunk.uploadedBytes,
+      );
+
+      return {
+        ...chunk,
+        status: 'uploaded' as ChunkUploadStatus,
+        expectedBytes: Math.max(chunk.expectedBytes, normalizedUploadedBytes),
+        uploadedBytes: normalizedUploadedBytes,
+        lastUpdatedAt: updatedAt,
+        errorMessage: null,
+      };
+    }
+
+    if (rejectedIndexes.has(chunk.chunkIndex)) {
+      return {
+        ...chunk,
+        status: 'rejected' as ChunkUploadStatus,
+        lastUpdatedAt: updatedAt,
+        errorMessage: normalizeTextValue(input.errorMessage) ?? chunk.errorMessage,
+      };
+    }
+
+    if (chunk.status === 'uploaded' || chunk.status === 'already_present') {
+      return chunk;
+    }
+
+    return {
+      ...chunk,
+      status: 'pending' as ChunkUploadStatus,
+      lastUpdatedAt: updatedAt,
+      errorMessage: null,
+    };
+  });
+
+  return rebuildRecordingUploadState(state, {
+    uploadId: normalizeTextValue(input.uploadId) ?? input.uploadId,
+    sessionId: normalizeTextValue(input.sessionId) ?? input.sessionId,
+    participantId: normalizeTextValue(input.participantId) ?? input.participantId,
+    role: input.role,
+    status: input.status,
+    chunks,
+    updatedAt,
+    completedAt: input.completedAt,
+    lastSyncedAt: updatedAt,
+    errorMessage: normalizeTextValue(input.errorMessage) ?? null,
   });
 }
 
@@ -265,13 +416,32 @@ export function markRecordingUploadCanceled(
     status: 'canceled',
     updatedAt,
     completedAt: null,
+    lastSyncedAt: updatedAt,
     errorMessage: null,
+  });
+}
+
+export function markRecordingUploadFailed(
+  state: RecordingUploadState,
+  errorMessage: string,
+  now: number,
+): RecordingUploadState {
+  if (isTerminalUploadState(state.status)) {
+    return state;
+  }
+
+  const updatedAt = normalizeTimestamp(now) ?? state.updatedAt;
+  return rebuildRecordingUploadState(state, {
+    status: 'failed',
+    updatedAt,
+    lastSyncedAt: updatedAt,
+    errorMessage: normalizeTextValue(errorMessage) ?? 'Upload failed.',
   });
 }
 
 export function getMissingUploadChunkIndexes(state: RecordingUploadState): number[] {
   return state.chunks
-    .filter((chunk) => !isUploadedChunkStatus(chunk.status))
+    .filter((chunk) => chunk.status !== 'uploaded' && chunk.status !== 'already_present')
     .map((chunk) => chunk.chunkIndex);
 }
 
@@ -337,6 +507,7 @@ function rebuildRecordingUploadState(
 ): RecordingUploadState {
   const chunks = overrides.chunks ?? state.chunks;
   const aggregates = summarizeUploadChunks(chunks);
+  const failedChunkCount = aggregates.failedChunkCount;
 
   return {
     ...state,
@@ -344,6 +515,7 @@ function rebuildRecordingUploadState(
     chunks,
     uploadedChunkCount: aggregates.uploadedChunkCount,
     uploadedBytes: aggregates.uploadedBytes,
+    failedChunkCount,
   };
 }
 
