@@ -468,7 +468,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
 
       await persistState(nextFailure);
     } finally {
-      invalidateRun(recording.recordingId);
+      clearRunTokenIfCurrent(runTokensRef.current, recording.recordingId, token);
     }
   }
 
@@ -485,6 +485,19 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
   function isCurrentRun(recordingId: string, token: number): boolean {
     return runTokensRef.current[recordingId] === token;
   }
+}
+
+export function clearRunTokenIfCurrent(
+  runTokens: Record<string, number>,
+  recordingId: string,
+  token: number,
+): boolean {
+  if (runTokens[recordingId] !== token) {
+    return false;
+  }
+
+  delete runTokens[recordingId];
+  return true;
 }
 
 function deriveNominalChunkSizeBytes(totalBytes: number, chunkCount: number): number {

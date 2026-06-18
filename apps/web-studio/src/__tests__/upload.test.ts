@@ -17,6 +17,7 @@ import {
   deriveServerConfirmedUploadChunkIndexes,
   resolveRecordingUploadStartState,
 } from '../upload/recordingUploadCoordinator';
+import { clearRunTokenIfCurrent } from '../upload/useRecordingUploadQueue';
 import {
   createInitialRecordingUploadState,
   markChunkAlreadyPresent,
@@ -62,9 +63,14 @@ const mockQueue = vi.hoisted(() => ({
   cancelUpload: vi.fn(),
 }));
 
-vi.mock('../upload/useRecordingUploadQueue', () => ({
-  useRecordingUploadQueue: () => mockQueue,
-}));
+vi.mock('../upload/useRecordingUploadQueue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../upload/useRecordingUploadQueue')>();
+
+  return {
+    ...actual,
+    useRecordingUploadQueue: () => mockQueue,
+  };
+});
 
 describe('upload state', () => {
   beforeEach(async () => {
@@ -715,6 +721,28 @@ describe('upload state', () => {
     });
 
     expect(resolved.status).toBe('canceled');
+  });
+
+  it('keeps a newer run token when an old run finishes after relaunch', () => {
+    const runTokens: Record<string, number> = {
+      'recording-14': 3,
+    };
+
+    const cleared = clearRunTokenIfCurrent(runTokens, 'recording-14', 1);
+
+    expect(cleared).toBe(false);
+    expect(runTokens['recording-14']).toBe(3);
+  });
+
+  it('clears only the finishing run token when no newer run has started', () => {
+    const runTokens: Record<string, number> = {
+      'recording-15': 3,
+    };
+
+    const cleared = clearRunTokenIfCurrent(runTokens, 'recording-15', 3);
+
+    expect(cleared).toBe(true);
+    expect(runTokens['recording-15']).toBeUndefined();
   });
 });
 
