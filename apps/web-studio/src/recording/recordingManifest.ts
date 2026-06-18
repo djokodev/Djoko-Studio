@@ -30,6 +30,18 @@ export interface LocalRecordingChunkManifestEntry {
   uploadStatus: LocalRecordingUploadStatusPlaceholder;
 }
 
+export interface LocalRecordingParticipantMetadata {
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
+}
+
+export interface LocalRecordingParticipantMetadataInput {
+  sessionId?: string | null;
+  participantId?: string | null;
+  role?: 'host' | 'guest' | null;
+}
+
 export interface LocalRecordingManifest {
   recordingId: string;
   sourceKind: LocalRecordingSourceKind;
@@ -42,6 +54,9 @@ export interface LocalRecordingManifest {
   latestChunkAt: number | null;
   approximateDurationMs: number | null;
   chunks: LocalRecordingChunkManifestEntry[];
+  sessionId?: string;
+  participantId?: string;
+  role?: 'host' | 'guest';
 }
 
 export interface LocalRecordingSummary {
@@ -85,6 +100,9 @@ export interface CreateLocalRecordingManifestInput {
   selectedMimeType: string | null;
   startedAt: number;
   sourceKind?: LocalRecordingSourceKind;
+  sessionId: string;
+  participantId: string;
+  role: 'host' | 'guest';
 }
 
 export function createLocalRecordingId(): string {
@@ -103,6 +121,9 @@ export function createLocalRecordingManifest({
   selectedMimeType,
   startedAt,
   sourceKind = localRecordingSourceKind,
+  sessionId,
+  participantId,
+  role,
 }: CreateLocalRecordingManifestInput): LocalRecordingManifest {
   return {
     recordingId,
@@ -116,7 +137,61 @@ export function createLocalRecordingManifest({
     latestChunkAt: null,
     approximateDurationMs: 0,
     chunks: [],
+    sessionId,
+    participantId,
+    role,
   };
+}
+
+export function getLocalRecordingMetadataBlockingReasons(
+  metadata: LocalRecordingParticipantMetadataInput | null | undefined,
+): string[] {
+  const blockingReasons: string[] = [];
+
+  if (normalizeMetadataValue(metadata?.sessionId) === null) {
+    blockingReasons.push('Create or join a session before recording.');
+  }
+
+  if (normalizeMetadataValue(metadata?.participantId) === null) {
+    blockingReasons.push('Participant metadata required.');
+  }
+
+  if (metadata?.role !== 'host' && metadata?.role !== 'guest') {
+    blockingReasons.push('Recording role required.');
+  }
+
+  return blockingReasons;
+}
+
+export function getLocalRecordingParticipantMetadata(
+  metadata: LocalRecordingParticipantMetadataInput | null | undefined,
+): LocalRecordingParticipantMetadata | null {
+  const blockingReasons = getLocalRecordingMetadataBlockingReasons(metadata);
+
+  if (blockingReasons.length > 0) {
+    return null;
+  }
+
+  return {
+    sessionId: normalizeMetadataValue(metadata?.sessionId) ?? '',
+    participantId: normalizeMetadataValue(metadata?.participantId) ?? '',
+    role: metadata?.role ?? 'host',
+  };
+}
+
+export function doesLocalRecordingMatchParticipantMetadata(
+  manifest: Pick<LocalRecordingManifest, 'sessionId' | 'participantId' | 'role'>,
+  metadata: LocalRecordingParticipantMetadata | null | undefined,
+): boolean {
+  if (metadata === null || metadata === undefined) {
+    return true;
+  }
+
+  return (
+    manifest.sessionId === metadata.sessionId &&
+    manifest.participantId === metadata.participantId &&
+    manifest.role === metadata.role
+  );
 }
 
 export function appendLocalRecordingChunkManifestEntry(
@@ -236,6 +311,12 @@ function normalizeMimeType(mimeType: string | null | undefined): string | null {
   const trimmedMimeType = mimeType?.trim();
 
   return trimmedMimeType ? trimmedMimeType : null;
+}
+
+function normalizeMetadataValue(value: string | null | undefined): string | null {
+  const trimmedValue = value?.trim();
+
+  return trimmedValue ? trimmedValue : null;
 }
 
 function getElapsedMsFromStart(startedAt: number | null, currentTime: number): number {

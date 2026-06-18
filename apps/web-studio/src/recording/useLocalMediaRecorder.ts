@@ -4,11 +4,16 @@ import {
   buildLocalRecordingSummary,
   createLocalRecordingId,
   createLocalRecordingManifest,
+  getLocalRecordingMetadataBlockingReasons,
+  getLocalRecordingParticipantMetadata,
+  doesLocalRecordingMatchParticipantMetadata,
   finalizeLocalRecordingManifest,
   localRecordingSourceKind,
   markLocalRecordingManifestFailed,
   transitionLocalRecordingManifestStatus,
   type LocalRecordingChunkManifestEntry,
+  type LocalRecordingParticipantMetadata,
+  type LocalRecordingParticipantMetadataInput,
   type LocalRecordingPersistenceStatus,
   type LocalRecordingPersistenceSupportStatus,
   type LocalRecordingManifest,
@@ -89,6 +94,13 @@ interface LocalIntegrityState {
   reportsByRecordingId: Record<string, LocalRecordingIntegrityReport>;
 }
 
+interface BeforeUnloadWarningInputs {
+  recordingState: RecordingStateSnapshot['state'];
+  persistenceStatus: LocalRecordingPersistenceStatus;
+  previewAvailable: boolean;
+  persistedRecordingCount: number;
+}
+
 const initialRecordingPlaybackPreviewMetadata: LocalRecordingPlaybackPreviewMetadata = {
   previewAvailable: false,
   previewUrl: null,
@@ -153,12 +165,18 @@ export interface LocalMediaRecorderController {
   storageSummaryError: string | null;
   refreshLocalStorageSummary: () => Promise<void>;
   clearAllPersistedLocalRecordings: () => Promise<boolean>;
-  startRecording: (stream: MediaStream | null, preferredMimeType?: string | null) => boolean;
+  startRecording: (
+    stream: MediaStream | null,
+    preferredMimeType?: string | null,
+    options?: LocalRecordingParticipantMetadata | null,
+  ) => boolean;
   stopRecording: () => boolean;
   resetRecording: () => boolean;
 }
 
-export function useLocalMediaRecorder(): LocalMediaRecorderController {
+export function useLocalMediaRecorder(
+  recordingContext?: LocalRecordingParticipantMetadataInput | null,
+): LocalMediaRecorderController {
   const [snapshot, setSnapshot] = useState<RecordingStateSnapshot>(createInitialRecordingSnapshot());
   const [manifest, setManifest] = useState<LocalRecordingManifest | null>(null);
   const [preview, setPreview] = useState<LocalRecordingPlaybackPreviewMetadata>(
@@ -178,7 +196,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   const recoveredPreviewRef = useRef(recoveredPreview);
   const storageSummaryRequestIdRef = useRef(0);
   const integrityCheckRequestIdRef = useRef(0);
-  const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
   const recoveredPreviewUrlRef = useRef<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -190,6 +207,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     initialPersistenceState,
   );
   const [, setDurationTick] = useState(0);
+  const currentRecordingContext = getLocalRecordingParticipantMetadata(recordingContext);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -207,6 +225,26 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     recoveredPreviewUrlRef.current = recoveredPreview.previewUrl;
   }, [recoveredPreview.previewUrl]);
 
+  const visiblePersistedRecordings = persistenceState.persistedRecordings.filter((record) =>
+    doesLocalRecordingMatchParticipantMetadata(record.manifest, currentRecordingContext),
+  );
+  const visiblePersistedRecordingCount = visiblePersistedRecordings.length;
+
+  const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
+    supportStatus: persistenceState.supportStatus,
+    status: persistenceState.status,
+    errorMessage: persistenceState.errorMessage,
+    persistedRecordingCount: visiblePersistedRecordingCount,
+    currentRecordingPersisted: persistenceState.currentRecordingPersisted,
+  });
+
+  const beforeUnloadWarningInputsRef = useRef<BeforeUnloadWarningInputs>({
+    recordingState: snapshot.state,
+    persistenceStatus: persistenceState.status,
+    previewAvailable: summary.previewAvailable,
+    persistedRecordingCount: visiblePersistedRecordingCount,
+  });
+
   useEffect(() => {
     isMountedRef.current = true;
     void initializePersistenceSupport();
@@ -216,7 +254,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       disposePreviewObjectUrl();
       disposeRecoveredPreviewObjectUrl();
       stopAndDisposeRecorder();
-      clearRecordingChunks();
       currentRecordingIdRef.current = null;
       setManifest(null);
       setPreview(initialRecordingPlaybackPreviewMetadata);
@@ -241,13 +278,36 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     };
   }, [snapshot.state]);
 
-  const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
-    supportStatus: persistenceState.supportStatus,
-    status: persistenceState.status,
-    errorMessage: persistenceState.errorMessage,
-    persistedRecordingCount: persistenceState.persistedRecordings.length,
-    currentRecordingPersisted: persistenceState.currentRecordingPersisted,
-  });
+  useEffect(() => {
+    beforeUnloadWarningInputsRef.current = {
+      recordingState: snapshot.state,
+      persistenceStatus: persistenceState.status,
+      previewAvailable: summary.previewAvailable,
+      persistedRecordingCount: visiblePersistedRecordingCount,
+    };
+  }, [
+    snapshot.state,
+    summary.previewAvailable,
+    persistenceState.status,
+    visiblePersistedRecordingCount,
+  ]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const shouldWarn = shouldWarnBeforeUnload(beforeUnloadWarningInputsRef.current);
+
+      if (shouldWarn) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved local recordings that are not uploaded. Are you sure you want to leave?';
+        return event.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   const localStorageSummary = storageSummaryState.localStorageSummary;
   const browserStorageEstimate = storageSummaryState.browserStorageEstimate;
@@ -356,7 +416,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
 
         const currentRecordingPersisted =
           activeRecordingId !== null
-            ? records.some((record) => record.recordingId === activeRecordingId)
+            ? records.some(
+                (record) =>
+                  record.recordingId === activeRecordingId &&
+                  doesLocalRecordingMatchParticipantMetadata(
+                    record.manifest,
+                    currentRecordingContext,
+                  ),
+              )
             : false;
 
         commitPersistenceState({
@@ -1011,10 +1078,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     });
   }
 
-  function clearRecordingChunks() {
-    chunksRef.current = [];
-  }
-
   function revokePreviewObjectUrl() {
     const currentPreviewUrl = previewUrlRef.current;
 
@@ -1037,7 +1100,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   }
 
   function clearRecordingArtifacts() {
-    clearRecordingChunks();
     resetPreview();
     commitManifest(null);
     currentRecordingIdRef.current = null;
@@ -1046,17 +1108,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     });
   }
 
-  function createPlaybackPreview() {
+  async function createPlaybackPreviewFromPersistence(recordingId: string) {
     revokePreviewObjectUrl();
 
     try {
-      const selectedMimeType = manifestRef.current?.selectedMimeType?.trim() || null;
-      const previewBlob =
-        selectedMimeType === null
-          ? new Blob(chunksRef.current)
-          : new Blob(chunksRef.current, { type: selectedMimeType });
+      const previewBlob = await buildPersistedLocalRecordingBlob(recordingId);
+      const currentManifest = manifestRef.current;
 
-      if (previewBlob.size === 0) {
+      if (previewBlob === null || previewBlob.size === 0) {
         commitPreview(initialRecordingPlaybackPreviewMetadata);
         return;
       }
@@ -1067,11 +1126,24 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         previewAvailable: true,
         previewUrl,
         previewBlobSizeBytes: previewBlob.size,
-        previewMimeType: previewBlob.type.trim() === '' ? selectedMimeType : previewBlob.type,
+        previewMimeType:
+          previewBlob.type.trim() === ''
+            ? currentManifest?.selectedMimeType ?? null
+            : previewBlob.type,
       });
     } catch {
       commitPreview(initialRecordingPlaybackPreviewMetadata);
     }
+  }
+
+  async function finalizeCurrentRecordingPreview(recordingId: string) {
+    await persistenceQueueRef.current;
+
+    if (!isMountedRef.current || currentRecordingIdRef.current !== recordingId) {
+      return;
+    }
+
+    await createPlaybackPreviewFromPersistence(recordingId);
   }
 
   function detachRecorderEventHandlers(recorder: MediaRecorder | null) {
@@ -1110,7 +1182,6 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return;
     }
 
-    chunksRef.current.push(blob);
     const nextManifest = appendLocalRecordingChunkManifestEntry(
       currentManifest,
       blob,
@@ -1142,7 +1213,10 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     }
 
     commitSnapshot(transitionRecordingState(snapshotRef.current, 'stopped').snapshot);
-    createPlaybackPreview();
+
+    if (currentManifest !== null) {
+      void finalizeCurrentRecordingPreview(currentManifest.recordingId);
+    }
   }
 
   function handleRecorderError(event: Event) {
@@ -1172,13 +1246,14 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     );
   }
 
-  function startRecording(stream: MediaStream | null, preferredMimeType?: string | null): boolean {
+  function startRecording(
+    stream: MediaStream | null,
+    preferredMimeType?: string | null,
+    options?: LocalRecordingParticipantMetadata | null,
+  ): boolean {
     if (!canTransitionRecordingState(snapshotRef.current.state, 'prepare')) {
       return false;
     }
-
-    commitSnapshot(transitionRecordingState(snapshotRef.current, 'prepare').snapshot);
-    clearRecordingArtifacts();
 
     if (stream === null) {
       failRecording('Start local preview before starting local recording.');
@@ -1193,10 +1268,20 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
       return false;
     }
 
+    const metadataBlockingReasons = getLocalRecordingMetadataBlockingReasons(options);
+    const metadata = getLocalRecordingParticipantMetadata(options);
+    if (metadata === null) {
+      failRecording(metadataBlockingReasons.join(' '));
+      return false;
+    }
+
     if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') {
       failRecording('MediaRecorder is unavailable in this browser.');
       return false;
     }
+
+    commitSnapshot(transitionRecordingState(snapshotRef.current, 'prepare').snapshot);
+    clearRecordingArtifacts();
 
     const mimeType = preferredMimeType?.trim() || null;
     let recorder: MediaRecorder | null = null;
@@ -1216,6 +1301,9 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
         selectedMimeType: recorder.mimeType.trim() === '' ? mimeType : recorder.mimeType,
         startedAt,
         sourceKind: localRecordingSourceKind,
+        sessionId: metadata.sessionId,
+        participantId: metadata.participantId,
+        role: metadata.role,
       });
 
       currentRecordingIdRef.current = recordingId;
@@ -1340,7 +1428,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     clearRecoveredPreview: clearRecoveredPreviewState,
     persistenceSupportStatus: persistenceState.supportStatus,
     persistenceErrorMessage: persistenceState.errorMessage,
-    persistedRecordings: persistenceState.persistedRecordings,
+    persistedRecordings: visiblePersistedRecordings,
     localIntegrityReports,
     integrityCheckStatus: integrityState.status,
     integrityCheckError: integrityState.errorMessage,
@@ -1357,6 +1445,21 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     stopRecording,
     resetRecording,
   };
+}
+
+export function shouldWarnBeforeUnload(input: {
+  recordingState: RecordingStateSnapshot['state'];
+  persistenceStatus: LocalRecordingPersistenceStatus;
+  previewAvailable: boolean;
+  persistedRecordingCount: number;
+}): boolean {
+  return (
+    input.recordingState === 'recording' ||
+    input.recordingState === 'stopping' ||
+    input.persistenceStatus === 'persisting' ||
+    input.previewAvailable ||
+    input.persistedRecordingCount > 0
+  );
 }
 
 function getRecorderErrorMessage(error: unknown, fallbackMessage: string): string {

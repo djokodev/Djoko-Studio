@@ -172,7 +172,9 @@ export async function getLocalRecordingPersistenceSupport(): Promise<LocalRecord
   }
 
   localRecordingSupportPromise = (async () => {
-    if (typeof window === 'undefined' || typeof window.indexedDB === 'undefined') {
+    const indexedDBFactory = getIndexedDBFactory();
+
+    if (indexedDBFactory === null) {
       return {
         state: 'unavailable',
         errorMessage: null,
@@ -443,15 +445,14 @@ async function getLocalRecordingDatabase(): Promise<IDBDatabase> {
 
 function openLocalRecordingDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined' || typeof window.indexedDB === 'undefined') {
+    const indexedDBFactory = getIndexedDBFactory();
+
+    if (indexedDBFactory === null) {
       reject(new Error('IndexedDB is unavailable in this environment.'));
       return;
     }
 
-    const request = window.indexedDB.open(
-      localRecordingDatabaseName,
-      localRecordingDatabaseVersion,
-    );
+    const request = indexedDBFactory.open(localRecordingDatabaseName, localRecordingDatabaseVersion);
 
     request.onupgradeneeded = () => {
       const database = request.result;
@@ -516,6 +517,14 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
       );
     };
   });
+}
+
+function getIndexedDBFactory(): IDBFactory | null {
+  if (typeof globalThis.indexedDB === 'undefined') {
+    return null;
+  }
+
+  return globalThis.indexedDB;
 }
 
 function getPersistenceErrorMessage(error: unknown, fallbackMessage: string): string {

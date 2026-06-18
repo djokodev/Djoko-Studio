@@ -1,20 +1,20 @@
 # Web Studio
 
-`apps/web-studio` is the React + TypeScript + Vite frontend for Djoko Studio.
+`apps/web-studio` is the React + TypeScript + Vite frontend for DNA Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
 a local camera and microphone preview foundation with local mic/camera toggle controls,
-the first local MediaRecorder in-memory prototype for the preview stream,
+the first local MediaRecorder chunked prototype for the preview stream,
 initial WebRTC media track attachment during negotiation,
 and a remote preview foundation with manual remote audio playback controls alongside the
 signaling-room connection panel for both roles. It also includes browser recording
-capability diagnostics and a local MediaRecorder in-memory prototype with DS-044
+capability diagnostics and a local MediaRecorder chunked prototype with DS-044
 state machine diagnostics for future local capture work. DS-047 extends that
 prototype with a local recording manifest foundation, a derived session summary,
 stronger lifecycle cleanup, and richer local diagnostics for the current page
 session. DS-048 adds the first IndexedDB local persistence foundation and recovery
 detection for persisted local recordings. DS-049 adds recovered playback preview
 from IndexedDB for persisted local recordings in this browser. DS-050 adds a raw
-local recording download safety copy for the completed in-memory preview and the
+local recording download safety copy for the completed local preview and the
 recovered IndexedDB-backed preview.
 DS-051 adds local browser storage visibility and a browser-local cleanup control
 for persisted recordings. DS-052 adds local recording integrity diagnostics that
@@ -34,8 +34,8 @@ persistence is unavailable instead of throwing.
 DS-061 adds the upload readiness panel and disabled upload client foundation.
 Upload remains disabled in this build, and no network upload occurs.
 DS-062 adds signaling presence events (`room-state`, `peer-joined`, and
-`peer-left`) plus the local host/guest WebRTC smoke test guide in
-[`docs/qa/local-host-guest-webrtc-smoke-test.md`](../../docs/qa/local-host-guest-webrtc-smoke-test.md).
+`peer-left`) plus the local host/guest WebRTC smoke test guide.
+DS-063 integrates the local recording session and IndexedDB persistence system with active WebRTC sessions, binding recordings to specific sessions and participants (sessionId, participantId, role), keeping chunk blobs out of long-lived memory by rebuilding preview/download from IndexedDB, and adding an unload warning UX when recording is in progress or unsaved local copies exist. It also sets up a Vitest unit test suite.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
@@ -48,7 +48,7 @@ The formal browser recording acceptance checklist lives in
 
 ## What this app does
 
-- shows the DNA Studio / Djoko Studio title and short product description
+- shows the DNA Studio title and short product description
 - keeps the existing host session creation screen on the default route
 - supports guest join URLs like `http://localhost:5173/guest/{invite_token}`
 - reads the invite token from the `/guest/{invite_token}` path segment
@@ -60,10 +60,11 @@ The formal browser recording acceptance checklist lives in
 - lets the host or guest mute/unmute the microphone and disable/enable the camera while preview is active
 - shows simple local media diagnostics for that preview
 - shows browser recording capability diagnostics for the active browser and preview stream
-- shows a local recording prototype that records only the active preview stream with in-memory chunks
+- shows a local recording prototype that records only the active preview stream with session metadata
+- requires session metadata before the product recording path can start
 - shows the DS-044 recording state machine through the local prototype controls
 - exposes a local recording manifest and session diagnostics panel for the current
-  in-memory recording run
+  current recording run
 - persists the local recording manifest and chunks to IndexedDB when the browser supports it
 - detects persisted local recordings on load and lets you discard the local copy
 - lets you preview a recovered local copy from IndexedDB after refresh
@@ -95,8 +96,8 @@ The recording diagnostics are present so the app can report browser support and 
 type readiness before the local recording prototype is used. A separate pure
 recording state machine module models the lifecycle and is surfaced in the UI
 through the local recording prototype controls. The local MediaRecorder prototype
-records only the active local preview stream, stores actual `Blob` chunks in memory
-for the current page session, and now assembles a temporary local playback preview
+records only the active local preview stream, persists each `Blob` chunk to
+IndexedDB as it arrives, and reconstructs the playback preview from IndexedDB
 after recording stops. DS-048 adds IndexedDB persistence for the manifest and
 chunks, plus local recovery detection when persisted recordings are found in this
 browser. DS-049 adds recovered playback preview from IndexedDB so persisted local
@@ -110,9 +111,9 @@ not final render validation.
 Uploads, exports, recovery routing, cloud sync, backend/database behavior, and
 final render validation are still out of scope.
 DS-047 adds a focused manifest model, derived summary fields, and more explicit
-lifecycle reset behavior while keeping the recording local-only and memory-backed.
+lifecycle reset behavior while keeping the recording local-only.
 DS-048 layers in browser-local durability and recovery detection while keeping the
-playback preview memory-backed.
+playback preview local-first.
 
 ## Signaling
 
@@ -179,7 +180,7 @@ It uses `getUserMedia({ audio: true, video: true })` only for local browser-side
 When the preview is already active before WebRTC negotiation starts, the local tracks can be attached to the peer connection.
 The microphone and camera controls toggle existing `MediaStreamTrack.enabled` values, so already attached WebRTC senders see the change without renegotiation.
 The preview panel also shows recording capability diagnostics for the current browser.
-The local recording prototype below starts from the DS-044 state machine, instantiates `MediaRecorder` only after you click `Start local recording`, stores chunks in memory only, and falls back to the browser default MIME type when no supported MIME type is reported.
+The local recording prototype below starts from the DS-044 state machine, instantiates `MediaRecorder` only after you click `Start local recording`, persists chunks locally as they arrive, and falls back to the browser default MIME type when no supported MIME type is reported.
 Those diagnostics do not trigger recording, storage, uploads, or browser prompts on their own.
 
 - click `Start preview` to request `getUserMedia({ audio: true, video: true })`
@@ -194,14 +195,14 @@ Those diagnostics do not trigger recording, storage, uploads, or browser prompts
 The local recording prototype is intentionally small and browser-only:
 
 - click `Start local recording` to record the active local preview stream
-- click `Stop local recording` to stop the current recorder, keep the in-memory chunks for this page session, and build a temporary local playback preview
+- click `Stop local recording` to stop the current recorder, persist chunks to IndexedDB, and build a temporary local playback preview from the persisted copy
 - click `Download raw local copy` on the completed preview to download the raw browser recording as a local safety copy
-- click `Discard local recording / Reset` to clear the in-memory chunks, metadata, preview URL, and persisted local copy when present
+- click `Discard local recording / Reset` to clear the manifest metadata, preview URL, and persisted local copy when present
 - the diagnostics area shows the manifest recording ID, status, source kind, MIME type, chunk counts, byte totals, latest chunk metadata, preview availability, and IndexedDB persistence status
 - the local browser storage panel shows approximate size, persisted chunk count, browser storage usage when available, and a clear-all action for persisted recordings
 - the recovery area includes a local integrity check that compares persisted manifest and chunk metadata with stored `Blob` sizes, then reports expected chunks, stored chunks, expected size, stored size, missing chunk counts when available, and a last-checked time
 - the recovery panel lists persisted local recordings detected in this browser, lets you preview a local copy from IndexedDB, download the raw local copy after it loads, and lets you discard the local copy
-- the playback preview is still local-only, memory-backed, and temporary
+- the playback preview is still local-only and temporary, but it is reconstructed from IndexedDB instead of holding the whole chunk buffer in RAM
 - recovered playback from IndexedDB is available through the recovery panel
 - clear-all only deletes persisted local recordings in this browser and does not affect any backend or cloud copy
 - refreshes may still show persisted local recordings in the recovery panel when IndexedDB is available

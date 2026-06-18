@@ -13,6 +13,10 @@ import {
   getRecordingCapabilityReport,
   type RecordingCapabilityReport,
 } from '../recording/recordingCapabilities';
+import {
+  getLocalRecordingMetadataBlockingReasons,
+  getLocalRecordingParticipantMetadata,
+} from '../recording/recordingManifest';
 import { getAllowedRecordingEvents, type RecordingEvent } from '../recording/recordingStateMachine';
 import {
   type LocalMediaRecorderController,
@@ -25,15 +29,23 @@ import { UploadReadinessPanel } from './UploadReadinessPanel';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
+  sessionId?: string | null;
+  participantId?: string | null;
+  role?: 'host' | 'guest' | null;
 }
 
-export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
+export function LocalMediaPreview({
+  onStreamChange,
+  sessionId,
+  participantId,
+  role,
+}: LocalMediaPreviewProps) {
   const [status, setStatus] = useState<LocalMediaPreviewStatus>('idle');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [, refreshDiagnostics] = useReducer((value: number) => value + 1, 0);
   const recordingCapabilityReport = getRecordingCapabilityReport(stream);
-  const localRecording = useLocalMediaRecorder();
+  const localRecording = useLocalMediaRecorder({ sessionId, participantId, role });
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const onStreamChangeRef = useRef(onStreamChange);
@@ -279,6 +291,9 @@ export function LocalMediaPreview({ onStreamChange }: LocalMediaPreviewProps) {
         stream={stream}
         recordingCapability={recordingCapabilityReport}
         recorder={localRecording}
+        sessionId={sessionId}
+        participantId={participantId}
+        role={role}
       />
 
       {diagnostics.errorMessage ? (
@@ -401,15 +416,31 @@ function LocalRecordingPrototype({
   stream,
   recordingCapability,
   recorder,
+  sessionId,
+  participantId,
+  role,
 }: {
   stream: MediaStream | null;
   recordingCapability: RecordingCapabilityReport;
   recorder: LocalMediaRecorderController;
+  sessionId?: string | null;
+  participantId?: string | null;
+  role?: 'host' | 'guest' | null;
 }) {
   const [discardingRecordingId, setDiscardingRecordingId] = useState<string | null>(null);
   const allowedEvents = getAllowedRecordingEvents(recorder.snapshot.state);
   const summary = recorder.summary;
   const recoveredPreview = recorder.recoveredPreview;
+  const recordingMetadata = getLocalRecordingParticipantMetadata({
+    sessionId,
+    participantId,
+    role,
+  });
+  const recordingMetadataBlockingReasons = getLocalRecordingMetadataBlockingReasons({
+    sessionId,
+    participantId,
+    role,
+  });
   const integrityReportsByRecordingId = new Map(
     recorder.localIntegrityReports.map((report) => [report.recordingId, report]),
   );
@@ -437,7 +468,8 @@ function LocalRecordingPrototype({
     recorder.snapshot.state !== 'idle' ||
     !recordingCapability.mediaRecorderAvailable ||
     !hasLocalPreviewStream ||
-    !hasAudioAndVideoTracks;
+    !hasAudioAndVideoTracks ||
+    recordingMetadata === null;
   const stopDisabled = recorder.snapshot.state !== 'recording';
   const resetDisabled =
     recorder.snapshot.state !== 'stopped' && recorder.snapshot.state !== 'failed';
@@ -461,8 +493,9 @@ function LocalRecordingPrototype({
       </div>
 
       <p className="api-note recording-prototype__note">
-        Prototype only: the recorder keeps the playback preview in memory, while
-        IndexedDB persistence stores the manifest and chunks locally when the browser
+        Prototype only: recording chunks are persisted locally as they arrive, while
+        preview and raw download are rebuilt from the persisted local copy when
+        needed. IndexedDB stores the manifest and chunks locally when the browser
         supports it. The recovery panel can now preview a persisted local copy from
         IndexedDB after refresh. The recorder prefers the supported MIME type from the
         diagnostics and falls back to the browser default when needed.
@@ -472,9 +505,13 @@ function LocalRecordingPrototype({
         <button
           className="submit-button signaling-button"
           type="button"
-          onClick={() =>
-            recorder.startRecording(stream, recordingCapability.preferredMimeType)
-          }
+          onClick={() => {
+            if (recordingMetadata === null) {
+              return;
+            }
+
+            recorder.startRecording(stream, recordingCapability.preferredMimeType, recordingMetadata);
+          }}
           disabled={startDisabled}
         >
           {recorder.snapshot.state === 'preparing'
@@ -500,6 +537,19 @@ function LocalRecordingPrototype({
           Discard local recording / Reset
         </button>
       </div>
+
+      {recordingMetadataBlockingReasons.length > 0 ? (
+        <div className="message message--warning recording-prototype__metadata-warning" role="status">
+          <p className="recording-prototype__metadata-warning-title">
+            Create or join a session before recording.
+          </p>
+          <ul className="recording-prototype__metadata-warning-list">
+            {recordingMetadataBlockingReasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <dl className="details-grid recording-prototype__details">
         <div className="detail-card">
@@ -584,8 +634,28 @@ function LocalRecordingPrototype({
         </div>
         <div className="detail-card">
           <dt>Upload status</dt>
-          <dd className="mono">{summary.uploadStatus}</dd>
+          <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
+            Not uploaded (Local only)
+          </dd>
         </div>
+        {recorder.manifest?.sessionId && (
+          <div className="detail-card">
+            <dt>Session ID</dt>
+            <dd className="mono">{recorder.manifest.sessionId}</dd>
+          </div>
+        )}
+        {recorder.manifest?.participantId && (
+          <div className="detail-card">
+            <dt>Participant ID</dt>
+            <dd className="mono">{recorder.manifest.participantId}</dd>
+          </div>
+        )}
+        {recorder.manifest?.role && (
+          <div className="detail-card">
+            <dt>Role</dt>
+            <dd className="mono">{recorder.manifest.role}</dd>
+          </div>
+        )}
         <div className="detail-card">
           <dt>Available next actions</dt>
           <dd className="mono">{formatRecordingEventList(allowedEvents)}</dd>
@@ -692,9 +762,9 @@ function LocalRecordingPrototype({
 
         <p className="api-note recording-recovery__note">
           Local recording recovery stays browser-only. The app can detect persisted
-          recordings in IndexedDB after refresh, preview a local copy from browser
-          storage, and discard the local copy. Upload/recovery sync is not implemented
-          yet.
+          recordings in IndexedDB after refresh for the current session, participant,
+          and role context, preview a local copy from browser storage, and discard the
+          local copy. Upload/recovery sync is not implemented yet.
         </p>
 
         <div className="recording-integrity__intro">
@@ -732,8 +802,8 @@ function LocalRecordingPrototype({
 
           <p className="api-note recording-recovery__preview-note">
             Recovered playback is read from local browser storage only. It is labeled
-            here as a browser copy so it is easy to distinguish from the live in-memory
-            playback preview.
+            here as a browser copy so it is easy to distinguish from the live preview
+            rebuilt from IndexedDB.
           </p>
 
           {recoveredPreview.status === 'idle' ? (
@@ -936,6 +1006,30 @@ function LocalRecordingPrototype({
                       <dt>Last persisted at</dt>
                       <dd>{formatDiagnosticTimestamp(record.lastPersistedAt)}</dd>
                     </div>
+                    <div className="detail-card">
+                      <dt>Upload status</dt>
+                      <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
+                        Not uploaded (Local only)
+                      </dd>
+                    </div>
+                    {record.manifest.sessionId && (
+                      <div className="detail-card">
+                        <dt>Session ID</dt>
+                        <dd className="mono">{record.manifest.sessionId}</dd>
+                      </div>
+                    )}
+                    {record.manifest.participantId && (
+                      <div className="detail-card">
+                        <dt>Participant ID</dt>
+                        <dd className="mono">{record.manifest.participantId}</dd>
+                      </div>
+                    )}
+                    {record.manifest.role && (
+                      <div className="detail-card">
+                        <dt>Role</dt>
+                        <dd className="mono">{record.manifest.role}</dd>
+                      </div>
+                    )}
                   </dl>
 
                   <LocalRecordingIntegrityBlock
@@ -956,7 +1050,7 @@ function LocalRecordingPrototype({
       </section>
 
       <div className="message message--warning recording-prototype__warning" role="status">
-        Prototype only: the in-memory playback preview stays separate from the recovered
+        Prototype only: the local playback preview stays separate from the recovered
         browser copy. IndexedDB keeps a local manifest/chunk copy for recovery
         detection and local preview when available.
       </div>
@@ -1104,12 +1198,23 @@ function LocalBrowserStoragePanel({
   const storageSummary = recorder.localStorageSummary;
   const browserStorageEstimate = recorder.browserStorageEstimate;
   const summaryReady = recorder.storageSummaryStatus === 'ready';
-  const hasPersistedRecordings = (storageSummary?.persistedRecordingCount ?? 0) > 0;
+  const visiblePersistedRecordings = recorder.persistedRecordings;
+  const visiblePersistedRecordingCount = visiblePersistedRecordings.length;
+  const visiblePersistedChunkCount = visiblePersistedRecordings.reduce(
+    (total, record) => total + record.manifest.chunkCount,
+    0,
+  );
+  const visiblePersistedBytes = visiblePersistedRecordings.reduce(
+    (total, record) => total + record.manifest.totalBytes,
+    0,
+  );
+  const visibleLatestRecording = visiblePersistedRecordings[0] ?? null;
+  const hasAnyPersistedRecordings = (storageSummary?.persistedRecordingCount ?? 0) > 0;
   const clearAllDisabled =
     recorder.storageSummaryStatus === 'loading' ||
     !summaryReady ||
     storageSummary?.supportStatus !== 'supported' ||
-    !hasPersistedRecordings;
+    !hasAnyPersistedRecordings;
   const refreshButtonLabel =
     recorder.storageSummaryStatus === 'loading'
       ? 'Refreshing storage summary…'
@@ -1159,9 +1264,9 @@ function LocalBrowserStoragePanel({
       </div>
 
       <p className="api-note recording-storage__note">
-        Stored only in this browser. No upload has been performed. Approximate size is
-        based on persisted manifest and chunk metadata, so it can help you understand
-        local browser usage without doing a full storage scan.
+        Stored only in this browser for the current session, participant, and role
+        context. No upload has been performed. Other browser-local copies may exist in
+        IndexedDB for different contexts.
       </p>
 
       <div className="recording-storage__actions" aria-label="Local browser storage actions">
@@ -1202,15 +1307,15 @@ function LocalBrowserStoragePanel({
         </div>
         <div className="detail-card">
           <dt>Persisted local recordings</dt>
-          <dd>{storageSummary?.persistedRecordingCount ?? 0}</dd>
+          <dd>{visiblePersistedRecordingCount}</dd>
         </div>
         <div className="detail-card">
           <dt>Approximate size</dt>
-          <dd>{formatBytes(storageSummary?.totalPersistedBytes ?? 0)}</dd>
+          <dd>{formatBytes(visiblePersistedBytes)}</dd>
         </div>
         <div className="detail-card">
           <dt>Persisted chunks</dt>
-          <dd>{storageSummary?.totalPersistedChunks ?? 0}</dd>
+          <dd>{visiblePersistedChunkCount}</dd>
         </div>
         <div className="detail-card">
           <dt>Browser estimate</dt>
@@ -1226,15 +1331,15 @@ function LocalBrowserStoragePanel({
         </div>
         <div className="detail-card">
           <dt>Latest recording ID</dt>
-          <dd className="mono">{formatNullableText(storageSummary?.latestRecordingId ?? null)}</dd>
+          <dd className="mono">{formatNullableText(visibleLatestRecording?.recordingId ?? null)}</dd>
         </div>
         <div className="detail-card">
           <dt>Latest started at</dt>
-          <dd>{formatDiagnosticTimestamp(storageSummary?.latestRecordingStartedAt ?? null)}</dd>
+          <dd>{formatDiagnosticTimestamp(visibleLatestRecording?.manifest.startedAt ?? null)}</dd>
         </div>
         <div className="detail-card">
           <dt>Latest persisted at</dt>
-          <dd>{formatDiagnosticTimestamp(storageSummary?.latestPersistedAt ?? null)}</dd>
+          <dd>{formatDiagnosticTimestamp(visibleLatestRecording?.lastPersistedAt ?? null)}</dd>
         </div>
       </dl>
 

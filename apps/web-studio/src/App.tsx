@@ -279,20 +279,20 @@ function HostSessionPage() {
   return (
     <main className="layout">
       <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA Studio / Djoko Studio</p>
+        <p className="eyebrow">DNA Studio</p>
         <h1 id="page-title">Create a host session from the web studio.</h1>
         <p className="lede">
           This first pass lets a host create a session, send the request to the API,
           and immediately see the session ID, title, status, guest invite details, a
           local camera/microphone preview foundation, initial WebRTC media track
-          attachment, the local in-memory recording prototype, the remote preview
+          attachment, the local chunked recording prototype, the remote preview
           foundation, the signaling room foundation, and the first WebRTC peer
           connection controls.
         </p>
         <ul className="scope-list" aria-label="Current scope">
           <li>No auth yet</li>
           <li>Local preview and initial track attachment</li>
-          <li>Local in-memory recording prototype</li>
+          <li>Local chunked recording prototype</li>
           <li>No upload or export yet</li>
           <li>Signaling, peer connection, and remote preview foundation</li>
         </ul>
@@ -364,7 +364,12 @@ function HostSessionPage() {
           </div>
         ) : null}
 
-        <LocalMediaPreview onStreamChange={setLocalMediaStream} />
+        <LocalMediaPreview
+          onStreamChange={setLocalMediaStream}
+          sessionId={sessionResult?.session.id}
+          participantId={sessionResult?.session.host_user_id}
+          role="host"
+        />
       </section>
 
       {sessionResult ? (
@@ -465,12 +470,12 @@ function GuestSessionPage() {
   return (
     <main className="layout">
       <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA Studio / Djoko Studio</p>
+        <p className="eyebrow">DNA Studio</p>
         <h1 id="page-title">Join a guest session in the web studio.</h1>
         <p className="lede">
           Open the invite link, look up the session, enter a display name, and join
           without auth, upload/export, or remote recording yet. Local camera and
-          microphone preview are available in the browser, the local in-memory
+          microphone preview are available in the browser, the local chunked
           recording prototype is available for the preview stream, initial WebRTC media
           track attachment is supported during negotiation, and the signaling room plus
           remote preview foundation are available after you join.
@@ -479,7 +484,7 @@ function GuestSessionPage() {
           <li>No auth yet</li>
           <li>No full authorization yet</li>
           <li>Local preview and initial track attachment</li>
-          <li>Local in-memory recording prototype</li>
+          <li>Local chunked recording prototype</li>
           <li>Signaling, peer connection, and remote preview foundation</li>
         </ul>
         <p className="api-note">
@@ -514,7 +519,12 @@ function GuestSessionPage() {
           </div>
         ) : null}
 
-        <LocalMediaPreview onStreamChange={setLocalMediaStream} />
+        <LocalMediaPreview
+          onStreamChange={setLocalMediaStream}
+          sessionId={joinedResult?.session.id ?? session?.id}
+          participantId={joinedResult?.participant.id}
+          role="guest"
+        />
 
         {session ? (
           <>

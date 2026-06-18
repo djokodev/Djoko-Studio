@@ -72,6 +72,7 @@
 | DS-060 | v0.1 Architecture References | Add open-source technical reference map | merged | Merged in PR #60. |
 | DS-061 | v0.1 Upload Foundation | Add upload readiness panel and disabled client foundation | merged | Merged in PR #61. |
 | DS-062 | v0.1 WebRTC Foundation | Add signaling presence events and local host/guest smoke flow | merged | Merged in PR #62. |
+| DS-063 | v0.1 Recording Core | Real local recording session and recovery | in_review | Draft PR. |
 
 ## Allowed Statuses
 
