@@ -1,5 +1,10 @@
 export type SignalingRole = 'host' | 'guest';
 
+export interface SignalingParticipant {
+  participant_id: string;
+  role: SignalingRole;
+}
+
 export type SignalingIncomingMessage =
   | {
       type: 'signal';
@@ -15,6 +20,22 @@ export type SignalingIncomingMessage =
         code: string;
         message: string;
       };
+    }
+  | {
+      type: 'room-state';
+      session_id: string;
+      self: SignalingParticipant;
+      peer: SignalingParticipant | null;
+    }
+  | {
+      type: 'peer-joined';
+      session_id: string;
+      participant: SignalingParticipant;
+    }
+  | {
+      type: 'peer-left';
+      session_id: string;
+      participant: SignalingParticipant;
     }
   | {
       type: 'malformed';
@@ -223,10 +244,114 @@ function parseIncomingMessage(data: unknown): SignalingIncomingMessage {
     };
   }
 
+  if (parsed.type === 'room-state') {
+    return parseRoomStateMessage(parsed);
+  }
+
+  if (parsed.type === 'peer-joined' || parsed.type === 'peer-left') {
+    return parsePeerEventMessage(parsed);
+  }
+
   return {
     type: 'malformed',
     message: `Malformed incoming message: unsupported type "${String(parsed.type)}".`,
     raw: parsed,
+  };
+}
+
+function parseRoomStateMessage(parsed: Record<string, unknown>): SignalingIncomingMessage {
+  const sessionId = parsed.session_id;
+  const self = parseParticipant(parsed.self);
+
+  if (typeof sessionId !== 'string' || sessionId.trim() === '' || self === null) {
+    return {
+      type: 'malformed',
+      message: 'Malformed incoming message: invalid room state payload.',
+      raw: parsed,
+    };
+  }
+
+  if (!('peer' in parsed)) {
+    return {
+      type: 'malformed',
+      message: 'Malformed incoming message: invalid room state payload.',
+      raw: parsed,
+    };
+  }
+
+  const peerValue = parsed.peer;
+  if (peerValue === null) {
+    return {
+      type: 'room-state',
+      session_id: sessionId,
+      self,
+      peer: null,
+    };
+  }
+
+  const peer = parseParticipant(peerValue);
+  if (peer === null) {
+    return {
+      type: 'malformed',
+      message: 'Malformed incoming message: invalid room state payload.',
+      raw: parsed,
+    };
+  }
+
+  return {
+    type: 'room-state',
+    session_id: sessionId,
+    self,
+    peer,
+  };
+}
+
+function parsePeerEventMessage(parsed: Record<string, unknown>): SignalingIncomingMessage {
+  const sessionId = parsed.session_id;
+  const participant = parseParticipant(parsed.participant);
+
+  if (typeof sessionId !== 'string' || sessionId.trim() === '' || participant === null) {
+    return {
+      type: 'malformed',
+      message: 'Malformed incoming message: invalid peer event payload.',
+      raw: parsed,
+    };
+  }
+
+  if (parsed.type === 'peer-joined') {
+    return {
+      type: 'peer-joined',
+      session_id: sessionId,
+      participant,
+    };
+  }
+
+  return {
+    type: 'peer-left',
+    session_id: sessionId,
+    participant,
+  };
+}
+
+function parseParticipant(value: unknown): SignalingParticipant | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const participantId = value.participant_id;
+  const role = value.role;
+
+  if (typeof participantId !== 'string' || participantId.trim() === '') {
+    return null;
+  }
+
+  if (!isSignalingRole(role)) {
+    return null;
+  }
+
+  return {
+    participant_id: participantId,
+    role,
   };
 }
 

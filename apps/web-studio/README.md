@@ -33,6 +33,9 @@ DS-058 hardens that metadata adapter so IndexedDB open failures behave like
 persistence is unavailable instead of throwing.
 DS-061 adds the upload readiness panel and disabled upload client foundation.
 Upload remains disabled in this build, and no network upload occurs.
+DS-062 adds signaling presence events (`room-state`, `peer-joined`, and
+`peer-left`) plus the local host/guest WebRTC smoke test guide in
+[`docs/qa/local-host-guest-webrtc-smoke-test.md`](../../docs/qa/local-host-guest-webrtc-smoke-test.md).
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 

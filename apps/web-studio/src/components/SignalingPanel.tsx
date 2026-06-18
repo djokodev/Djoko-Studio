@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   buildSignalingRoomUrl,
   connectToSignalingRoom,
+  type SignalingParticipant,
   type SignalingConnection,
   type SignalingIncomingMessage,
   type SignalingRole,
@@ -16,8 +17,9 @@ import {
 } from '../webrtc/peerConnection';
 
 type SignalingStatus = 'idle' | 'connecting' | 'open' | 'closing' | 'closed' | 'error';
+type PeerPresence = 'unknown' | 'waiting' | 'connected' | 'disconnected';
 
-type PanelLogKind = 'open' | 'message' | 'signal' | 'error' | 'close' | 'state' | 'data' | 'info';
+type PanelLogKind = 'open' | 'message' | 'signal' | 'error' | 'close' | 'state' | 'data' | 'info' | 'presence';
 
 type PanelLogEntry = {
   id: string;
@@ -64,6 +66,12 @@ const remoteStreamUnavailableMessage = 'Remote stream is not available yet.';
 const remoteStreamAvailableMessage = 'Remote stream is available. Click "Enable remote audio" to hear it.';
 const remoteAudioEnabledMessage = 'Remote audio is enabled.';
 const remoteAudioMutedMessage = 'Remote audio is muted.';
+const peerPresenceLabels: Record<PeerPresence, string> = {
+  unknown: 'Unknown',
+  waiting: 'Waiting',
+  connected: 'Connected',
+  disconnected: 'Disconnected',
+};
 
 function getLocalMediaAttachmentNote(
   localMediaStreamAvailable: boolean,
@@ -101,6 +109,8 @@ export function SignalingPanel({
   const [webRtcState, setWebRtcState] = useState<WebRtcPeerConnectionState>(idleWebRtcState);
   const [events, setEvents] = useState<PanelLogEntry[]>([]);
   const [hasWebRtcController, setHasWebRtcController] = useState(false);
+  const [peerPresence, setPeerPresence] = useState<PeerPresence>('unknown');
+  const [peerParticipant, setPeerParticipant] = useState<SignalingParticipant | null>(null);
   const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(false);
   const [remotePlaybackMessage, setRemotePlaybackMessage] = useState(remoteStreamUnavailableMessage);
@@ -157,6 +167,8 @@ export function SignalingPanel({
     setWebRtcMessageKind('info');
     setWebRtcState(idleWebRtcState);
     setHasWebRtcController(false);
+    setPeerPresence('unknown');
+    setPeerParticipant(null);
     setRemoteMediaStream(null);
     setEvents([]);
   }, [trimmedSessionId, trimmedParticipantId, role]);
@@ -201,6 +213,34 @@ export function SignalingPanel({
     };
 
     setEvents((current) => [...current, entry].slice(-maxLogEntries));
+  }
+
+  function describeParticipant(participant: SignalingParticipant | null): string {
+    if (participant === null) {
+      return 'none';
+    }
+
+    return `${participant.participant_id} (${participant.role})`;
+  }
+
+  function getPeerPresenceMessage() {
+    if (peerPresence === 'connected') {
+      return peerParticipant === null
+        ? 'Peer connected.'
+        : `Peer connected: ${describeParticipant(peerParticipant)}.`;
+    }
+
+    if (peerPresence === 'waiting') {
+      return 'Waiting for the peer to connect.';
+    }
+
+    if (peerPresence === 'disconnected') {
+      return peerParticipant === null
+        ? 'Peer left the room.'
+        : `Peer left the room: ${describeParticipant(peerParticipant)}.`;
+    }
+
+    return 'Peer presence has not been reported yet.';
   }
 
   function setConnectionError(message: string) {
@@ -326,6 +366,53 @@ export function SignalingPanel({
       return;
     }
 
+    if (message.type === 'room-state') {
+      setPeerParticipant(message.peer);
+      setPeerPresence(message.peer === null ? 'waiting' : 'connected');
+      appendLog(
+        'presence',
+        message.peer === null
+          ? `Room state received for ${message.session_id}. Waiting for peer presence.`
+          : `Room state received for ${message.session_id}. Peer connected: ${describeParticipant(message.peer)}.`,
+        message.peer === null
+          ? `self=${describeParticipant(message.self)}, peer=none`
+          : `self=${describeParticipant(message.self)}, peer=${describeParticipant(message.peer)}`,
+      );
+      setWebRtcBanner(
+        message.peer === null
+          ? 'Room state received. Waiting for peer presence.'
+          : `Room state received. Peer connected: ${describeParticipant(message.peer)}.`,
+      );
+      return;
+    }
+
+    if (message.type === 'peer-joined') {
+      setPeerParticipant(message.participant);
+      setPeerPresence('connected');
+      appendLog(
+        'presence',
+        `Peer joined the room: ${describeParticipant(message.participant)}.`,
+        `session_id=${message.session_id}`,
+      );
+      setWebRtcBanner(`Peer joined the room: ${describeParticipant(message.participant)}.`);
+      return;
+    }
+
+    if (message.type === 'peer-left') {
+      setPeerParticipant(message.participant);
+      setPeerPresence('disconnected');
+      closeWebRtcPeerConnection();
+      setRemoteMediaStream(null);
+      setRemoteAudioEnabled(false);
+      appendLog(
+        'presence',
+        `Peer left the room: ${describeParticipant(message.participant)}.`,
+        `session_id=${message.session_id}`,
+      );
+      setWebRtcBanner(`Peer left the room: ${describeParticipant(message.participant)}.`, 'error');
+      return;
+    }
+
     if (message.type === 'error') {
       appendLog('error', message.error.message, `code=${message.error.code}`);
       return;
@@ -348,6 +435,8 @@ export function SignalingPanel({
     try {
       setStatus('connecting');
       setStatusMessage(`Connecting to ${roomUrl}.`);
+      setPeerPresence('unknown');
+      setPeerParticipant(null);
 
       const connection = connectToSignalingRoom(
         {
@@ -365,7 +454,7 @@ export function SignalingPanel({
             setStatusMessage(`Connected to ${roomUrl}.`);
             setWebRtcBanner(
               role === 'host'
-                ? 'Ready to start the WebRTC peer connection.'
+                ? 'Connected to signaling. Waiting for peer presence before starting WebRTC.'
                 : 'Waiting for the host WebRTC offer.',
             );
             appendLog('open', 'WebSocket connection opened.', roomUrl);
@@ -427,7 +516,12 @@ export function SignalingPanel({
     disconnectCauseRef.current = 'user';
     setStatus('closing');
     setStatusMessage('Disconnecting signaling connection.');
+    setPeerPresence('unknown');
+    setPeerParticipant(null);
     closeWebRtcPeerConnection();
+    setRemoteMediaStream(null);
+    setRemoteAudioEnabled(false);
+    setRemotePlaybackError(null);
     connectionRef.current.close();
   }
 
@@ -473,6 +567,12 @@ export function SignalingPanel({
     if (status !== 'open') {
       setWebRtcBanner('Connect signaling first.', 'error');
       appendLog('error', 'Connect signaling first.');
+      return;
+    }
+
+    if (peerPresence !== 'connected') {
+      setWebRtcBanner('Wait for peer presence to connect before starting WebRTC.', 'error');
+      appendLog('error', 'Wait for peer presence to connect before starting WebRTC.');
       return;
     }
 
@@ -576,7 +676,7 @@ export function SignalingPanel({
   const canConnect = roomError === '' && status !== 'connecting' && status !== 'open' && status !== 'closing';
   const canDisconnect = status === 'connecting' || status === 'open' || status === 'closing';
   const canSendTestSignal = status === 'open' && roomError === '';
-  const canStartWebRtc = role === 'host' && status === 'open' && !hasWebRtcController;
+  const canStartWebRtc = role === 'host' && status === 'open' && peerPresence === 'connected' && !hasWebRtcController;
   const canCloseWebRtc = hasWebRtcController;
   const canSendWebRtcMessage = hasWebRtcController && webRtcState.dataChannelState === 'open';
   const canEnableRemoteAudio = remoteMediaStream !== null && !remoteAudioEnabled;
@@ -689,6 +789,41 @@ export function SignalingPanel({
           {statusMessage}
         </div>
       ) : null}
+
+      <section className="peer-panel" aria-labelledby={`${role}-presence-heading`}>
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Room presence</p>
+            <h4 id={`${role}-presence-heading`}>Peer presence</h4>
+          </div>
+          <span className={`status-pill peer-presence-pill peer-presence-pill--${peerPresence}`}>
+            {peerPresenceLabels[peerPresence]}
+          </span>
+        </div>
+
+        <div
+          className={`message ${peerPresence === 'disconnected' ? 'message--warning' : ''}`}
+          aria-live={peerPresence === 'disconnected' ? 'assertive' : 'polite'}
+          role={peerPresence === 'disconnected' ? 'alert' : 'status'}
+        >
+          {getPeerPresenceMessage()}
+        </div>
+
+        <dl className="details-grid signaling-details">
+          <div className="detail-card">
+            <dt>Peer presence</dt>
+            <dd>{peerPresenceLabels[peerPresence]}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Peer role</dt>
+            <dd>{peerParticipant?.role ?? 'none'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Peer participant ID</dt>
+            <dd className="mono">{peerParticipant?.participant_id ?? 'none'}</dd>
+          </div>
+        </dl>
+      </section>
 
       <section className="peer-panel" aria-labelledby={`${role}-webrtc-heading`}>
         <div className="panel__header">
@@ -909,7 +1044,7 @@ export function SignalingPanel({
               ))}
             </ul>
           ) : (
-            <div className="message signaling-log__empty">No signaling or WebRTC events yet.</div>
+            <div className="message signaling-log__empty">No signaling, presence, or WebRTC events yet.</div>
           )}
         </section>
       </section>

@@ -157,7 +157,7 @@ func TestRoomRouteRejectsNonWebSocketRequests(t *testing.T) {
 	}
 }
 
-func TestRoomRelayForwardsSignalMessagesBetweenParticipants(t *testing.T) {
+func TestRoomRouteSendsRoomStateWhenHostJoinsAlone(t *testing.T) {
 	server := httptest.NewServer(newHandler())
 	t.Cleanup(server.Close)
 
@@ -167,22 +167,125 @@ func TestRoomRelayForwardsSignalMessagesBetweenParticipants(t *testing.T) {
 	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
 	t.Cleanup(func() { _ = hostConn.CloseNow() })
 
+	_, payload := readWebSocketMessage(t, ctx, hostConn)
+	assertWebSocketMessage(t, payload, wsRoomStateMessage{
+		Type:      "room-state",
+		SessionID: "session-123",
+		Self: wsParticipantPayload{
+			ParticipantID: "participant-host",
+			Role:          hostRole,
+		},
+		Peer: nil,
+	})
+}
+
+func TestRoomRouteSendsRoomStateWithPeerWhenGuestJoins(t *testing.T) {
+	server := httptest.NewServer(newHandler())
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
+	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
+
 	guestConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-guest", guestRole)
 	t.Cleanup(func() { _ = guestConn.CloseNow() })
+
+	_, payload := readWebSocketMessage(t, ctx, guestConn)
+	assertWebSocketMessage(t, payload, wsRoomStateMessage{
+		Type:      "room-state",
+		SessionID: "session-123",
+		Self: wsParticipantPayload{
+			ParticipantID: "participant-guest",
+			Role:          guestRole,
+		},
+		Peer: &wsParticipantPayload{
+			ParticipantID: "participant-host",
+			Role:          hostRole,
+		},
+	})
+}
+
+func TestRoomRouteNotifiesPeerJoined(t *testing.T) {
+	server := httptest.NewServer(newHandler())
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
+	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
+
+	guestConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-guest", guestRole)
+	t.Cleanup(func() { _ = guestConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, guestConn)
+
+	_, payload := readWebSocketMessage(t, ctx, hostConn)
+	assertWebSocketMessage(t, payload, wsPeerEventMessage{
+		Type:      "peer-joined",
+		SessionID: "session-123",
+		Participant: wsParticipantPayload{
+			ParticipantID: "participant-guest",
+			Role:          guestRole,
+		},
+	})
+}
+
+func TestRoomRouteNotifiesPeerLeft(t *testing.T) {
+	server := httptest.NewServer(newHandler())
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
+	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
+
+	guestConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-guest", guestRole)
+	_, _ = readWebSocketMessage(t, ctx, guestConn)
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
+
+	if err := guestConn.Close(websocket.StatusNormalClosure, "test guest leaving"); err != nil {
+		t.Fatalf("close guest websocket: %v", err)
+	}
+
+	_, payload := readWebSocketMessage(t, ctx, hostConn)
+	assertWebSocketMessage(t, payload, wsPeerEventMessage{
+		Type:      "peer-left",
+		SessionID: "session-123",
+		Participant: wsParticipantPayload{
+			ParticipantID: "participant-guest",
+			Role:          guestRole,
+		},
+	})
+}
+
+func TestRoomRelayForwardsSignalMessagesBetweenParticipants(t *testing.T) {
+	server := httptest.NewServer(newHandler())
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
+	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
+
+	guestConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-guest", guestRole)
+	t.Cleanup(func() { _ = guestConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, guestConn)
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
 
 	hostMessage := `{"type":"signal","payload":{"kind":"placeholder","data":{"from":"host"}}}`
 	if err := hostConn.Write(ctx, websocket.MessageText, []byte(hostMessage)); err != nil {
 		t.Fatalf("write host message: %v", err)
 	}
 
-	messageType, payload, err := guestConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read guest relay message: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload := readWebSocketMessage(t, ctx, guestConn)
 	assertWebSocketMessage(t, payload, wsSignalEnvelope{
 		Type: "signal",
 		From: wsSignalFrom{
@@ -197,14 +300,7 @@ func TestRoomRelayForwardsSignalMessagesBetweenParticipants(t *testing.T) {
 		t.Fatalf("write guest message: %v", err)
 	}
 
-	messageType, payload, err = hostConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read host relay message: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload = readWebSocketMessage(t, ctx, hostConn)
 	assertWebSocketMessage(t, payload, wsSignalEnvelope{
 		Type: "signal",
 		From: wsSignalFrom{
@@ -224,20 +320,14 @@ func TestRoomRouteReportsPeerNotConnected(t *testing.T) {
 
 	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
 	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
 
 	message := `{"type":"signal","payload":{"kind":"placeholder","data":{}}}`
 	if err := hostConn.Write(ctx, websocket.MessageText, []byte(message)); err != nil {
 		t.Fatalf("write host message: %v", err)
 	}
 
-	messageType, payload, err := hostConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read error message: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload := readWebSocketMessage(t, ctx, hostConn)
 	assertWebSocketMessage(t, payload, wsErrorResponse{
 		Type: "error",
 		Error: wsErrorDetail{
@@ -256,19 +346,13 @@ func TestRoomRouteRejectsUnsupportedMessageType(t *testing.T) {
 
 	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
 	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
 
 	if err := hostConn.Write(ctx, websocket.MessageText, []byte(`{"type":"noop","payload":{}}`)); err != nil {
 		t.Fatalf("write unsupported message: %v", err)
 	}
 
-	messageType, payload, err := hostConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read unsupported message error: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload := readWebSocketMessage(t, ctx, hostConn)
 	assertWebSocketMessage(t, payload, wsErrorResponse{
 		Type: "error",
 		Error: wsErrorDetail{
@@ -287,19 +371,13 @@ func TestRoomRouteRejectsInvalidJSON(t *testing.T) {
 
 	hostConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host", hostRole)
 	t.Cleanup(func() { _ = hostConn.CloseNow() })
+	_, _ = readWebSocketMessage(t, ctx, hostConn)
 
 	if err := hostConn.Write(ctx, websocket.MessageText, []byte(`not-json`)); err != nil {
 		t.Fatalf("write invalid json: %v", err)
 	}
 
-	messageType, payload, err := hostConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read invalid json error: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload := readWebSocketMessage(t, ctx, hostConn)
 	assertWebSocketMessage(t, payload, wsErrorResponse{
 		Type: "error",
 		Error: wsErrorDetail{
@@ -322,14 +400,7 @@ func TestRoomRouteRejectsDuplicateHost(t *testing.T) {
 	duplicateConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-host-duplicate", hostRole)
 	t.Cleanup(func() { _ = duplicateConn.CloseNow() })
 
-	messageType, payload, err := duplicateConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read duplicate host error message: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload := readWebSocketMessage(t, ctx, duplicateConn)
 	assertWebSocketMessage(t, payload, wsErrorResponse{
 		Type: "error",
 		Error: wsErrorDetail{
@@ -355,14 +426,7 @@ func TestRoomRouteRejectsDuplicateGuest(t *testing.T) {
 	duplicateConn := dialRoomParticipant(t, ctx, server.URL, "session-123", "participant-guest-duplicate", guestRole)
 	t.Cleanup(func() { _ = duplicateConn.CloseNow() })
 
-	messageType, payload, err := duplicateConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read duplicate guest error message: %v", err)
-	}
-	if messageType != websocket.MessageText {
-		t.Fatalf("expected text message type, got %v", messageType)
-	}
-
+	_, payload := readWebSocketMessage(t, ctx, duplicateConn)
 	assertWebSocketMessage(t, payload, wsErrorResponse{
 		Type: "error",
 		Error: wsErrorDetail{
@@ -416,6 +480,20 @@ func dialRoomParticipant(t *testing.T, ctx context.Context, serverURL, sessionID
 	}
 
 	return conn
+}
+
+func readWebSocketMessage(t *testing.T, ctx context.Context, conn *websocket.Conn) (websocket.MessageType, []byte) {
+	t.Helper()
+
+	messageType, payload, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read websocket message: %v", err)
+	}
+	if messageType != websocket.MessageText {
+		t.Fatalf("expected text message type, got %v", messageType)
+	}
+
+	return messageType, payload
 }
 
 func assertHTTPErrorResponse(t *testing.T, response *http.Response, expectedStatus int, expectedError string) {
