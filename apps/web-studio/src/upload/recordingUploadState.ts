@@ -222,6 +222,7 @@ export function mergeRecordingUploadServerStatus(
     role: 'host' | 'guest';
     uploadedChunkIndexes: number[];
     rejectedChunkIndexes: number[];
+    uploadedChunkSizeByIndex?: Record<number, number>;
     uploadedBytes: number;
     completedAt: number | null;
     now: number;
@@ -237,10 +238,15 @@ export function mergeRecordingUploadServerStatus(
   const rejectedIndexes = new Set(input.rejectedChunkIndexes.map(normalizeNonNegativeInteger));
   const chunks = state.chunks.map((chunk) => {
     if (uploadedIndexes.has(chunk.chunkIndex)) {
+      const normalizedUploadedBytes = normalizeNonNegativeInteger(
+        input.uploadedChunkSizeByIndex?.[chunk.chunkIndex] ?? chunk.uploadedBytes,
+      );
+
       return {
         ...chunk,
         status: 'uploaded' as ChunkUploadStatus,
-        uploadedBytes: Math.max(chunk.uploadedBytes, chunk.expectedBytes),
+        expectedBytes: Math.max(chunk.expectedBytes, normalizedUploadedBytes),
+        uploadedBytes: normalizedUploadedBytes,
         lastUpdatedAt: updatedAt,
         errorMessage: null,
       };

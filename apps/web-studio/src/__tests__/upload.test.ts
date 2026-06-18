@@ -9,13 +9,21 @@ import {
   computeBlobSha256Hex,
   createRecordingUploadApiClient,
 } from '../upload/recordingUploadApiClient';
-import { deriveServerConfirmedUploadChunkIndexes, resolveRecordingUploadStartState } from '../upload/recordingUploadCoordinator';
+import {
+  applyRecordingUploadChunkResponse,
+  buildLocalRecordingChunkSizeByIndex,
+  canApplyLateUploadResponse,
+  deriveServerConfirmedUploadChunkIndexes,
+  resolveRecordingUploadStartState,
+} from '../upload/recordingUploadCoordinator';
 import {
   createInitialRecordingUploadState,
   markChunkAlreadyPresent,
   markChunkUploading,
+  markChunkUploaded,
   markRecordingUploadCanceled,
   markRecordingUploadComplete,
+  getMissingUploadChunkIndexes,
   mergeRecordingUploadServerStatus,
   setRecordingUploadPaused,
   setRecordingUploadSessionReady,
@@ -28,7 +36,10 @@ import {
   saveRecordingUploadState,
 } from '../upload/recordingUploadPersistence';
 import { createLocalRecordingManifest } from '../recording/recordingManifest';
-import type { PersistedLocalRecordingRecord } from '../recording/recordingPersistence';
+import type {
+  PersistedLocalRecordingChunkRecord,
+  PersistedLocalRecordingRecord,
+} from '../recording/recordingPersistence';
 
 const windowLike = globalThis as unknown as Window & typeof globalThis;
 
@@ -475,6 +486,139 @@ describe('upload state', () => {
       }),
     ).toEqual([0, 2]);
   });
+
+  it('hydrates server-confirmed chunk bytes from local chunk sizes during resume', () => {
+    const localChunkSizeByIndex = {
+      0: 2,
+      1: 3,
+    };
+
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-6',
+      sessionId: 'session-6',
+      participantId: 'participant-6',
+      role: 'host',
+      expectedChunkCount: 2,
+      expectedTotalBytes: 5,
+      now: 1000,
+    });
+
+    state = mergeRecordingUploadServerStatus(state, {
+      status: 'uploading',
+      uploadId: 'upl_6',
+      sessionId: 'session-6',
+      participantId: 'participant-6',
+      role: 'host',
+      uploadedChunkIndexes: [0],
+      rejectedChunkIndexes: [],
+      uploadedChunkSizeByIndex: localChunkSizeByIndex,
+      uploadedBytes: 2,
+      completedAt: null,
+      now: 1001,
+    });
+
+    expect(state.chunks[0]?.status).toBe('uploaded');
+    expect(state.chunks[0]?.uploadedBytes).toBe(2);
+    expect(state.chunks[1]?.status).toBe('pending');
+    expect(state.uploadedBytes).toBe(2);
+
+    state = markChunkUploading(state, 1, 1002);
+    state = markChunkUploaded(state, 1, 3, 1003);
+    state = markRecordingUploadComplete(state, 1004);
+
+    expect(state.uploadedBytes).toBe(5);
+    expect(state.status).toBe('uploaded');
+  });
+
+  it('hydrates all server-confirmed chunks with local bytes and leaves no missing uploads', () => {
+    const localChunks = createMockLocalRecordingChunks('recording-7', [2, 3]);
+    const localChunkSizeByIndex = buildLocalRecordingChunkSizeByIndex({
+      chunks: localChunks,
+    });
+
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-7',
+      sessionId: 'session-7',
+      participantId: 'participant-7',
+      role: 'guest',
+      expectedChunkCount: 2,
+      expectedTotalBytes: 5,
+      now: 1000,
+    });
+
+    state = mergeRecordingUploadServerStatus(state, {
+      status: 'uploaded',
+      uploadId: 'upl_7',
+      sessionId: 'session-7',
+      participantId: 'participant-7',
+      role: 'guest',
+      uploadedChunkIndexes: [0, 1],
+      rejectedChunkIndexes: [],
+      uploadedChunkSizeByIndex: localChunkSizeByIndex,
+      uploadedBytes: 5,
+      completedAt: 1001,
+      now: 1001,
+    });
+
+    expect(state.chunks[0]?.uploadedBytes).toBe(2);
+    expect(state.chunks[1]?.uploadedBytes).toBe(3);
+    expect(getMissingUploadChunkIndexes(state)).toEqual([]);
+    expect(state.uploadedBytes).toBe(5);
+  });
+
+  it('does not apply a late chunk response after cancel', () => {
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-8',
+      sessionId: 'session-8',
+      participantId: 'participant-8',
+      role: 'host',
+      expectedChunkCount: 1,
+      expectedTotalBytes: 2,
+      now: 1000,
+    });
+
+    state = markChunkUploading(state, 0, 1001);
+    state = markRecordingUploadCanceled(state, 1002);
+
+    const resolved = applyRecordingUploadChunkResponse({
+      state,
+      chunkIndex: 0,
+      uploadedBytes: 2,
+      alreadyPresent: false,
+      now: 1003,
+    });
+
+    expect(canApplyLateUploadResponse(resolved.status)).toBe(false);
+    expect(resolved.status).toBe('canceled');
+    expect(resolved.chunks[0]?.status).toBe('uploading');
+  });
+
+  it('does not apply a late chunk response after pause', () => {
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-9',
+      sessionId: 'session-9',
+      participantId: 'participant-9',
+      role: 'guest',
+      expectedChunkCount: 1,
+      expectedTotalBytes: 2,
+      now: 1000,
+    });
+
+    state = markChunkUploading(state, 0, 1001);
+    state = setRecordingUploadPaused(state, 1002);
+
+    const resolved = applyRecordingUploadChunkResponse({
+      state,
+      chunkIndex: 0,
+      uploadedBytes: 2,
+      alreadyPresent: false,
+      now: 1003,
+    });
+
+    expect(canApplyLateUploadResponse(resolved.status)).toBe(false);
+    expect(resolved.status).toBe('paused');
+    expect(resolved.chunks[0]?.status).toBe('uploading');
+  });
 });
 
 function createMockRecorder(persistedRecordings: PersistedLocalRecordingRecord[]) {
@@ -503,4 +647,30 @@ function createMockRecordingRecord(recordingId: string): PersistedLocalRecording
     firstPersistedAt: 1000,
     lastPersistedAt: 2000,
   };
+}
+
+function createMockLocalRecordingChunks(
+  recordingId: string,
+  sizes: number[],
+): PersistedLocalRecordingChunkRecord[] {
+  return sizes.map((size, index) => {
+    const text = 'x'.repeat(Math.max(0, size));
+
+    return {
+      chunkId: `${recordingId}-chunk-${index}`,
+      recordingId,
+      chunkEntry: {
+        chunkId: `${recordingId}-chunk-${index}`,
+        recordingId,
+        chunkIndex: index,
+        mimeType: 'video/webm',
+        sizeBytes: size,
+        capturedAt: 1000 + index,
+        elapsedMsFromStart: index * 1000,
+        uploadStatus: 'local_only',
+      },
+      blob: new Blob([text], { type: 'video/webm' }),
+      persistedAt: 2000 + index,
+    };
+  });
 }

@@ -3,13 +3,14 @@ import type { PersistedLocalRecordingRecord } from '../recording/recordingPersis
 import { listPersistedLocalRecordingChunks } from '../recording/recordingPersistence';
 import { computeBlobSha256Hex, createRecordingUploadApiClient, RecordingUploadClientError } from './recordingUploadApiClient';
 import {
+  applyRecordingUploadChunkResponse,
+  buildLocalRecordingChunkSizeByIndex,
   deriveServerConfirmedUploadChunkIndexes,
+  canApplyLateUploadResponse,
   resolveRecordingUploadStartState,
 } from './recordingUploadCoordinator';
 import {
-  markChunkAlreadyPresent,
   markChunkUploading,
-  markChunkUploaded,
   markRecordingUploadCanceled,
   markRecordingUploadComplete,
   markRecordingUploadFailed,
@@ -239,6 +240,9 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
     await persistState(nextState);
 
     const token = nextRunToken(recording.recordingId);
+    const chunkSizeByIndex = buildLocalRecordingChunkSizeByIndex({
+      chunks: localChunks,
+    });
 
     try {
       const chunkSizeBytes = deriveNominalChunkSizeBytes(
@@ -259,6 +263,18 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           clientCreatedAt: new Date().toISOString(),
         });
 
+        if (!isCurrentRun(recording.recordingId, token)) {
+          return;
+        }
+
+        const latestStateAfterCreate = await getPersistedRecordingUploadState(recording.recordingId);
+        if (
+          latestStateAfterCreate !== null &&
+          !canApplyLateUploadResponse(latestStateAfterCreate.status)
+        ) {
+          return;
+        }
+
         nextState = setRecordingUploadSessionReady(nextState, {
           uploadId: createResponse.uploadId,
           sessionId: createResponse.sessionId,
@@ -272,6 +288,19 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           recording.recordingId,
           nextState.uploadId,
         );
+
+        if (!isCurrentRun(recording.recordingId, token)) {
+          return;
+        }
+
+        const latestStateAfterStatus = await getPersistedRecordingUploadState(recording.recordingId);
+        if (
+          latestStateAfterStatus !== null &&
+          !canApplyLateUploadResponse(latestStateAfterStatus.status)
+        ) {
+          return;
+        }
+
         const confirmedChunkIndexes = deriveServerConfirmedUploadChunkIndexes({
           expectedChunkCount: serverStatus.expectedChunkCount,
           missingChunkIndexes: serverStatus.missingChunkIndexes,
@@ -286,6 +315,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           role: serverStatus.role,
           uploadedChunkIndexes: confirmedChunkIndexes,
           rejectedChunkIndexes: serverStatus.rejectedChunkIndexes,
+          uploadedChunkSizeByIndex: chunkSizeByIndex,
           uploadedBytes: serverStatus.uploadedBytes,
           completedAt: serverStatus.completedAt === null ? null : Date.parse(serverStatus.completedAt),
           now: Date.now(),
@@ -327,13 +357,39 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           chunkChecksum,
         });
 
-        nextState = response.alreadyPresent
-          ? markChunkAlreadyPresent(nextState, response.chunkIndex, response.uploadedBytes, Date.now())
-          : markChunkUploaded(nextState, response.chunkIndex, response.uploadedBytes, Date.now());
+        if (!isCurrentRun(recording.recordingId, token)) {
+          return;
+        }
+
+        const latestStateAfterChunk = await getPersistedRecordingUploadState(recording.recordingId);
+        if (
+          latestStateAfterChunk !== null &&
+          !canApplyLateUploadResponse(latestStateAfterChunk.status)
+        ) {
+          return;
+        }
+
+        const chunkStateToUpdate = latestStateAfterChunk ?? nextState;
+
+        nextState = applyRecordingUploadChunkResponse({
+          state: chunkStateToUpdate,
+          chunkIndex: response.chunkIndex,
+          uploadedBytes: response.uploadedBytes,
+          alreadyPresent: response.alreadyPresent,
+          now: Date.now(),
+        });
         await persistState(nextState);
       }
 
       if (!isCurrentRun(recording.recordingId, token)) {
+        return;
+      }
+
+      const latestStateBeforeComplete = await getPersistedRecordingUploadState(recording.recordingId);
+      if (
+        latestStateBeforeComplete !== null &&
+        !canApplyLateUploadResponse(latestStateBeforeComplete.status)
+      ) {
         return;
       }
 
@@ -342,7 +398,20 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
         nextState.uploadId ?? '',
       );
 
-      nextState = mergeRecordingUploadServerStatus(nextState, {
+      if (!isCurrentRun(recording.recordingId, token)) {
+        return;
+      }
+
+      const latestStateAfterComplete = await getPersistedRecordingUploadState(recording.recordingId);
+      if (
+        latestStateAfterComplete !== null &&
+        !canApplyLateUploadResponse(latestStateAfterComplete.status)
+      ) {
+        return;
+      }
+
+      const stateToComplete = latestStateAfterComplete ?? nextState;
+      nextState = mergeRecordingUploadServerStatus(stateToComplete, {
         status: completion.status,
         uploadId: completion.uploadId,
         sessionId: completion.sessionId,
@@ -350,10 +419,10 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
         role: completion.role,
         uploadedChunkIndexes:
           completion.missingChunkIndexes.length === 0
-            ? nextState.chunks
+            ? stateToComplete.chunks
                 .map((chunk) => chunk.chunkIndex)
                 .filter((chunkIndex) => {
-                  const chunk = nextState.chunks[chunkIndex];
+                  const chunk = stateToComplete.chunks[chunkIndex];
                   return (
                     chunk !== undefined &&
                     (chunk.status === 'uploaded' || chunk.status === 'already_present')
@@ -361,6 +430,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
                 })
             : [],
         rejectedChunkIndexes: completion.rejectedChunkIndexes,
+        uploadedChunkSizeByIndex: chunkSizeByIndex,
         uploadedBytes: completion.uploadedBytes,
         completedAt: completion.status === 'uploaded' ? Date.now() : null,
         now: Date.now(),

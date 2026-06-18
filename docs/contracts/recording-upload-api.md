@@ -179,6 +179,8 @@ Behavior:
 - duplicate uploads with the same checksum are reported as
   `already_present`
 - checksum mismatches are rejected
+- `uploadedBytes` in the chunk response is the size of the accepted chunk, not
+  the total bytes uploaded for the whole session
 
 ### Complete upload
 

@@ -1,5 +1,14 @@
-import type { PersistedLocalRecordingRecord } from '../recording/recordingPersistence';
-import { createInitialRecordingUploadState, type RecordingUploadState } from './recordingUploadState';
+import type {
+  PersistedLocalRecordingChunkRecord,
+  PersistedLocalRecordingRecord,
+} from '../recording/recordingPersistence';
+import {
+  markChunkAlreadyPresent,
+  markChunkUploaded,
+  createInitialRecordingUploadState,
+  type RecordingUploadState,
+  type RecordingUploadStatus,
+} from './recordingUploadState';
 
 export interface ResolveRecordingUploadStartStateInput {
   recording: PersistedLocalRecordingRecord;
@@ -17,6 +26,18 @@ export interface DeriveServerConfirmedUploadChunkIndexesInput {
   expectedChunkCount: number;
   missingChunkIndexes: number[];
   rejectedChunkIndexes: number[];
+}
+
+export interface BuildLocalRecordingChunkSizeByIndexInput {
+  chunks: readonly PersistedLocalRecordingChunkRecord[];
+}
+
+export interface ApplyRecordingUploadChunkResponseInput {
+  state: RecordingUploadState;
+  chunkIndex: number;
+  uploadedBytes: number;
+  alreadyPresent: boolean;
+  now: number;
 }
 
 export function resolveRecordingUploadStartState(
@@ -62,6 +83,34 @@ export function deriveServerConfirmedUploadChunkIndexes(
   }
 
   return confirmedChunkIndexes;
+}
+
+export function buildLocalRecordingChunkSizeByIndex(
+  input: BuildLocalRecordingChunkSizeByIndexInput,
+): Record<number, number> {
+  const chunkSizeByIndex: Record<number, number> = {};
+
+  for (const chunk of input.chunks) {
+    chunkSizeByIndex[chunk.chunkEntry.chunkIndex] = chunk.blob.size;
+  }
+
+  return chunkSizeByIndex;
+}
+
+export function canApplyLateUploadResponse(status: RecordingUploadStatus): boolean {
+  return status !== 'paused' && status !== 'canceled' && status !== 'uploaded';
+}
+
+export function applyRecordingUploadChunkResponse(
+  input: ApplyRecordingUploadChunkResponseInput,
+): RecordingUploadState {
+  if (!canApplyLateUploadResponse(input.state.status)) {
+    return input.state;
+  }
+
+  return input.alreadyPresent
+    ? markChunkAlreadyPresent(input.state, input.chunkIndex, input.uploadedBytes, input.now)
+    : markChunkUploaded(input.state, input.chunkIndex, input.uploadedBytes, input.now);
 }
 
 function normalizeChunkIndexes(chunkIndexes: readonly number[]): number[] {

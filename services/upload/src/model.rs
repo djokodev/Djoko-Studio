@@ -124,6 +124,7 @@ pub struct UploadChunkResponse {
     pub upload_id: String,
     pub chunk_index: u32,
     pub status: UploadChunkStatus,
+    /// Size of the accepted chunk in bytes, not the total upload session bytes.
     pub uploaded_bytes: u64,
     pub already_present: bool,
     pub uploaded_chunk_count: u32,

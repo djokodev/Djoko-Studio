@@ -90,6 +90,7 @@ export interface UploadRecordingChunkResponse {
   uploadId: string;
   chunkIndex: number;
   status: RecordingUploadChunkStatus;
+  /** Size of the accepted chunk in bytes, not the total session bytes. */
   uploadedBytes: number;
   alreadyPresent: boolean;
   uploadedChunkCount: number;
