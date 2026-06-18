@@ -72,3 +72,24 @@ cd apps/web-studio && npm run dev
   - Click "Discard local copy" on the recovered recording or "Clear all local recordings" in the storage section.
   - Confirm the dialog.
   - Verify that the recording is deleted from the recovery list and the unload warning is no longer active when you refresh/close the tab.
+
+## Manual Smoke Result
+
+Smoke test completed successfully.
+
+- Host recording: pass
+- Host preview/audio/download: pass
+- Guest recording: pass
+- Guest preview/audio/download: pass
+- Refresh recovery: pass
+- beforeunload warning with local copy: pass
+- Discard local copy: pass
+- beforeunload warning after discard: pass
+
+Observed discard behavior:
+
+- The targeted recovered copy was removed.
+- Persisted local recordings dropped to `0` in the current context.
+- Persisted chunks dropped to `0` in the current context.
+- The `Preview local copy` / `Discard local copy` controls disappeared after discard.
+- The `beforeunload` warning disappeared after discard when no local copy remained.
