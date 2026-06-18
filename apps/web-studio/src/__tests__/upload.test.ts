@@ -9,6 +9,7 @@ import {
   computeBlobSha256Hex,
   createRecordingUploadApiClient,
 } from '../upload/recordingUploadApiClient';
+import { deriveServerConfirmedUploadChunkIndexes, resolveRecordingUploadStartState } from '../upload/recordingUploadCoordinator';
 import {
   createInitialRecordingUploadState,
   markChunkAlreadyPresent,
@@ -39,6 +40,7 @@ const mockQueue = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
   loading: false,
   errorMessage: null as string | null,
+  summaryRevision: 0,
   refreshUploadStates: vi.fn(),
   startUpload: vi.fn(),
   resumeUpload: vi.fn(),
@@ -57,6 +59,7 @@ describe('upload state', () => {
     mockQueue.items = [];
     mockQueue.loading = false;
     mockQueue.errorMessage = null;
+    mockQueue.summaryRevision = 0;
     mockQueue.refreshUploadStates.mockReset();
     mockQueue.startUpload.mockReset();
     mockQueue.resumeUpload.mockReset();
@@ -432,6 +435,45 @@ describe('upload state', () => {
     state = markRecordingUploadComplete(state, 1003);
 
     expect(state.status).toBe('canceled');
+  });
+
+  it('starts a fresh upload session after cancel instead of reusing a terminal state', () => {
+    const recording = createMockRecordingRecord('recording-5');
+    const canceledState = markRecordingUploadCanceled(
+      createInitialRecordingUploadState({
+        recordingId: 'recording-5',
+        sessionId: 'session-5',
+        participantId: 'participant-5',
+        role: 'guest',
+        expectedChunkCount: 2,
+        expectedTotalBytes: 6,
+        now: 1000,
+      }),
+      1001,
+    );
+
+    const result = resolveRecordingUploadStartState({
+      recording,
+      existingState: canceledState,
+      resumeExisting: true,
+      now: 2000,
+    });
+
+    expect(result.shouldResetPersistedState).toBe(true);
+    expect(result.state.status).toBe('not_started');
+    expect(result.state.uploadId).toBeNull();
+    expect(result.state.createdAt).toBe(2000);
+    expect(result.state.recordingId).toBe('recording-5');
+  });
+
+  it('derives server-confirmed chunk indexes from missing and rejected indexes', () => {
+    expect(
+      deriveServerConfirmedUploadChunkIndexes({
+        expectedChunkCount: 4,
+        missingChunkIndexes: [1],
+        rejectedChunkIndexes: [3],
+      }),
+    ).toEqual([0, 2]);
   });
 });
 

@@ -88,7 +88,7 @@ export function UploadReadinessPanel({ recorder }: UploadReadinessPanelProps) {
     return () => {
       isActive = false;
     };
-  }, [recorder.persistedRecordings.length]);
+  }, [recorder.persistedRecordings.length, uploadQueue.summaryRevision]);
 
   const localRecordingLabel = getLocalRecordingSafetyCopyLabel(recorder);
   const queueSummary = queueState.summary ?? initialUploadQueueSummary;

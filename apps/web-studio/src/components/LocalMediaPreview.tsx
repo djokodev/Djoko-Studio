@@ -764,7 +764,7 @@ function LocalRecordingPrototype({
           Local recording recovery stays browser-only. The app can detect persisted
           recordings in IndexedDB after refresh for the current session, participant,
           and role context, preview a local copy from browser storage, and discard the
-          local copy. Upload/recovery sync is not implemented yet.
+          local copy. Upload and recovery now sync separately through the upload queue.
         </p>
 
         <div className="recording-integrity__intro">
@@ -1285,7 +1285,7 @@ function LocalBrowserStoragePanel({
           type="button"
           onClick={() => {
             const confirmed = window.confirm(
-              'Clear all local recordings stored in this browser? This cannot be undone. This does not affect any cloud copy because upload is not implemented yet.',
+              'Clear all local recordings stored in this browser? This cannot be undone. This does not affect any completed server-side upload copy.',
             );
 
             if (!confirmed) {

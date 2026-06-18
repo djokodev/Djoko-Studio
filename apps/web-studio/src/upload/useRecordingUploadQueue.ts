@@ -3,7 +3,10 @@ import type { PersistedLocalRecordingRecord } from '../recording/recordingPersis
 import { listPersistedLocalRecordingChunks } from '../recording/recordingPersistence';
 import { computeBlobSha256Hex, createRecordingUploadApiClient, RecordingUploadClientError } from './recordingUploadApiClient';
 import {
-  createInitialRecordingUploadState,
+  deriveServerConfirmedUploadChunkIndexes,
+  resolveRecordingUploadStartState,
+} from './recordingUploadCoordinator';
+import {
   markChunkAlreadyPresent,
   markChunkUploading,
   markChunkUploaded,
@@ -19,6 +22,7 @@ import {
   type RecordingUploadState,
 } from './recordingUploadState';
 import {
+  deletePersistedRecordingUploadState,
   getPersistedRecordingUploadState,
   listPersistedRecordingUploadStates,
   saveRecordingUploadState,
@@ -30,6 +34,7 @@ interface RecordingUploadQueueState {
   statesByRecordingId: Record<string, RecordingUploadState>;
   loading: boolean;
   errorMessage: string | null;
+  summaryRevision: number;
 }
 
 export interface RecordingUploadQueueItem {
@@ -50,6 +55,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
     statesByRecordingId: {},
     loading: false,
     errorMessage: null,
+    summaryRevision: 0,
   });
   const runTokensRef = useRef<Record<string, number>>({});
 
@@ -72,6 +78,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           statesByRecordingId,
           loading: false,
           errorMessage: null,
+          summaryRevision: 0,
         });
       })
       .catch((error: unknown) => {
@@ -144,6 +151,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
         ...current.statesByRecordingId,
         [state.recordingId]: state,
       },
+      summaryRevision: current.summaryRevision + 1,
     }));
     return state;
   }
@@ -189,6 +197,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
     items,
     loading: queueState.loading,
     errorMessage: queueState.errorMessage,
+    summaryRevision: queueState.summaryRevision,
     refreshUploadStates: async () => {
       const statesByRecordingId = await refreshUploadStates();
       setQueueState((current) => ({
@@ -213,17 +222,17 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
       return;
     }
 
-    const baseState =
-      (await getPersistedRecordingUploadState(recording.recordingId)) ??
-      createInitialRecordingUploadState({
-        recordingId: recording.recordingId,
-        sessionId: recording.manifest.sessionId ?? null,
-        participantId: recording.manifest.participantId ?? null,
-        role: recording.manifest.role ?? null,
-        expectedChunkCount: recording.manifest.chunkCount,
-        expectedTotalBytes: recording.manifest.totalBytes,
-        now: Date.now(),
-      });
+    const persistedState = await getPersistedRecordingUploadState(recording.recordingId);
+    const { state: baseState, shouldResetPersistedState } = resolveRecordingUploadStartState({
+      recording,
+      existingState: persistedState,
+      resumeExisting: options.resumeExisting,
+      now: Date.now(),
+    });
+
+    if (shouldResetPersistedState) {
+      await deletePersistedRecordingUploadState(recording.recordingId);
+    }
 
     let nextState = baseState;
     nextState = setRecordingUploadInitializing(nextState, Date.now());
@@ -263,6 +272,11 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           recording.recordingId,
           nextState.uploadId,
         );
+        const confirmedChunkIndexes = deriveServerConfirmedUploadChunkIndexes({
+          expectedChunkCount: serverStatus.expectedChunkCount,
+          missingChunkIndexes: serverStatus.missingChunkIndexes,
+          rejectedChunkIndexes: serverStatus.rejectedChunkIndexes,
+        });
 
         nextState = mergeRecordingUploadServerStatus(nextState, {
           status: serverStatus.status,
@@ -270,9 +284,7 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
           sessionId: serverStatus.sessionId,
           participantId: serverStatus.participantId,
           role: serverStatus.role,
-          uploadedChunkIndexes: nextState.chunks
-            .filter((chunk) => chunk.status === 'uploaded' || chunk.status === 'already_present')
-            .map((chunk) => chunk.chunkIndex),
+          uploadedChunkIndexes: confirmedChunkIndexes,
           rejectedChunkIndexes: serverStatus.rejectedChunkIndexes,
           uploadedBytes: serverStatus.uploadedBytes,
           completedAt: serverStatus.completedAt === null ? null : Date.parse(serverStatus.completedAt),
@@ -336,10 +348,18 @@ export function useRecordingUploadQueue(persistedRecordings: PersistedLocalRecor
         sessionId: completion.sessionId,
         participantId: completion.participantId,
         role: completion.role,
-        uploadedChunkIndexes: completion.missingChunkIndexes.length === 0 ? nextState.chunks.map((chunk) => chunk.chunkIndex).filter((chunkIndex) => {
-          const chunk = nextState.chunks[chunkIndex];
-          return chunk !== undefined && (chunk.status === 'uploaded' || chunk.status === 'already_present');
-        }) : [],
+        uploadedChunkIndexes:
+          completion.missingChunkIndexes.length === 0
+            ? nextState.chunks
+                .map((chunk) => chunk.chunkIndex)
+                .filter((chunkIndex) => {
+                  const chunk = nextState.chunks[chunkIndex];
+                  return (
+                    chunk !== undefined &&
+                    (chunk.status === 'uploaded' || chunk.status === 'already_present')
+                  );
+                })
+            : [],
         rejectedChunkIndexes: completion.rejectedChunkIndexes,
         uploadedBytes: completion.uploadedBytes,
         completedAt: completion.status === 'uploaded' ? Date.now() : null,
