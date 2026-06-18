@@ -394,4 +394,33 @@ describe('Recording unload warning', () => {
       }),
     ).toBe(false);
   });
+
+  it('should react when preview availability changes after a stopped recording', () => {
+    const warningInputs = {
+      current: {
+        recordingState: 'idle' as const,
+        previewAvailable: false,
+        persistedRecordingCount: 0,
+      },
+    };
+
+    const readWarning = () => shouldWarnBeforeUnload(warningInputs.current);
+
+    expect(readWarning()).toBe(false);
+
+    warningInputs.current = {
+      ...warningInputs.current,
+      previewAvailable: true,
+    };
+
+    expect(readWarning()).toBe(true);
+
+    warningInputs.current = {
+      recordingState: 'idle',
+      previewAvailable: false,
+      persistedRecordingCount: 0,
+    };
+
+    expect(readWarning()).toBe(false);
+  });
 });

@@ -3,11 +3,11 @@
 `apps/web-studio` is the React + TypeScript + Vite frontend for DNA Studio.
 It now includes the first host-facing session creation flow, the first guest-facing session join flow,
 a local camera and microphone preview foundation with local mic/camera toggle controls,
-the first local MediaRecorder in-memory prototype for the preview stream,
+the first local MediaRecorder chunked prototype for the preview stream,
 initial WebRTC media track attachment during negotiation,
 and a remote preview foundation with manual remote audio playback controls alongside the
 signaling-room connection panel for both roles. It also includes browser recording
-capability diagnostics and a local MediaRecorder in-memory prototype with DS-044
+capability diagnostics and a local MediaRecorder chunked prototype with DS-044
 state machine diagnostics for future local capture work. DS-047 extends that
 prototype with a local recording manifest foundation, a derived session summary,
 stronger lifecycle cleanup, and richer local diagnostics for the current page
@@ -180,7 +180,7 @@ It uses `getUserMedia({ audio: true, video: true })` only for local browser-side
 When the preview is already active before WebRTC negotiation starts, the local tracks can be attached to the peer connection.
 The microphone and camera controls toggle existing `MediaStreamTrack.enabled` values, so already attached WebRTC senders see the change without renegotiation.
 The preview panel also shows recording capability diagnostics for the current browser.
-The local recording prototype below starts from the DS-044 state machine, instantiates `MediaRecorder` only after you click `Start local recording`, stores chunks in memory only, and falls back to the browser default MIME type when no supported MIME type is reported.
+The local recording prototype below starts from the DS-044 state machine, instantiates `MediaRecorder` only after you click `Start local recording`, persists chunks locally as they arrive, and falls back to the browser default MIME type when no supported MIME type is reported.
 Those diagnostics do not trigger recording, storage, uploads, or browser prompts on their own.
 
 - click `Start preview` to request `getUserMedia({ audio: true, video: true })`

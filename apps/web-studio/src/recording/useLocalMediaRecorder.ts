@@ -92,6 +92,12 @@ interface LocalIntegrityState {
   reportsByRecordingId: Record<string, LocalRecordingIntegrityReport>;
 }
 
+interface BeforeUnloadWarningInputs {
+  recordingState: RecordingStateSnapshot['state'];
+  previewAvailable: boolean;
+  persistedRecordingCount: number;
+}
+
 const initialRecordingPlaybackPreviewMetadata: LocalRecordingPlaybackPreviewMetadata = {
   previewAvailable: false,
   previewUrl: null,
@@ -213,6 +219,20 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     recoveredPreviewUrlRef.current = recoveredPreview.previewUrl;
   }, [recoveredPreview.previewUrl]);
 
+  const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
+    supportStatus: persistenceState.supportStatus,
+    status: persistenceState.status,
+    errorMessage: persistenceState.errorMessage,
+    persistedRecordingCount: persistenceState.persistedRecordings.length,
+    currentRecordingPersisted: persistenceState.currentRecordingPersisted,
+  });
+
+  const beforeUnloadWarningInputsRef = useRef<BeforeUnloadWarningInputs>({
+    recordingState: snapshot.state,
+    previewAvailable: summary.previewAvailable,
+    persistedRecordingCount: persistenceState.persistedRecordings.length,
+  });
+
   useEffect(() => {
     isMountedRef.current = true;
     void initializePersistenceSupport();
@@ -247,12 +267,16 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
   }, [snapshot.state]);
 
   useEffect(() => {
+    beforeUnloadWarningInputsRef.current = {
+      recordingState: snapshot.state,
+      previewAvailable: summary.previewAvailable,
+      persistedRecordingCount: persistenceState.persistedRecordings.length,
+    };
+  }, [snapshot.state, summary.previewAvailable, persistenceState.persistedRecordings.length]);
+
+  useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      const shouldWarn = shouldWarnBeforeUnload({
-        recordingState: snapshot.state,
-        previewAvailable: summary.previewAvailable,
-        persistedRecordingCount: persistenceState.persistedRecordings.length,
-      });
+      const shouldWarn = shouldWarnBeforeUnload(beforeUnloadWarningInputsRef.current);
 
       if (shouldWarn) {
         event.preventDefault();
@@ -265,16 +289,7 @@ export function useLocalMediaRecorder(): LocalMediaRecorderController {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [snapshot.state, persistenceState.persistedRecordings.length]);
-
-
-  const summary = buildLocalRecordingSummary(manifest, preview, snapshot.state, {
-    supportStatus: persistenceState.supportStatus,
-    status: persistenceState.status,
-    errorMessage: persistenceState.errorMessage,
-    persistedRecordingCount: persistenceState.persistedRecordings.length,
-    currentRecordingPersisted: persistenceState.currentRecordingPersisted,
-  });
+  }, []);
 
   const localStorageSummary = storageSummaryState.localStorageSummary;
   const browserStorageEstimate = storageSummaryState.browserStorageEstimate;

@@ -493,8 +493,9 @@ function LocalRecordingPrototype({
       </div>
 
       <p className="api-note recording-prototype__note">
-        Prototype only: the recorder keeps the playback preview in memory, while
-        IndexedDB persistence stores the manifest and chunks locally when the browser
+        Prototype only: recording chunks are persisted locally as they arrive, while
+        preview and raw download are rebuilt from the persisted local copy when
+        needed. IndexedDB stores the manifest and chunks locally when the browser
         supports it. The recovery panel can now preview a persisted local copy from
         IndexedDB after refresh. The recorder prefers the supported MIME type from the
         diagnostics and falls back to the browser default when needed.
