@@ -197,6 +197,7 @@ export function setRecordingUploadPaused(
 export function setRecordingUploadRetrying(
   state: RecordingUploadState,
   now: number,
+  errorMessage: string | null = null,
 ): RecordingUploadState {
   if (isTerminalUploadState(state.status)) {
     return state;
@@ -208,7 +209,7 @@ export function setRecordingUploadRetrying(
     status: 'retrying',
     updatedAt,
     lastSyncedAt: updatedAt,
-    errorMessage: null,
+    errorMessage: normalizeTextValue(errorMessage) ?? state.errorMessage,
   });
 }
 

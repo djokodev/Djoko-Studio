@@ -3,6 +3,7 @@ use std::{collections::HashMap, env, sync::Arc};
 use aws_config::BehaviorVersion;
 use aws_credential_types::{provider::SharedCredentialsProvider, Credentials};
 use aws_sdk_s3::{config::Builder as S3ConfigBuilder, primitives::ByteStream, Client};
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use chrono::Utc;
 use tokio::sync::Mutex;
 use tracing::info;
@@ -578,11 +579,19 @@ impl S3UploadRepository {
             .key(key)
             .send()
             .await
-            .map_err(|error| match error.to_string().contains("NoSuchKey") {
-                true => {
+            .map_err(|error| {
+                let code = error
+                    .as_service_error()
+                    .and_then(|service_error| service_error.code());
+                let status = error
+                    .raw_response()
+                    .map(|response| response.status().as_u16());
+
+                if is_missing_s3_object_error(code, status) {
                     UploadServiceError::not_found("invalid_upload_id", "Upload session not found.")
+                } else {
+                    UploadServiceError::storage(format!("Unable to load manifest: {error}"))
                 }
-                false => UploadServiceError::storage(format!("Unable to load manifest: {error}")),
             })?;
 
         let bytes = payload.body.collect().await.map_err(|error| {
@@ -641,8 +650,14 @@ impl S3UploadRepository {
                 }))
             }
             Err(error) => {
-                let text = error.to_string();
-                if text.contains("NotFound") || text.contains("NoSuchKey") {
+                let code = error
+                    .as_service_error()
+                    .and_then(|service_error| service_error.code());
+                let status = error
+                    .raw_response()
+                    .map(|response| response.status().as_u16());
+
+                if is_missing_s3_object_error(code, status) {
                     Ok(None)
                 } else {
                     Err(UploadServiceError::storage(format!(
@@ -662,6 +677,10 @@ struct ChunkHead {
 
 fn chunk_head_matches_request(existing: &ChunkHead, checksum: &str, uploaded_bytes: u64) -> bool {
     existing.size_bytes == uploaded_bytes && existing.checksum.as_deref() == Some(checksum)
+}
+
+fn is_missing_s3_object_error(code: Option<&str>, status: Option<u16>) -> bool {
+    matches!(code, Some("NoSuchKey") | Some("NotFound")) || status == Some(404)
 }
 
 fn manifest_lookup_key(recording_id: &str, upload_id: &str) -> String {
@@ -723,7 +742,7 @@ pub fn status_code_for_error(error: &UploadServiceError) -> axum::http::StatusCo
 
 #[cfg(test)]
 mod tests {
-    use super::{chunk_head_matches_request, ChunkHead};
+    use super::{chunk_head_matches_request, is_missing_s3_object_error, ChunkHead};
 
     #[test]
     fn chunk_head_matches_request_requires_same_size_and_checksum() {
@@ -735,5 +754,18 @@ mod tests {
         assert!(chunk_head_matches_request(&existing, "abc", 3));
         assert!(!chunk_head_matches_request(&existing, "abc", 2));
         assert!(!chunk_head_matches_request(&existing, "def", 3));
+    }
+
+    #[test]
+    fn missing_s3_object_errors_cover_common_not_found_shapes() {
+        assert!(is_missing_s3_object_error(Some("NoSuchKey"), None));
+        assert!(is_missing_s3_object_error(Some("NotFound"), Some(200)));
+        assert!(is_missing_s3_object_error(None, Some(404)));
+        assert!(!is_missing_s3_object_error(Some("AccessDenied"), Some(403)));
+        assert!(!is_missing_s3_object_error(None, None));
+        assert!(!is_missing_s3_object_error(
+            Some("InternalError"),
+            Some(500)
+        ));
     }
 }

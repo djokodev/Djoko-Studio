@@ -130,7 +130,7 @@ export function applyRecordingUploadFailureResponse(
   }
 
   return input.retryable
-    ? setRecordingUploadRetrying(input.state, input.now)
+    ? setRecordingUploadRetrying(input.state, input.now, input.errorMessage)
     : markRecordingUploadFailed(input.state, input.errorMessage, input.now);
 }
 

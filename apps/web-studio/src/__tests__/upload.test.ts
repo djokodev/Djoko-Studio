@@ -439,6 +439,56 @@ describe('upload state', () => {
     expect(queuedMarkup).toContain('0/2 chunks, 0 B / 6 B');
   });
 
+  it('renders retrying upload errors with the last failure message', () => {
+    const recording = createMockRecordingRecord('recording-3b');
+    const queuedRecorder = createMockRecorder([recording]);
+    mockQueue.items = [
+      {
+        recording,
+        state: {
+          recordingId: 'recording-3b',
+          sessionId: 'session-3',
+          participantId: 'participant-3',
+          role: 'host',
+          uploadId: 'upl_3',
+          status: 'retrying',
+          expectedChunkCount: 2,
+          expectedTotalBytes: 6,
+          uploadedChunkCount: 0,
+          uploadedBytes: 0,
+          failedChunkCount: 1,
+          chunks: [],
+          retry: {
+            attemptCount: 1,
+            lastAttemptAt: 1001,
+            nextRetryAt: null,
+            lastErrorMessage: 'Network error.',
+          },
+          createdAt: 1000,
+          updatedAt: 1002,
+          completedAt: null,
+          lastSyncedAt: 1002,
+          errorMessage: 'Network error.',
+        },
+        progressLabel: '0/2 chunks, 0 B / 6 B',
+        uploadLabel: 'Upload local copy',
+        statusLabel: 'retrying',
+        canUpload: true,
+        canPause: false,
+        canResume: true,
+        canCancel: true,
+        canRetry: true,
+      },
+    ];
+
+    const queuedMarkup = renderToStaticMarkup(
+      createElement(UploadReadinessPanel, { recorder: queuedRecorder as never }),
+    );
+
+    expect(queuedMarkup).toContain('Network error.');
+    expect(queuedMarkup).toContain('retrying');
+  });
+
   it('maps upload lifecycle flags without breaking local-first status', () => {
     let state = createInitialRecordingUploadState({
       recordingId: 'recording-4',
@@ -697,6 +747,30 @@ describe('upload state', () => {
     });
 
     expect(resolved.status).toBe('paused');
+  });
+
+  it('keeps the retrying upload error message visible after a retryable failure', () => {
+    let state = createInitialRecordingUploadState({
+      recordingId: 'recording-12b',
+      sessionId: 'session-12b',
+      participantId: 'participant-12b',
+      role: 'host',
+      expectedChunkCount: 1,
+      expectedTotalBytes: 2,
+      now: 1000,
+    });
+
+    state = markChunkUploading(state, 0, 1001);
+
+    const resolved = applyRecordingUploadFailureResponse({
+      state,
+      errorMessage: 'Network error.',
+      retryable: true,
+      now: 1002,
+    });
+
+    expect(resolved.status).toBe('retrying');
+    expect(resolved.errorMessage).toBe('Network error.');
   });
 
   it('does not overwrite a canceled upload when a late failure arrives', () => {
