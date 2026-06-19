@@ -183,6 +183,16 @@ impl ExportManifest {
         }
     }
 
+    pub fn restart_processing(&self, now: DateTime<Utc>) -> Self {
+        let mut manifest = self.clone();
+        manifest.status = ExportStatus::Processing;
+        manifest.updated_at = now;
+        manifest.completed_at = None;
+        manifest.output_bytes = None;
+        manifest.error = None;
+        manifest
+    }
+
     pub fn is_completed(&self) -> bool {
         matches!(self.status, ExportStatus::Ready)
     }

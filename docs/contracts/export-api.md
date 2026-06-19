@@ -12,6 +12,11 @@ The contract exposes the current export row for a recording and lets the API
 create the primary export record exactly once. Rendering itself remains a later
 worker concern.
 
+DS-065 uses the Rust export worker directly from the web studio for local
+processing and download. The Go API export seam is the durable product/domain
+foundation for later worker/job orchestration, not the browser runtime path in
+this slice.
+
 ## Base URL
 
 The browser and local tooling talk to the API through the existing API base URL.
@@ -108,4 +113,3 @@ This contract does not include:
 - public download URLs
 - export UI
 - multiple export presets
-

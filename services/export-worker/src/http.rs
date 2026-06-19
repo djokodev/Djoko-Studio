@@ -1,17 +1,20 @@
 use std::sync::Arc;
 
 use axum::{
+    body::Body,
     extract::{Path, State},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
+use tokio_util::io::ReaderStream;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     model::{CreateExportRequest, ErrorEnvelope, ExportReadyzResponse},
-    service::{ExportService, ExportServiceError},
+    service::{ExportDownload, ExportService, ExportServiceError},
+    storage::ExportDownloadBody,
 };
 
 pub fn build_router(service: ExportService) -> Router {
@@ -83,22 +86,7 @@ async fn download_export_handler(
     }
 
     match service.download_export(&export_id).await {
-        Ok(bytes) => (
-            StatusCode::OK,
-            [
-                (header::CONTENT_TYPE, HeaderValue::from_static("video/mp4")),
-                (
-                    header::CONTENT_DISPOSITION,
-                    HeaderValue::from_str(&format!(
-                        "attachment; filename=\"{}\"",
-                        crate::model::export_download_filename(&export_id)
-                    ))
-                    .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-                ),
-            ],
-            bytes,
-        )
-            .into_response(),
+        Ok(download) => download_response(download, &export_id),
         Err(error) => error.into_response(),
     }
 }
@@ -127,6 +115,41 @@ fn response_error(
             },
         }),
     )
+}
+
+fn download_response(download: ExportDownload, export_id: &str) -> Response {
+    let content_type = HeaderValue::from_static("video/mp4");
+    let content_disposition = HeaderValue::from_str(&format!(
+        "attachment; filename=\"{}\"",
+        crate::model::export_download_filename(export_id)
+    ))
+    .unwrap_or_else(|_| HeaderValue::from_static("attachment"));
+
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_DISPOSITION, content_disposition);
+
+    if let Some(length) = download.content_length {
+        if let Ok(length_value) = HeaderValue::from_str(&length.to_string()) {
+            builder = builder.header(header::CONTENT_LENGTH, length_value);
+        }
+    }
+
+    let body = match download.body {
+        ExportDownloadBody::Bytes(bytes) => Body::from(bytes),
+        ExportDownloadBody::Stream(reader) => Body::from_stream(ReaderStream::new(reader)),
+    };
+
+    builder.body(body).unwrap_or_else(|_| {
+        response_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "response_build_failed",
+            "Unable to build the export download response.",
+            true,
+        )
+        .into_response()
+    })
 }
 
 #[cfg(test)]
@@ -235,9 +258,9 @@ mod tests {
             .await
             .expect("store manifest");
 
-        let chunk_keys = [(0usize, b"chunk-a".to_vec()), (1usize, b"chunk-b".to_vec())];
+        let chunk_keys = [b"chunk-a".to_vec(), b"chunk-b".to_vec()];
 
-        for (index, bytes) in chunk_keys {
+        for (chunk, bytes) in manifest.chunks.iter().zip(chunk_keys.into_iter()) {
             storage
                 .put_object(
                     &format!(
@@ -246,7 +269,7 @@ mod tests {
                         manifest.participant_id,
                         manifest.recording_id,
                         manifest.upload_id,
-                        index
+                        chunk.chunk_index
                     ),
                     bytes,
                     "video/webm",

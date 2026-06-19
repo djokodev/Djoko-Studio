@@ -35,10 +35,11 @@ the final MP4, and shuts down cleanly when interrupted.
 cd services/export-worker
 EXPORT_WORKER_PORT=8083 \
 S3_ENDPOINT=http://localhost:9000 \
-S3_BUCKET=djoko-studio \
-S3_ACCESS_KEY=djoko \
-S3_SECRET_KEY=djoko \
+S3_BUCKET=dna-studio-recordings \
+S3_ACCESS_KEY=djoko_minio \
+S3_SECRET_KEY=djoko_minio_local_2026_change_me \
 S3_REGION=us-east-1 \
+S3_FORCE_PATH_STYLE=true \
 FFMPEG_BINARY=ffmpeg \
 cargo run
 ```
@@ -64,6 +65,9 @@ The worker reads:
 - `S3_REGION`
 - `S3_FORCE_PATH_STYLE`, defaulting to `true`
 - `FFMPEG_BINARY`, defaulting to `ffmpeg`
+
+`EXPORT_WORKER_PORT` and `FFMPEG_BINARY` are the canonical local configuration
+names for this slice.
 
 ## Contract
 

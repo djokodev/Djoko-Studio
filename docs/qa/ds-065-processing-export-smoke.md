@@ -11,6 +11,25 @@ Verify the local direct export flow from the browser to the export worker.
 - export worker running on `http://localhost:8083`
 - web studio running with `VITE_EXPORT_BASE_URL=http://localhost:8083`
 
+Suggested local environment values:
+
+```bash
+S3_ENDPOINT="http://localhost:9000"
+S3_BUCKET="dna-studio-recordings"
+S3_ACCESS_KEY="djoko_minio"
+S3_SECRET_KEY="djoko_minio_local_2026_change_me"
+S3_REGION="us-east-1"
+S3_FORCE_PATH_STYLE="true"
+```
+
+Run the web studio with:
+
+```bash
+VITE_UPLOAD_BASE_URL="http://localhost:8082" \
+VITE_EXPORT_BASE_URL="http://localhost:8083" \
+npm run dev
+```
+
 ## Smoke steps
 
 1. Open the web studio host flow and create a session.
@@ -30,4 +49,3 @@ Verify the local direct export flow from the browser to the export worker.
 - the final MP4 is persisted in MinIO
 - the dashboard remembers the last export ID after refresh
 - failed exports surface a readable error message in the dashboard
-

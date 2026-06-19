@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, sync::Arc};
+use std::{collections::HashMap, env, path::Path, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
@@ -6,6 +6,7 @@ use aws_credential_types::{provider::SharedCredentialsProvider, Credentials};
 use aws_sdk_s3::{config::Builder as S3ConfigBuilder, primitives::ByteStream, Client};
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncRead;
 use tokio::sync::Mutex;
 use tracing::info;
 
@@ -20,14 +21,26 @@ pub struct ObjectData {
     pub content_type: String,
 }
 
+pub enum ExportDownloadBody {
+    Bytes(Vec<u8>),
+    Stream(Pin<Box<dyn AsyncRead + Send>>),
+}
+
 #[async_trait]
 pub trait ExportStorage: Send + Sync {
     async fn ready(&self) -> Result<(), ExportServiceError>;
     async fn get_object(&self, key: &str) -> Result<Vec<u8>, ExportServiceError>;
+    async fn get_file_object(&self, key: &str) -> Result<ExportDownloadBody, ExportServiceError>;
     async fn put_object(
         &self,
         key: &str,
         body: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), ExportServiceError>;
+    async fn put_file_object(
+        &self,
+        key: &str,
+        path: &Path,
         content_type: &str,
     ) -> Result<(), ExportServiceError>;
 }
@@ -135,10 +148,23 @@ impl ExportStorage for UnconfiguredStorage {
         Err(ExportServiceError::unavailable(self.message.clone()))
     }
 
+    async fn get_file_object(&self, _key: &str) -> Result<ExportDownloadBody, ExportServiceError> {
+        Err(ExportServiceError::unavailable(self.message.clone()))
+    }
+
     async fn put_object(
         &self,
         _key: &str,
         _body: Vec<u8>,
+        _content_type: &str,
+    ) -> Result<(), ExportServiceError> {
+        Err(ExportServiceError::unavailable(self.message.clone()))
+    }
+
+    async fn put_file_object(
+        &self,
+        _key: &str,
+        _path: &Path,
         _content_type: &str,
     ) -> Result<(), ExportServiceError> {
         Err(ExportServiceError::unavailable(self.message.clone()))
@@ -192,6 +218,11 @@ impl ExportStorage for MemoryObjectStore {
         Ok(object.bytes.clone())
     }
 
+    async fn get_file_object(&self, key: &str) -> Result<ExportDownloadBody, ExportServiceError> {
+        let bytes = self.get_object(key).await?;
+        Ok(ExportDownloadBody::Bytes(bytes))
+    }
+
     async fn put_object(
         &self,
         key: &str,
@@ -207,6 +238,18 @@ impl ExportStorage for MemoryObjectStore {
             },
         );
         Ok(())
+    }
+
+    async fn put_file_object(
+        &self,
+        key: &str,
+        path: &Path,
+        content_type: &str,
+    ) -> Result<(), ExportServiceError> {
+        let body = tokio::fs::read(path).await.map_err(|error| {
+            ExportServiceError::internal(format!("Unable to read export file: {error}"))
+        })?;
+        self.put_object(key, body, content_type).await
     }
 }
 
@@ -304,6 +347,34 @@ impl ExportStorage for S3ObjectStore {
         Ok(bytes.into_bytes().to_vec())
     }
 
+    async fn get_file_object(&self, key: &str) -> Result<ExportDownloadBody, ExportServiceError> {
+        let output = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|error| {
+                let code = error
+                    .as_service_error()
+                    .and_then(|service_error| service_error.code());
+                let status = error
+                    .raw_response()
+                    .map(|response| response.status().as_u16());
+
+                if is_missing_s3_object_error(code, status) {
+                    ExportServiceError::not_found("export_not_found", "Export asset not found.")
+                } else {
+                    ExportServiceError::internal(format!("Unable to read export asset: {error}"))
+                }
+            })?;
+
+        Ok(ExportDownloadBody::Stream(Box::pin(
+            output.body.into_async_read(),
+        )))
+    }
+
     async fn put_object(
         &self,
         key: &str,
@@ -316,6 +387,31 @@ impl ExportStorage for S3ObjectStore {
             .key(key)
             .content_type(content_type)
             .body(ByteStream::from(body))
+            .send()
+            .await
+            .map_err(|error| {
+                ExportServiceError::internal(format!("Unable to store export asset: {error}"))
+            })?;
+
+        Ok(())
+    }
+
+    async fn put_file_object(
+        &self,
+        key: &str,
+        path: &Path,
+        content_type: &str,
+    ) -> Result<(), ExportServiceError> {
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .content_type(content_type)
+            .body(ByteStream::from_path(path).await.map_err(|error| {
+                ExportServiceError::internal(format!(
+                    "Unable to open export file for upload: {error}"
+                ))
+            })?)
             .send()
             .await
             .map_err(|error| {

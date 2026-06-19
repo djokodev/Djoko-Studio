@@ -37,7 +37,7 @@ impl CommandFfmpegRunner {
             "-i".to_string(),
             input_webm.display().to_string(),
             "-vf".to_string(),
-            "scale=1920:1080".to_string(),
+            "scale=-2:1080,pad=1920:1080:(ow-iw)/2:(oh-ih)/2".to_string(),
             "-c:v".to_string(),
             "libx264".to_string(),
             "-pix_fmt".to_string(),
@@ -176,5 +176,24 @@ impl FfmpegRunner for FakeFfmpegRunner {
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_arguments_preserve_aspect_ratio() {
+        let input = Path::new("/tmp/input.webm");
+        let output = Path::new("/tmp/output.mp4");
+
+        let arguments = CommandFfmpegRunner::output_arguments(input, output);
+        assert!(arguments
+            .iter()
+            .any(|argument| argument == "scale=-2:1080,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"));
+        assert!(!arguments
+            .iter()
+            .any(|argument| argument == "scale=1920:1080"));
     }
 }

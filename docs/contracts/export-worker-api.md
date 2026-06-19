@@ -20,6 +20,10 @@ For local development the expected value is:
 http://localhost:8083
 ```
 
+The worker is configured through `EXPORT_WORKER_PORT` and `FFMPEG_BINARY`.
+Local MinIO integration uses `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`,
+`S3_SECRET_KEY`, `S3_REGION`, and `S3_FORCE_PATH_STYLE`.
+
 ## Readiness
 
 ```http
@@ -84,9 +88,11 @@ Behavior:
 
 - creates the primary export manifest if needed
 - is idempotent for a recording
+- returns `409 Conflict` when a matching export is already processing
 - validates that the source upload is complete before rendering
-- rejects uploads with missing chunks, rejected chunks, out-of-order chunks, or checksum mismatches
-- writes the final MP4 and the export manifest to MinIO
+- sorts uploaded chunks by numeric `chunkIndex` before reconstruction
+- rejects uploads with missing chunks, duplicate chunk indexes, failed chunk statuses, invalid byte counts, or checksum mismatches
+- streams the final MP4 into MinIO and persists the export manifest
 
 Response fields:
 
@@ -129,6 +135,7 @@ Responses:
 - `200 OK` with `video/mp4` and `Content-Disposition: attachment` when the export is ready
 - `409 Conflict` when the export is not finished yet
 - `404 Not Found` when the export is unknown
+- the worker streams the MP4 response body instead of buffering the whole file in memory
 
 ## Storage layout
 
@@ -147,4 +154,3 @@ This contract does not include:
 - retry policies
 - multiple export presets
 - the Go API export seam as a runtime dependency for the browser
-

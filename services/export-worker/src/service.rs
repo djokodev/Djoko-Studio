@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use chrono::Utc;
 use tokio::io::AsyncWriteExt;
@@ -6,17 +6,36 @@ use tokio::io::AsyncWriteExt;
 use crate::{
     ffmpeg::FfmpegRunner,
     model::{
-        export_id_for_recording, export_manifest_key, upload_manifest_key, CreateExportRequest,
-        ExportFailure, ExportManifest, ExportReadyzResponse, ExportStatus, UploadManifest,
-        UploadStatus, TARGET_FORMAT, TARGET_RESOLUTION,
+        export_id_for_recording, export_manifest_key, CreateExportRequest, ExportFailure,
+        ExportManifest, ExportReadyzResponse, ExportStatus, UploadChunkManifest, UploadChunkStatus,
+        UploadManifest, UploadStatus, TARGET_FORMAT, TARGET_RESOLUTION,
     },
-    storage::ExportStorage,
+    storage::{ExportDownloadBody, ExportStorage},
 };
 
 #[derive(Clone)]
 pub struct ExportService {
     storage: Arc<dyn ExportStorage>,
     ffmpeg: Arc<dyn FfmpegRunner>,
+}
+
+pub struct ExportDownload {
+    pub body: ExportDownloadBody,
+    pub content_length: Option<u64>,
+}
+
+impl std::fmt::Debug for ExportDownload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let body_kind = match &self.body {
+            ExportDownloadBody::Bytes(_) => "bytes",
+            ExportDownloadBody::Stream(_) => "stream",
+        };
+
+        f.debug_struct("ExportDownload")
+            .field("body", &body_kind)
+            .field("content_length", &self.content_length)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -154,7 +173,22 @@ impl ExportService {
 
         if let Some(existing) = self.load_export_manifest(&manifest_key).await? {
             self.validate_request_matches_manifest(&request, &existing)?;
-            return Ok((existing, false));
+            return match existing.status {
+                ExportStatus::Ready => Ok((existing, false)),
+                ExportStatus::Processing | ExportStatus::Pending => {
+                    Err(ExportServiceError::conflict(
+                        "export_processing",
+                        "Export is already processing.",
+                    ))
+                }
+                ExportStatus::Failed => {
+                    let restarted = existing.restart_processing(Utc::now());
+                    self.store_export_manifest(&manifest_key, &restarted)
+                        .await?;
+                    let outcome = self.process_export(&request, &restarted).await?;
+                    Ok((outcome, false))
+                }
+            };
         }
 
         let now = Utc::now();
@@ -171,7 +205,10 @@ impl ExportService {
             .ok_or_else(|| ExportServiceError::not_found("export_not_found", "Export not found."))
     }
 
-    pub async fn download_export(&self, export_id: &str) -> Result<Vec<u8>, ExportServiceError> {
+    pub async fn download_export(
+        &self,
+        export_id: &str,
+    ) -> Result<ExportDownload, ExportServiceError> {
         let manifest = self.get_export(export_id).await?;
 
         if !manifest.is_completed() {
@@ -181,7 +218,14 @@ impl ExportService {
             ));
         }
 
-        self.storage.get_object(&manifest.output_object_key).await
+        let body = self
+            .storage
+            .get_file_object(&manifest.output_object_key)
+            .await?;
+        Ok(ExportDownload {
+            body,
+            content_length: manifest.output_bytes,
+        })
     }
 
     pub async fn process_export(
@@ -219,35 +263,35 @@ impl ExportService {
             }
         };
 
-        self.validate_upload_manifest(&source, request, manifest)
-            .await?;
-
         let temp_dir = tempfile::tempdir().map_err(|error| {
             ExportServiceError::internal(format!("Unable to create temp dir: {error}"))
         })?;
         let input_path = temp_dir.path().join("source.webm");
         let output_path = temp_dir.path().join("final.mp4");
 
-        self.rebuild_webm(&source, &input_path).await?;
+        let chunks = self
+            .validate_upload_manifest(&source, request, manifest)
+            .await?;
+        self.rebuild_webm(&source, &chunks, manifest, &input_path)
+            .await?;
         self.ffmpeg
             .render(&input_path, &output_path, &request.target)
             .await?;
 
-        let output_bytes = tokio::fs::read(&output_path).await.map_err(|error| {
-            ExportServiceError::internal(format!("Unable to read FFmpeg output: {error}"))
-        })?;
+        let output_bytes = tokio::fs::metadata(&output_path)
+            .await
+            .map_err(|error| {
+                ExportServiceError::internal(format!("Unable to stat FFmpeg output: {error}"))
+            })?
+            .len();
         self.storage
-            .put_object(
-                &manifest.output_object_key,
-                output_bytes.clone(),
-                "video/mp4",
-            )
+            .put_file_object(&manifest.output_object_key, &output_path, "video/mp4")
             .await?;
 
         let now = Utc::now();
         let mut ready_manifest = manifest.clone();
         ready_manifest.status = ExportStatus::Ready;
-        ready_manifest.output_bytes = Some(output_bytes.len() as u64);
+        ready_manifest.output_bytes = Some(output_bytes);
         ready_manifest.updated_at = now;
         ready_manifest.completed_at = Some(now);
         ready_manifest.error = None;
@@ -255,6 +299,41 @@ impl ExportService {
             .await?;
 
         Ok(ready_manifest)
+    }
+
+    async fn rebuild_webm(
+        &self,
+        source: &UploadManifest,
+        chunks: &[UploadChunkManifest],
+        manifest: &ExportManifest,
+        input_path: &Path,
+    ) -> Result<(), ExportServiceError> {
+        let mut file = tokio::fs::File::create(input_path).await.map_err(|error| {
+            ExportServiceError::internal(format!("Unable to create temp webm: {error}"))
+        })?;
+
+        for chunk in chunks {
+            let chunk_key = chunk_key_from_upload(source, chunk.chunk_index);
+            let body = self.storage.get_object(&chunk_key).await?;
+            if let Some(expected_checksum) = chunk.checksum.as_ref() {
+                let actual_checksum = sha256_hex(&body);
+                if actual_checksum != expected_checksum.trim() {
+                    self.fail_export(manifest, "checksum_mismatch", "Chunk checksum mismatch.")
+                        .await?;
+                    unreachable!("fail_export always returns an error");
+                }
+            }
+
+            file.write_all(&body).await.map_err(|error| {
+                ExportServiceError::internal(format!("Unable to write temp webm: {error}"))
+            })?;
+        }
+
+        file.flush().await.map_err(|error| {
+            ExportServiceError::internal(format!("Unable to flush temp webm: {error}"))
+        })?;
+
+        Ok(())
     }
 
     async fn mark_export_failed(
@@ -275,118 +354,103 @@ impl ExportService {
             .await
     }
 
-    async fn rebuild_webm(
-        &self,
-        source: &UploadManifest,
-        input_path: &Path,
-    ) -> Result<(), ExportServiceError> {
-        let mut file = tokio::fs::File::create(input_path).await.map_err(|error| {
-            ExportServiceError::internal(format!("Unable to create temp webm: {error}"))
-        })?;
-
-        for (expected_index, chunk) in source.chunks.iter().enumerate() {
-            if chunk.chunk_index != expected_index as u32 {
-                return self
-                    .fail_export_from_source(
-                        source,
-                        "chunk_order_mismatch",
-                        "Uploaded chunks are not in the expected order.",
-                    )
-                    .await
-                    .map(|_| ());
-            }
-
-            let chunk_key = chunk_key_from_upload(source, chunk.chunk_index);
-            let body = self.storage.get_object(&chunk_key).await?;
-            if let Some(expected_checksum) = chunk.checksum.as_ref() {
-                let actual_checksum = sha256_hex(&body);
-                if actual_checksum != expected_checksum.trim() {
-                    return self
-                        .fail_export_from_source(
-                            source,
-                            "checksum_mismatch",
-                            "Chunk checksum mismatch.",
-                        )
-                        .await
-                        .map(|_| ());
-                }
-            }
-
-            file.write_all(&body).await.map_err(|error| {
-                ExportServiceError::internal(format!("Unable to write temp webm: {error}"))
-            })?;
-        }
-
-        file.flush().await.map_err(|error| {
-            ExportServiceError::internal(format!("Unable to flush temp webm: {error}"))
-        })?;
-
-        Ok(())
-    }
-
     async fn validate_upload_manifest(
         &self,
         source: &UploadManifest,
         request: &CreateExportRequest,
         manifest: &ExportManifest,
-    ) -> Result<(), ExportServiceError> {
+    ) -> Result<Vec<UploadChunkManifest>, ExportServiceError> {
         if source.status != UploadStatus::Uploaded {
-            return self
-                .fail_export(
-                    manifest,
-                    "upload_incomplete",
-                    "Source upload is not complete yet.",
-                )
-                .await
-                .map(|_| ());
+            self.fail_export(
+                manifest,
+                "upload_incomplete",
+                "Source upload is not complete yet.",
+            )
+            .await?;
+            unreachable!("fail_export always returns an error");
         }
 
         if source.uploaded_chunk_count != source.expected_chunk_count {
-            return self
-                .fail_export(
-                    manifest,
-                    "incomplete_upload",
-                    "Uploaded chunk count does not match the expected chunk count.",
-                )
-                .await
-                .map(|_| ());
+            self.fail_export(
+                manifest,
+                "incomplete_upload",
+                "Uploaded chunk count does not match the expected chunk count.",
+            )
+            .await?;
+            unreachable!("fail_export always returns an error");
         }
 
         if source.uploaded_bytes != source.total_bytes {
-            return self
-                .fail_export(
-                    manifest,
-                    "incomplete_upload",
-                    "Uploaded byte count does not match the expected total bytes.",
-                )
-                .await
-                .map(|_| ());
+            self.fail_export(
+                manifest,
+                "incomplete_upload",
+                "Uploaded byte count does not match the expected total bytes.",
+            )
+            .await?;
+            unreachable!("fail_export always returns an error");
         }
 
-        if !source.uploaded_chunk_indexes().is_empty() {
-            return self
-                .fail_export(
+        let mut chunks = source.chunks.clone();
+        chunks.sort_by_key(|chunk| chunk.chunk_index);
+
+        let mut seen = HashSet::new();
+        for (expected_index, chunk) in chunks.iter().enumerate() {
+            if !seen.insert(chunk.chunk_index) {
+                self.fail_export(
+                    manifest,
+                    "duplicate_chunk_indexes",
+                    "Some source chunks are duplicated.",
+                )
+                .await?;
+                unreachable!("fail_export always returns an error");
+            }
+
+            if chunk.chunk_index != expected_index as u32 {
+                self.fail_export(
                     manifest,
                     "missing_chunks",
                     "Some source chunks are missing.",
                 )
-                .await
-                .map(|_| ());
+                .await?;
+                unreachable!("fail_export always returns an error");
+            }
+
+            if !matches!(
+                chunk.status,
+                UploadChunkStatus::Uploaded | UploadChunkStatus::AlreadyPresent
+            ) {
+                self.fail_export(
+                    manifest,
+                    "failed_chunk_status",
+                    "Some source chunks are not ready for export.",
+                )
+                .await?;
+                unreachable!("fail_export always returns an error");
+            }
+
+            if chunk.expected_bytes == 0 || chunk.uploaded_bytes != chunk.expected_bytes {
+                self.fail_export(
+                    manifest,
+                    "chunk_byte_mismatch",
+                    "A source chunk has unexpected byte counts.",
+                )
+                .await?;
+                unreachable!("fail_export always returns an error");
+            }
         }
 
-        if !source.rejected_chunk_indexes().is_empty() {
-            return self
-                .fail_export(
-                    manifest,
-                    "rejected_chunks",
-                    "Some source chunks were rejected.",
-                )
-                .await
-                .map(|_| ());
+        if chunks.len() as u32 != source.expected_chunk_count {
+            self.fail_export(
+                manifest,
+                "missing_chunks",
+                "Some source chunks are missing.",
+            )
+            .await?;
+            unreachable!("fail_export always returns an error");
         }
 
         self.validate_request_matches_manifest(request, manifest)?;
-        Ok(())
+        Ok(chunks)
     }
 
     async fn fail_export(
@@ -406,51 +470,6 @@ impl ExportService {
             message: message.to_string(),
         });
         self.store_export_manifest(&export_manifest_key(&manifest.export_id), &failed)
-            .await?;
-
-        Err(ExportServiceError::processing(
-            code.to_string(),
-            message.to_string(),
-        ))
-    }
-
-    async fn fail_export_from_source(
-        &self,
-        source: &UploadManifest,
-        code: &str,
-        message: &str,
-    ) -> Result<ExportManifest, ExportServiceError> {
-        let export_id = export_id_for_recording(&source.recording_id);
-        let output_object_key = crate::model::export_output_key(
-            &source.session_id,
-            &source.participant_id,
-            &source.recording_id,
-            &export_id,
-        );
-        let manifest = ExportManifest {
-            manifest_version: 1,
-            export_id,
-            recording_id: source.recording_id.clone(),
-            upload_id: source.upload_id.clone(),
-            session_id: source.session_id.clone(),
-            participant_id: source.participant_id.clone(),
-            role: source.role,
-            status: ExportStatus::Failed,
-            target_format: TARGET_FORMAT.to_string(),
-            target_resolution: TARGET_RESOLUTION.to_string(),
-            source_manifest_key: upload_manifest_key(&source.recording_id, &source.upload_id),
-            output_object_key,
-            output_bytes: None,
-            created_at: source.created_at,
-            updated_at: Utc::now(),
-            completed_at: None,
-            error: Some(ExportFailure {
-                code: code.to_string(),
-                message: message.to_string(),
-            }),
-        };
-
-        self.store_export_manifest(&export_manifest_key(&manifest.export_id), &manifest)
             .await?;
 
         Err(ExportServiceError::processing(
@@ -566,29 +585,6 @@ fn chunk_key_from_upload(source: &UploadManifest, chunk_index: u32) -> String {
     )
 }
 
-impl UploadManifest {
-    fn uploaded_chunk_indexes(&self) -> Vec<u32> {
-        let expected: Vec<u32> = (0..self.expected_chunk_count).collect();
-        let present = self
-            .chunks
-            .iter()
-            .map(|chunk| chunk.chunk_index)
-            .collect::<Vec<_>>();
-        expected
-            .into_iter()
-            .filter(|index| !present.contains(index))
-            .collect()
-    }
-
-    fn rejected_chunk_indexes(&self) -> Vec<u32> {
-        self.chunks
-            .iter()
-            .filter(|chunk| chunk.status == crate::model::UploadChunkStatus::Rejected)
-            .map(|chunk| chunk.chunk_index)
-            .collect()
-    }
-}
-
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
 
@@ -600,19 +596,32 @@ fn sha256_hex(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
-    use std::sync::Arc;
+    use std::{
+        collections::HashMap,
+        path::{Path, PathBuf},
+        sync::Arc,
+    };
 
     use chrono::{TimeZone, Utc};
+    use tokio::{io::AsyncWriteExt, sync::Mutex};
 
     use crate::{
         ffmpeg::FakeFfmpegRunner,
-        model::{UploadChunkStatus, UploadStatus},
-        storage::{ExportStorage, StorageBackend},
+        model::{upload_manifest_key, UploadChunkStatus, UploadStatus},
+        storage::{ExportStorage, ObjectData, StorageBackend},
     };
 
     fn service_with_memory_storage() -> (ExportService, Arc<dyn ExportStorage>) {
         let storage = StorageBackend::memory().into_shared();
         let service = ExportService::new(storage.clone(), Arc::new(FakeFfmpegRunner::available()));
+        (service, storage)
+    }
+
+    fn service_with_custom_storage(
+        storage: Arc<RecordingStorage>,
+        ffmpeg: Arc<dyn FfmpegRunner>,
+    ) -> (ExportService, Arc<RecordingStorage>) {
+        let service = ExportService::new(storage.clone(), ffmpeg);
         (service, storage)
     }
 
@@ -713,20 +722,371 @@ mod tests {
             .await
             .expect("store manifest");
 
-        for (index, bytes) in chunk_bytes.iter().enumerate() {
+        for (chunk, bytes) in manifest.chunks.iter().zip(chunk_bytes.iter()) {
             let chunk_key = format!(
                 "sessions/{}/participants/{}/recordings/{}/uploads/{}/chunks/{}",
                 manifest.session_id,
                 manifest.participant_id,
                 manifest.recording_id,
                 manifest.upload_id,
-                index
+                chunk.chunk_index
             );
             storage
                 .put_object(&chunk_key, bytes.clone(), "video/webm")
                 .await
                 .expect("store chunk");
         }
+    }
+
+    fn failed_export_manifest(recording_id: &str, upload_id: &str) -> ExportManifest {
+        let mut manifest =
+            ExportManifest::new_processing(&create_request(recording_id, upload_id), timestamp());
+        manifest.status = ExportStatus::Failed;
+        manifest.updated_at = timestamp();
+        manifest.error = Some(ExportFailure {
+            code: "previous_failure".to_string(),
+            message: "previous failure".to_string(),
+        });
+        manifest
+    }
+
+    #[derive(Clone)]
+    struct RecordingStorage {
+        objects: Arc<Mutex<HashMap<String, ObjectData>>>,
+        file_put_paths: Arc<Mutex<Vec<PathBuf>>>,
+        stream_download: bool,
+        download_bytes: Vec<u8>,
+    }
+
+    impl RecordingStorage {
+        fn new(stream_download: bool, download_bytes: Vec<u8>) -> Self {
+            Self {
+                objects: Arc::new(Mutex::new(HashMap::new())),
+                file_put_paths: Arc::new(Mutex::new(Vec::new())),
+                stream_download,
+                download_bytes,
+            }
+        }
+
+        async fn file_put_paths(&self) -> Vec<PathBuf> {
+            self.file_put_paths.lock().await.clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ExportStorage for RecordingStorage {
+        async fn ready(&self) -> Result<(), ExportServiceError> {
+            Ok(())
+        }
+
+        async fn get_object(&self, key: &str) -> Result<Vec<u8>, ExportServiceError> {
+            let objects = self.objects.lock().await;
+            let Some(object) = objects.get(key) else {
+                return Err(ExportServiceError::not_found(
+                    "export_not_found",
+                    "Export asset not found.",
+                ));
+            };
+
+            Ok(object.bytes.clone())
+        }
+
+        async fn get_file_object(
+            &self,
+            key: &str,
+        ) -> Result<ExportDownloadBody, ExportServiceError> {
+            if self.stream_download {
+                let bytes = if self.download_bytes.is_empty() {
+                    self.get_object(key).await?
+                } else {
+                    self.download_bytes.clone()
+                };
+                let (mut writer, reader) = tokio::io::duplex(bytes.len().max(1) + 8);
+                tokio::spawn(async move {
+                    let _ = writer.write_all(&bytes).await;
+                });
+                Ok(ExportDownloadBody::Stream(Box::pin(reader)))
+            } else {
+                Ok(ExportDownloadBody::Bytes(self.get_object(key).await?))
+            }
+        }
+
+        async fn put_object(
+            &self,
+            key: &str,
+            body: Vec<u8>,
+            content_type: &str,
+        ) -> Result<(), ExportServiceError> {
+            let mut objects = self.objects.lock().await;
+            objects.insert(
+                key.to_string(),
+                ObjectData {
+                    bytes: body,
+                    content_type: content_type.to_string(),
+                },
+            );
+            Ok(())
+        }
+
+        async fn put_file_object(
+            &self,
+            key: &str,
+            path: &Path,
+            content_type: &str,
+        ) -> Result<(), ExportServiceError> {
+            self.file_put_paths.lock().await.push(path.to_path_buf());
+            let body = tokio::fs::read(path).await.map_err(|error| {
+                ExportServiceError::internal(format!("Unable to read export file: {error}"))
+            })?;
+            self.put_object(key, body, content_type).await
+        }
+    }
+
+    struct InspectingFfmpegRunner {
+        expected_input: Vec<u8>,
+        output_bytes: Vec<u8>,
+    }
+
+    #[async_trait::async_trait]
+    impl crate::ffmpeg::FfmpegRunner for InspectingFfmpegRunner {
+        async fn is_available(&self) -> Result<(), ExportServiceError> {
+            Ok(())
+        }
+
+        async fn render(
+            &self,
+            input_webm: &std::path::Path,
+            output_mp4: &std::path::Path,
+            target: &crate::model::ExportTargetRequest,
+        ) -> Result<(), ExportServiceError> {
+            assert_eq!(
+                tokio::fs::read(input_webm)
+                    .await
+                    .expect("read reconstructed input"),
+                self.expected_input
+            );
+            assert_eq!(target.format, TARGET_FORMAT);
+            assert_eq!(target.resolution, TARGET_RESOLUTION);
+            tokio::fs::write(output_mp4, &self.output_bytes)
+                .await
+                .expect("write ffmpeg output");
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn create_export_retries_failed_manifest() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-retry", "upload-retry");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let manifest =
+            uploaded_manifest("recording-retry", "upload-retry", &chunk_bytes, true, true);
+        seed_upload(&storage, &manifest, &chunk_bytes).await;
+
+        let failed = failed_export_manifest("recording-retry", "upload-retry");
+        storage
+            .put_object(
+                &export_manifest_key(&failed.export_id),
+                serde_json::to_vec_pretty(&failed).expect("serialize failed export manifest"),
+                "application/json",
+            )
+            .await
+            .expect("seed failed manifest");
+
+        let (retried_manifest, created) = service
+            .create_export(request.clone())
+            .await
+            .expect("failed export should retry");
+        assert!(!created);
+        assert_eq!(retried_manifest.status, ExportStatus::Ready);
+        assert!(retried_manifest.error.is_none());
+
+        let persisted = service
+            .get_export(&retried_manifest.export_id)
+            .await
+            .expect("persisted retried manifest");
+        assert_eq!(persisted.status, ExportStatus::Ready);
+        assert!(persisted.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn create_export_sorts_manifest_chunks_numerically() {
+        let storage = Arc::new(RecordingStorage::new(false, Vec::new()));
+        let ffmpeg = Arc::new(InspectingFfmpegRunner {
+            expected_input: b"chunk-bchunk-a".to_vec(),
+            output_bytes: b"encoded-mp4".to_vec(),
+        });
+        let (service, storage) = service_with_custom_storage(storage, ffmpeg);
+        let request = create_request("recording-sort", "upload-sort");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let manifest =
+            uploaded_manifest("recording-sort", "upload-sort", &chunk_bytes, false, true);
+        let storage_trait: Arc<dyn ExportStorage> = storage.clone();
+        seed_upload(&storage_trait, &manifest, &chunk_bytes).await;
+
+        let (created_manifest, created) = service
+            .create_export(request.clone())
+            .await
+            .expect("export should complete");
+        assert!(created);
+        assert_eq!(created_manifest.status, ExportStatus::Ready);
+        assert_eq!(
+            created_manifest.output_bytes,
+            Some(b"encoded-mp4".len() as u64)
+        );
+    }
+
+    #[tokio::test]
+    async fn create_export_rejects_duplicate_chunk_indexes() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-dup", "upload-dup");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let mut manifest =
+            uploaded_manifest("recording-dup", "upload-dup", &chunk_bytes, true, true);
+        manifest.chunks[1].chunk_index = 0;
+        seed_upload(&storage, &manifest, &chunk_bytes).await;
+
+        let result = service.create_export(request.clone()).await;
+        assert!(result.is_err());
+
+        let persisted = service
+            .get_export(&export_id_for_recording(&request.recording_id))
+            .await
+            .expect("failed export manifest");
+        assert_eq!(
+            persisted.error.as_ref().map(|error| error.code.as_str()),
+            Some("duplicate_chunk_indexes")
+        );
+    }
+
+    #[tokio::test]
+    async fn create_export_rejects_failed_chunk_status() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-failed-chunk", "upload-failed-chunk");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let mut manifest = uploaded_manifest(
+            "recording-failed-chunk",
+            "upload-failed-chunk",
+            &chunk_bytes,
+            true,
+            true,
+        );
+        manifest.chunks[1].status = UploadChunkStatus::Failed;
+        seed_upload(&storage, &manifest, &chunk_bytes).await;
+
+        let result = service.create_export(request.clone()).await;
+        assert!(result.is_err());
+
+        let persisted = service
+            .get_export(&export_id_for_recording(&request.recording_id))
+            .await
+            .expect("failed export manifest");
+        assert_eq!(
+            persisted.error.as_ref().map(|error| error.code.as_str()),
+            Some("failed_chunk_status")
+        );
+    }
+
+    #[tokio::test]
+    async fn create_export_rejects_chunk_byte_mismatch() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-byte", "upload-byte");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let mut manifest =
+            uploaded_manifest("recording-byte", "upload-byte", &chunk_bytes, true, true);
+        manifest.chunks[1].uploaded_bytes = manifest.chunks[1].uploaded_bytes.saturating_sub(1);
+        seed_upload(&storage, &manifest, &chunk_bytes).await;
+
+        let result = service.create_export(request.clone()).await;
+        assert!(result.is_err());
+
+        let persisted = service
+            .get_export(&export_id_for_recording(&request.recording_id))
+            .await
+            .expect("failed export manifest");
+        assert_eq!(
+            persisted.error.as_ref().map(|error| error.code.as_str()),
+            Some("chunk_byte_mismatch")
+        );
+    }
+
+    #[tokio::test]
+    async fn create_export_uses_file_path_for_output_mp4() {
+        let storage = Arc::new(RecordingStorage::new(false, Vec::new()));
+        let ffmpeg = Arc::new(InspectingFfmpegRunner {
+            expected_input: b"chunk-achunk-b".to_vec(),
+            output_bytes: b"path-output".to_vec(),
+        });
+        let (service, storage) = service_with_custom_storage(storage, ffmpeg);
+        let request = create_request("recording-path", "upload-path");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let manifest = uploaded_manifest("recording-path", "upload-path", &chunk_bytes, true, true);
+        let storage_trait: Arc<dyn ExportStorage> = storage.clone();
+        seed_upload(&storage_trait, &manifest, &chunk_bytes).await;
+
+        let (_created_manifest, created) = service
+            .create_export(request.clone())
+            .await
+            .expect("export should complete");
+        assert!(created);
+
+        let file_put_paths = storage.file_put_paths().await;
+        assert_eq!(file_put_paths.len(), 1);
+        assert_eq!(
+            file_put_paths
+                .first()
+                .and_then(|path| path.file_name())
+                .and_then(|name| name.to_str()),
+            Some("final.mp4")
+        );
+    }
+
+    #[tokio::test]
+    async fn download_export_returns_stream_body_when_storage_streams() {
+        let storage = Arc::new(RecordingStorage::new(true, b"streamed-mp4".to_vec()));
+        let ffmpeg = Arc::new(FakeFfmpegRunner::available());
+        let service = ExportService::new(storage.clone(), ffmpeg);
+        let export_id = export_id_for_recording("recording-stream");
+        let manifest = ExportManifest {
+            manifest_version: 1,
+            export_id: export_id.clone(),
+            recording_id: "recording-stream".to_string(),
+            upload_id: "upload-stream".to_string(),
+            session_id: "session-1".to_string(),
+            participant_id: "participant-1".to_string(),
+            role: crate::model::ParticipantRole::Host,
+            status: ExportStatus::Ready,
+            target_format: TARGET_FORMAT.to_string(),
+            target_resolution: TARGET_RESOLUTION.to_string(),
+            source_manifest_key: upload_manifest_key("recording-stream", "upload-stream"),
+            output_object_key: crate::model::export_output_key(
+                "session-1",
+                "participant-1",
+                "recording-stream",
+                &export_id,
+            ),
+            output_bytes: Some(b"streamed-mp4".len() as u64),
+            created_at: timestamp(),
+            updated_at: timestamp(),
+            completed_at: Some(timestamp()),
+            error: None,
+        };
+
+        storage
+            .put_object(
+                &export_manifest_key(&export_id),
+                serde_json::to_vec_pretty(&manifest).expect("serialize export manifest"),
+                "application/json",
+            )
+            .await
+            .expect("seed manifest");
+
+        let download = service
+            .download_export(&export_id)
+            .await
+            .expect("download export");
+        assert_eq!(download.content_length, Some(b"streamed-mp4".len() as u64));
+        assert!(matches!(download.body, ExportDownloadBody::Stream(_)));
     }
 
     #[tokio::test]
@@ -800,25 +1160,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_export_fails_when_chunks_are_out_of_order() {
+    async fn create_export_accepts_chunks_out_of_order() {
         let (service, storage) = service_with_memory_storage();
         let request = create_request("recording-3", "upload-3");
         let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
         let manifest = uploaded_manifest("recording-3", "upload-3", &chunk_bytes, false, true);
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
-
-        let export_id = export_id_for_recording(&request.recording_id);
-        let persisted = service
-            .get_export(&export_id)
+        let (created_manifest, created) = service
+            .create_export(request.clone())
             .await
-            .expect("failed export manifest");
-        assert_eq!(
-            persisted.error.as_ref().map(|error| error.code.as_str()),
-            Some("chunk_order_mismatch")
-        );
+            .expect("export should complete");
+        assert!(created);
+        assert_eq!(created_manifest.status, ExportStatus::Ready);
     }
 
     #[tokio::test]
@@ -874,7 +1228,11 @@ mod tests {
             .download_export(&export_id)
             .await
             .expect("download output");
-        assert_eq!(output, b"fake-mp4".to_vec());
+        assert_eq!(output.content_length, Some(b"fake-mp4".len() as u64));
+        match output.body {
+            ExportDownloadBody::Bytes(bytes) => assert_eq!(bytes, b"fake-mp4".to_vec()),
+            ExportDownloadBody::Stream(_) => panic!("expected in-memory bytes"),
+        }
     }
 
     #[tokio::test]

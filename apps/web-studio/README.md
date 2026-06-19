@@ -244,6 +244,8 @@ Example local setup with an optional STUN server:
 cd apps/web-studio
 VITE_API_BASE_URL=http://localhost:8080 \
 VITE_SIGNALING_BASE_URL=ws://localhost:8081 \
+VITE_UPLOAD_BASE_URL=http://localhost:8082 \
+VITE_EXPORT_BASE_URL=http://localhost:8083 \
 VITE_RTC_ICE_SERVERS_JSON='[{"urls":"stun:stun.l.google.com:19302"}]' \
 npm run dev
 ```
@@ -278,6 +280,7 @@ Example local setup:
 cd apps/web-studio
 VITE_API_BASE_URL=http://localhost:8080 \
 VITE_UPLOAD_BASE_URL=http://localhost:8082 \
+VITE_EXPORT_BASE_URL=http://localhost:8083 \
 npm run dev
 ```
 

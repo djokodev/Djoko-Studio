@@ -21,6 +21,10 @@ slice, the browser talks directly to the export worker through
 `VITE_EXPORT_BASE_URL` while the Go API keeps the durable export row seam for
 future coordination work.
 
+In other words, the Go API export seam is the product/domain foundation for a
+later orchestration layer. DS-065 uses the Rust export worker directly from the
+web studio, and a later PR will connect the Go API to worker/job orchestration.
+
 ## Decision
 
 v0.1 uses a single primary export per recording.
@@ -47,6 +51,8 @@ v0.1 uses a single primary export per recording.
   retry and re-render policies need explicit follow-up design
 - the V1 direct browser-to-worker path is intentionally local-first and should
   be revisited before production hardening
+- the Go API export seam remains the durable foundation for later worker
+  orchestration instead of becoming the browser runtime dependency in DS-065
 
 ## Alternatives considered
 
