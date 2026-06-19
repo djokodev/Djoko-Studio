@@ -1133,7 +1133,7 @@ mod tests {
     async fn create_export_returns_existing_recent_processing_manifest() {
         let (service, storage) = service_with_memory_storage();
         let request = create_request("recording-recent", "upload-recent");
-        let existing = ExportManifest::new_processing(&request, timestamp());
+        let existing = ExportManifest::new_processing(&request, Utc::now());
 
         storage
             .put_object(

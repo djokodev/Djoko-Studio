@@ -52,10 +52,12 @@ impl CommandFfmpegRunner {
     fn output_arguments(input_webm: &Path, output_mp4: &Path) -> Vec<String> {
         vec![
             "-y".to_string(),
+            "-fflags".to_string(),
+            "+genpts".to_string(),
             "-i".to_string(),
             input_webm.display().to_string(),
             "-vf".to_string(),
-            "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2".to_string(),
+            "fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2".to_string(),
             "-c:v".to_string(),
             "libx264".to_string(),
             "-preset".to_string(),
@@ -137,7 +139,7 @@ impl FfmpegRunner for CommandFfmpegRunner {
         if output.status.success() {
             Ok(())
         } else {
-            let stderr = summarize_stderr(&output.stderr, 4000);
+            let stderr = summarize_stderr(&output.stderr, 1000, 4000);
             Err(ExportServiceError::processing(
                 "ffmpeg_failed",
                 format!("FFmpeg failed to render the export. {stderr}"),
@@ -154,7 +156,7 @@ fn duration_from_env(name: &str, default_seconds: u64) -> Duration {
         .unwrap_or_else(|| Duration::from_secs(default_seconds))
 }
 
-fn summarize_stderr(stderr: &[u8], limit: usize) -> String {
+fn summarize_stderr(stderr: &[u8], head_limit: usize, tail_limit: usize) -> String {
     let decoded = String::from_utf8_lossy(stderr);
     let trimmed = decoded.trim();
 
@@ -162,11 +164,27 @@ fn summarize_stderr(stderr: &[u8], limit: usize) -> String {
         return "No FFmpeg stderr output was captured.".to_string();
     }
 
-    let summary: String = trimmed.chars().take(limit).collect();
-    if trimmed.chars().count() > limit {
-        format!("stderr: {summary}…")
+    let chars: Vec<char> = trimmed.chars().collect();
+    let len = chars.len();
+
+    if len <= tail_limit {
+        return format!("stderr: {}", chars.iter().collect::<String>());
+    }
+
+    let head_end = head_limit.min(len);
+    let tail_start = len.saturating_sub(tail_limit);
+
+    if tail_start <= head_end {
+        return format!("stderr: {}", chars.iter().collect::<String>());
+    }
+
+    let head: String = chars[..head_end].iter().collect();
+    let tail: String = chars[tail_start..].iter().collect();
+
+    if head.is_empty() {
+        format!("stderr: {tail}")
     } else {
-        format!("stderr: {summary}")
+        format!("stderr: {head}... [stderr truncated] ...{tail}")
     }
 }
 
@@ -251,6 +269,10 @@ mod tests {
         let output = Path::new("/tmp/output.mp4");
 
         let arguments = CommandFfmpegRunner::output_arguments(input, output);
+        assert!(arguments.iter().any(|argument| argument == "+genpts"));
+        assert!(arguments
+            .iter()
+            .any(|argument| argument.contains("fps=30,")));
         assert!(arguments
             .iter()
             .any(|argument| argument.contains("force_original_aspect_ratio=decrease")));
@@ -264,6 +286,17 @@ mod tests {
         assert!(!arguments
             .iter()
             .any(|argument| argument == "scale=1920:1080"));
+    }
+
+    #[test]
+    fn ffmpeg_arguments_normalize_output_fps_to_30() {
+        let input = Path::new("/tmp/input.webm");
+        let output = Path::new("/tmp/output.mp4");
+
+        let arguments = CommandFfmpegRunner::output_arguments(input, output);
+        assert!(arguments
+            .iter()
+            .any(|argument| argument.starts_with("fps=30,")));
     }
 
     #[test]
@@ -308,11 +341,15 @@ mod tests {
     }
 
     #[test]
-    fn render_failure_includes_truncated_ffmpeg_stderr() {
+    fn render_failure_includes_tail_of_ffmpeg_stderr() {
         let temp_dir = tempdir().expect("temp dir");
         let script_path = temp_dir.path().join("fake-ffmpeg.sh");
-        let long_stderr = "x".repeat(4500);
-        let script = format!("#!/bin/sh\nprintf '%s' \"{}\" >&2\nexit 1\n", long_stderr);
+        let head = "ffmpeg version sample line\n".repeat(220);
+        let tail = "FINAL_FFMPEG_ERROR: non-monotonous DTS";
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\\n%s\\n' \"{}\" \"{}\" >&2\nexit 1\n",
+            head, tail
+        );
         fs::write(&script_path, script).expect("write fake ffmpeg script");
         #[cfg(unix)]
         {
@@ -343,7 +380,9 @@ mod tests {
 
         assert_eq!(error.code(), "ffmpeg_failed");
         assert!(error.message().contains("stderr:"));
-        assert!(error.message().contains("…"));
-        assert!(error.message().len() < 4200);
+        assert!(error.message().contains("[stderr truncated]"));
+        assert!(error
+            .message()
+            .contains("FINAL_FFMPEG_ERROR: non-monotonous DTS"));
     }
 }

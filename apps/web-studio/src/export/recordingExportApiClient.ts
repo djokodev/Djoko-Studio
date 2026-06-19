@@ -24,6 +24,7 @@ export interface RecordingExportFailure {
 export interface RecordingExportManifest {
   manifestVersion: number;
   exportId: string;
+  attemptId: string;
   recordingId: string;
   uploadId: string;
   sessionId: string;

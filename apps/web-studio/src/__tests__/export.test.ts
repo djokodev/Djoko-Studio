@@ -203,6 +203,7 @@ describe('export client', () => {
     const manifest: RecordingExportManifest = {
       manifestVersion: 1,
       exportId: 'exp-recording-1',
+      attemptId: 'attempt-1',
       recordingId: 'recording-1',
       uploadId: 'upload-1',
       sessionId: 'session-1',
