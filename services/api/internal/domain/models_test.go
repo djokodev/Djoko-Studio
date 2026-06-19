@@ -50,3 +50,20 @@ func TestParticipantStatusConstants(t *testing.T) {
 		}
 	}
 }
+
+func TestExportStatusConstants(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]ExportStatus{
+		"pending":    ExportStatusPending,
+		"processing": ExportStatusProcessing,
+		"ready":      ExportStatusReady,
+		"failed":     ExportStatusFailed,
+	}
+
+	for want, got := range tests {
+		if string(got) != want {
+			t.Fatalf("expected export status %q, got %q", want, got)
+		}
+	}
+}

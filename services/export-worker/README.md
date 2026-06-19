@@ -1,34 +1,45 @@
 # Export Worker
 
-This directory contains the minimal Rust export worker scaffold for Djoko Studio.
+This directory contains the Rust export worker for the DS-065 local export slice.
 
 ## Why this is a worker
 
-Export rendering is a long-running background concern, not a request/response API.
-This service is meant to stay alive, wait for work, and shut down cleanly when interrupted.
+Export rendering is a long-running concern, not a request/response API.
+This service stays alive, checks readiness, receives export requests, renders
+the final MP4, and shuts down cleanly when interrupted.
 
 ## What is implemented now
 
 - a Rust binary crate
 - Tokio-based startup and graceful shutdown handling
-- a long-running idle loop with a heartbeat interval
+- a local HTTP API with readiness, export creation, export inspection, and download routes
+- MinIO/S3 object storage access
+- FFmpeg command execution through `FFMPEG_BINARY`
+- export manifest persistence in MinIO
+- a temporary WebM reconstruction step before MP4 rendering
 - tracing-based logging
-- simple unit tests for the worker foundation
+- unit tests for readiness, validation, manifest persistence, and download behavior
 
 ## What is intentionally not implemented yet
 
-- FFmpeg orchestration
-- export job consumption
-- object storage access
+- queue consumers or NATS ingestion
+- retry or requeue policies
+- export presets beyond MP4 1920x1080
+- UI access from anything other than the local web studio client
 - database access
-- export composition or rendering logic
-- status event publishing
-- retry or idempotency policies
+- production hardening for the direct browser-to-worker path
 
 ## How to run
 
 ```bash
 cd services/export-worker
+EXPORT_WORKER_PORT=8083 \
+S3_ENDPOINT=http://localhost:9000 \
+S3_BUCKET=djoko-studio \
+S3_ACCESS_KEY=djoko \
+S3_SECRET_KEY=djoko \
+S3_REGION=us-east-1 \
+FFMPEG_BINARY=ffmpeg \
 cargo run
 ```
 
@@ -41,6 +52,20 @@ cd services/export-worker
 cargo test
 ```
 
-## How to stop it manually
+## Configuration
 
-Press Ctrl+C to stop the worker.
+The worker reads:
+
+- `EXPORT_WORKER_PORT` for the HTTP port, defaulting to `8083`
+- `S3_ENDPOINT`
+- `S3_BUCKET`
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_REGION`
+- `S3_FORCE_PATH_STYLE`, defaulting to `true`
+- `FFMPEG_BINARY`, defaulting to `ffmpeg`
+
+## Contract
+
+See [`docs/contracts/export-worker-api.md`](../../docs/contracts/export-worker-api.md)
+for the local worker contract and MinIO key layout.

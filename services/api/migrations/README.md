@@ -6,6 +6,7 @@ This directory will contain ordered SQL migrations for `services/api`.
 
 - `00001_create_v0_1_core_tables.sql` adds the initial v0.1 schema
 - the migration creates `users`, `studios`, `sessions`, `participants`, `recordings`, `recording_tracks`, `uploads`, and `exports`
+- `00002_add_export_last_error.sql` adds the nullable `last_error` column to `exports`
 - DS-023 introduces the first product migration set
 
 ## Working with migrations

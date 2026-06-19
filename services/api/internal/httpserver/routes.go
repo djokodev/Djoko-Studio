@@ -26,6 +26,7 @@ type errorResponse struct {
 type Dependencies struct {
 	SessionStore     storage.SessionStore
 	ParticipantStore storage.ParticipantStore
+	ExportStore      storage.ExportStore
 }
 
 type createSessionRequest struct {
@@ -93,6 +94,22 @@ type participantResponse struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+type exportResponse struct {
+	ID               string     `json:"id"`
+	RecordingID      string     `json:"recording_id"`
+	Status           string     `json:"status"`
+	Format           string     `json:"format"`
+	Width            int        `json:"width"`
+	Height           int        `json:"height"`
+	StorageObjectKey *string    `json:"storage_object_key,omitempty"`
+	ByteSize         *int64     `json:"byte_size,omitempty"`
+	DurationMs       *int       `json:"duration_ms,omitempty"`
+	LastError        *string    `json:"last_error,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+}
+
 func newHandler(deps Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", allowOnly(http.MethodGet, healthzHandler))
@@ -107,6 +124,7 @@ func newHandler(deps Dependencies) http.Handler {
 	mux.HandleFunc("/v1/sessions/{session_id}/end", allowOnly(http.MethodPost, endSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/sessions/{id}", allowOnly(http.MethodGet, getSessionHandler(deps.SessionStore)))
 	mux.HandleFunc("/v1/studios/{studio_id}/sessions", allowOnly(http.MethodGet, listStudioSessionsHandler(deps.SessionStore)))
+	mux.HandleFunc("/v1/recordings/{recording_id}/export", recordingExportHandler(deps.ExportStore))
 	return withCORS(mux)
 }
 
@@ -543,6 +561,101 @@ func listStudioSessionsHandler(store storage.SessionStore) http.HandlerFunc {
 	}
 }
 
+func recordingExportHandler(store storage.ExportStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getRecordingExportHandler(store).ServeHTTP(w, r)
+		case http.MethodPost:
+			createRecordingExportHandler(store).ServeHTTP(w, r)
+		default:
+			w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+			writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
+				Error: "method not allowed",
+			})
+		}
+	}
+}
+
+func getRecordingExportHandler(store storage.ExportStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !exportStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "export store unavailable",
+			})
+			return
+		}
+
+		recordingID := strings.TrimSpace(r.PathValue("recording_id"))
+		if recordingID == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "export not found",
+			})
+			return
+		}
+
+		export, err := store.GetExportByRecordingID(r.Context(), recordingID)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "export not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to fetch export",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, newExportResponse(export))
+	}
+}
+
+func createRecordingExportHandler(store storage.ExportStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !exportStoreAvailable(store) {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{
+				Error: "export store unavailable",
+			})
+			return
+		}
+
+		recordingID := strings.TrimSpace(r.PathValue("recording_id"))
+		if recordingID == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{
+				Error: "recording not found",
+			})
+			return
+		}
+
+		export, created, err := store.EnsureExport(r.Context(), storage.EnsureExportParams{
+			RecordingID: recordingID,
+		})
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errorResponse{
+					Error: "recording not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "failed to create export",
+			})
+			return
+		}
+
+		statusCode := http.StatusOK
+		if created {
+			statusCode = http.StatusCreated
+		}
+
+		writeJSON(w, statusCode, newExportResponse(export))
+	}
+}
+
 func startSessionHandler(store storage.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !sessionStoreAvailable(store) {
@@ -876,11 +989,33 @@ func newParticipantResponse(participant domain.Participant) participantResponse 
 	}
 }
 
+func newExportResponse(export domain.Export) exportResponse {
+	return exportResponse{
+		ID:               export.ID,
+		RecordingID:      export.RecordingID,
+		Status:           string(export.Status),
+		Format:           export.Format,
+		Width:            export.Width,
+		Height:           export.Height,
+		StorageObjectKey: export.StorageObjectKey,
+		ByteSize:         export.ByteSize,
+		DurationMs:       export.DurationMs,
+		LastError:        export.LastError,
+		CreatedAt:        export.CreatedAt,
+		UpdatedAt:        export.UpdatedAt,
+		CompletedAt:      export.CompletedAt,
+	}
+}
+
 func sessionStoreAvailable(store storage.SessionStore) bool {
 	return store != nil
 }
 
 func participantStoreAvailable(store storage.ParticipantStore) bool {
+	return store != nil
+}
+
+func exportStoreAvailable(store storage.ExportStore) bool {
 	return store != nil
 }
 

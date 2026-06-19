@@ -26,6 +26,7 @@ import type { LocalRecordingIntegrityReport } from '../recording/recordingIntegr
 import { buildLocalRecordingFilename } from '../recording/recordingDownload';
 import { formatBytes } from '../recording/formatBytes';
 import { UploadReadinessPanel } from './UploadReadinessPanel';
+import { ProcessingExportPanel } from './ProcessingExportPanel';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -741,6 +742,7 @@ function LocalRecordingPrototype({
       </section>
 
       <UploadReadinessPanel recorder={recorder} />
+      <ProcessingExportPanel recorder={recorder} />
 
       <section
         className="recording-recovery"

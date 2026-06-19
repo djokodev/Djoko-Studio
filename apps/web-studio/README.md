@@ -42,6 +42,11 @@ checking server status, tracks upload progress separately from local recording
 persistence, and uses the Rust upload service backed by MinIO/S3 storage.
 MediaRecorder chunks are treated as variable-sized pieces, not a fixed-size
 stream.
+DS-065 adds a direct Processing & Export dashboard for the latest uploaded local
+recording. The panel talks to the local export worker through
+`VITE_EXPORT_BASE_URL`, keeps the last export ID in `localStorage`, and lets the
+user start, refresh, and download the final MP4 once the worker reports it is
+ready.
 The next resumable upload architecture is documented in
 [`docs/adr/ADR-0017-resumable-recording-upload-architecture.md`](../../docs/adr/ADR-0017-resumable-recording-upload-architecture.md).
 
@@ -78,6 +83,7 @@ The formal browser recording acceptance checklist lives in
 - shows a local browser storage panel with approximate size, persisted chunk count, browser storage estimate, and a clear-all control for persisted local recordings
 - shows local recording integrity diagnostics for persisted copies, including manifest/chunk consistency checks, stored `Blob` sizes, missing chunk counts when available, and a local-only recheck action
 - shows a real upload readiness panel for persisted local recordings, including queue status, chunk progress, byte progress, retry/pause/resume/cancel actions, and last upload error visibility
+- shows a Processing & Export dashboard for the latest uploaded local recording, including service readiness, export status, target format, output bytes, start/refresh/download actions, and failure visibility
 - pairs with the browser recording acceptance checklist for QA sign-off before resumable upload work
 - attaches the active local preview stream during the initial WebRTC negotiation when preview is already running
 - shows a minimal signaling panel after host session creation
@@ -94,7 +100,7 @@ The formal browser recording acceptance checklist lives in
 - auth
 - full authorization
 - backend/database behavior
-- export
+- export worker backend coordination
 - cloud sync
 - recovery routing
 
@@ -257,6 +263,8 @@ The API client uses that base URL for host create, guest lookup, and guest join 
 The app also reads `VITE_SIGNALING_BASE_URL` for the signaling client.
 
 The upload panel reads `VITE_UPLOAD_BASE_URL` for the Rust upload service.
+The export dashboard reads `VITE_EXPORT_BASE_URL` for the Rust export worker and
+expects the local worker to run on `http://localhost:8083` during DS-065.
 
 If `VITE_UPLOAD_BASE_URL` is not set, the app falls back to:
 
