@@ -56,7 +56,7 @@ export function getApiBaseUrl(): string {
 }
 
 export function buildGuestInviteUrl(inviteToken: string): string {
-  return `${window.location.origin}/guest/${encodeURIComponent(inviteToken)}`;
+  return `${window.location.origin}${buildGuestInvitePath(inviteToken)}`;
 }
 
 export async function createSession(
@@ -141,3 +141,4 @@ function extractErrorMessage(payload: unknown, response: Response): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
+import { buildGuestInvitePath } from '../navigation/routes';

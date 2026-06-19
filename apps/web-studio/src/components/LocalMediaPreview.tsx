@@ -27,6 +27,8 @@ import { buildLocalRecordingFilename } from '../recording/recordingDownload';
 import { formatBytes } from '../recording/formatBytes';
 import { UploadReadinessPanel } from './UploadReadinessPanel';
 import { ProcessingExportPanel } from './ProcessingExportPanel';
+import { DebugOnly } from './debug/DebugOnly';
+import { debugLog } from '../lib/debug';
 
 interface LocalMediaPreviewProps {
   onStreamChange?: (stream: MediaStream | null) => void;
@@ -118,6 +120,7 @@ export function LocalMediaPreview({
       setStream(nextStream);
       notifyStreamChange(nextStream);
       setStatus('active');
+      debugLog('media', 'Started local preview');
     } catch (error) {
       if (!isMountedRef.current || requestId !== requestIdRef.current) {
         return;
@@ -130,6 +133,7 @@ export function LocalMediaPreview({
       setErrorMessage(
         getLocalMediaErrorMessage(error, 'Unable to access camera or microphone.'),
       );
+      debugLog('media', 'Failed to start local preview', error);
     } finally {
       if (isMountedRef.current && requestId === requestIdRef.current) {
         isRequestInFlightRef.current = false;
@@ -151,6 +155,7 @@ export function LocalMediaPreview({
     notifyStreamChange(null);
     setStatus('idle');
     setErrorMessage('');
+    debugLog('media', 'Stopped local preview');
   }
 
   const diagnostics: LocalMediaDiagnostics = describeLocalMediaStream(stream, status, errorMessage);
@@ -192,14 +197,8 @@ export function LocalMediaPreview({
       </div>
 
       <p className="api-note media-preview__note">
-        This preview stays local to the browser. The microphone and camera buttons
-        toggle MediaStreamTrack.enabled on the live tracks, so already attached WebRTC
-        senders see the change without renegotiation.
-      </p>
-      <p className="api-note media-preview__note">
-        Recording capability diagnostics are read-only. They inspect browser support
-        and the current preview stream, but they do not create a recording, prompt for
-        permissions, or persist any media.
+        This preview stays local to the browser. Start it before recording so the
+        studio can use your camera and microphone.
       </p>
 
       <div className="media-preview__actions" aria-label="Local media preview actions">
@@ -252,42 +251,44 @@ export function LocalMediaPreview({
         )}
       </div>
 
-      <dl className="details-grid media-preview__details">
-        <div className="detail-card">
-          <dt>Permission status</dt>
-          <dd>{statusLabel}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Local stream</dt>
-          <dd>{diagnostics.hasStream ? 'Yes' : 'No'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Microphone track count</dt>
-          <dd>{diagnostics.audioTrackCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Camera track count</dt>
-          <dd>{diagnostics.videoTrackCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Microphone state</dt>
-          <dd>{diagnostics.audioTrackEnabledState}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Camera state</dt>
-          <dd>{diagnostics.videoTrackEnabledState}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Microphone readyState</dt>
-          <dd>{diagnostics.audioTrackReadyState}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Camera readyState</dt>
-          <dd>{diagnostics.videoTrackReadyState}</dd>
-        </div>
-      </dl>
+      <DebugOnly>
+        <dl className="details-grid media-preview__details">
+          <div className="detail-card">
+            <dt>Permission status</dt>
+            <dd>{statusLabel}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Local stream</dt>
+            <dd>{diagnostics.hasStream ? 'Yes' : 'No'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Microphone track count</dt>
+            <dd>{diagnostics.audioTrackCount}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Camera track count</dt>
+            <dd>{diagnostics.videoTrackCount}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Microphone state</dt>
+            <dd>{diagnostics.audioTrackEnabledState}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Camera state</dt>
+            <dd>{diagnostics.videoTrackEnabledState}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Microphone readyState</dt>
+            <dd>{diagnostics.audioTrackReadyState}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Camera readyState</dt>
+            <dd>{diagnostics.videoTrackReadyState}</dd>
+          </div>
+        </dl>
 
-      <RecordingCapabilityDiagnostics stream={stream} />
+        <RecordingCapabilityDiagnostics stream={stream} />
+      </DebugOnly>
       <LocalRecordingPrototype
         stream={stream}
         recordingCapability={recordingCapabilityReport}
@@ -494,12 +495,8 @@ function LocalRecordingPrototype({
       </div>
 
       <p className="api-note recording-prototype__note">
-        Prototype only: recording chunks are persisted locally as they arrive, while
-        preview and raw download are rebuilt from the persisted local copy when
-        needed. IndexedDB stores the manifest and chunks locally when the browser
-        supports it. The recovery panel can now preview a persisted local copy from
-        IndexedDB after refresh. The recorder prefers the supported MIME type from the
-        diagnostics and falls back to the browser default when needed.
+        Record locally in the browser so you can keep working even when the network is
+        unstable.
       </p>
 
       <div className="recording-prototype__actions" aria-label="Local recording prototype actions">
@@ -542,128 +539,132 @@ function LocalRecordingPrototype({
       {recordingMetadataBlockingReasons.length > 0 ? (
         <div className="message message--warning recording-prototype__metadata-warning" role="status">
           <p className="recording-prototype__metadata-warning-title">
-            Create or join a session before recording.
+            Start or join a session before recording.
           </p>
-          <ul className="recording-prototype__metadata-warning-list">
-            {recordingMetadataBlockingReasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+          <DebugOnly>
+            <ul className="recording-prototype__metadata-warning-list">
+              {recordingMetadataBlockingReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </DebugOnly>
         </div>
       ) : null}
 
-      <dl className="details-grid recording-prototype__details">
-        <div className="detail-card">
-          <dt>Recording ID</dt>
-          <dd className="mono">{formatNullableText(summary.recordingId)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Manifest status</dt>
-          <dd className="mono">{formatRecordingStateLabel(summary.status)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Source kind</dt>
-          <dd className="mono">{formatNullableText(summary.sourceKind)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Selected MIME type</dt>
-          <dd className="mono">{formatNullableText(summary.selectedMimeType)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Started at</dt>
-          <dd>{formatDiagnosticTimestamp(summary.startedAt)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Stopped at</dt>
-          <dd>{formatDiagnosticTimestamp(summary.stoppedAt)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Approximate duration</dt>
-          <dd>{formatApproximateDuration(summary.approximateDurationMs)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Manifest chunk count</dt>
-          <dd>{summary.chunkCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Manifest total bytes</dt>
-          <dd>{formatByteCount(summary.totalBytes)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Latest chunk index</dt>
-          <dd>{formatNullableNumber(summary.latestChunkIndex)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Latest chunk size</dt>
-          <dd>{formatNullableByteCount(summary.latestChunkSizeBytes)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Latest chunk timestamp</dt>
-          <dd>{formatDiagnosticTimestamp(summary.latestChunkAt)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Preview available</dt>
-          <dd>{summary.previewAvailable ? 'Yes' : 'No'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Preview blob size</dt>
-          <dd>{summary.previewAvailable ? formatByteCount(summary.previewBlobSizeBytes) : '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persistence support</dt>
-          <dd className="mono">{formatPersistenceSupportLabel(recorder.persistenceSupportStatus)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persistence status</dt>
-          <dd className="mono">{formatPersistenceStatusLabel(summary.persistenceStatus)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persistence error</dt>
-          <dd>{recorder.persistenceErrorMessage ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persisted recordings detected</dt>
-          <dd>{summary.persistedRecordingCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Current recording persisted</dt>
-          <dd>{summary.currentRecordingPersisted ? 'Yes' : 'No'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Recording error</dt>
-          <dd>{recorder.snapshot.errorMessage ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Upload status</dt>
-          <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
-            Local copy only
-          </dd>
-        </div>
-        {recorder.manifest?.sessionId && (
+      <DebugOnly>
+        <dl className="details-grid recording-prototype__details">
           <div className="detail-card">
-            <dt>Session ID</dt>
-            <dd className="mono">{recorder.manifest.sessionId}</dd>
+            <dt>Recording ID</dt>
+            <dd className="mono">{formatNullableText(summary.recordingId)}</dd>
           </div>
-        )}
-        {recorder.manifest?.participantId && (
           <div className="detail-card">
-            <dt>Participant ID</dt>
-            <dd className="mono">{recorder.manifest.participantId}</dd>
+            <dt>Manifest status</dt>
+            <dd className="mono">{formatRecordingStateLabel(summary.status)}</dd>
           </div>
-        )}
-        {recorder.manifest?.role && (
           <div className="detail-card">
-            <dt>Role</dt>
-            <dd className="mono">{recorder.manifest.role}</dd>
+            <dt>Source kind</dt>
+            <dd className="mono">{formatNullableText(summary.sourceKind)}</dd>
           </div>
-        )}
-        <div className="detail-card">
-          <dt>Available next actions</dt>
-          <dd className="mono">{formatRecordingEventList(allowedEvents)}</dd>
-        </div>
-      </dl>
+          <div className="detail-card">
+            <dt>Selected MIME type</dt>
+            <dd className="mono">{formatNullableText(summary.selectedMimeType)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Started at</dt>
+            <dd>{formatDiagnosticTimestamp(summary.startedAt)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Stopped at</dt>
+            <dd>{formatDiagnosticTimestamp(summary.stoppedAt)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Approximate duration</dt>
+            <dd>{formatApproximateDuration(summary.approximateDurationMs)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Manifest chunk count</dt>
+            <dd>{summary.chunkCount}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Manifest total bytes</dt>
+            <dd>{formatByteCount(summary.totalBytes)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Latest chunk index</dt>
+            <dd>{formatNullableNumber(summary.latestChunkIndex)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Latest chunk size</dt>
+            <dd>{formatNullableByteCount(summary.latestChunkSizeBytes)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Latest chunk timestamp</dt>
+            <dd>{formatDiagnosticTimestamp(summary.latestChunkAt)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Preview available</dt>
+            <dd>{summary.previewAvailable ? 'Yes' : 'No'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Preview blob size</dt>
+            <dd>{summary.previewAvailable ? formatByteCount(summary.previewBlobSizeBytes) : '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persistence support</dt>
+            <dd className="mono">{formatPersistenceSupportLabel(recorder.persistenceSupportStatus)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persistence status</dt>
+            <dd className="mono">{formatPersistenceStatusLabel(summary.persistenceStatus)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persistence error</dt>
+            <dd>{recorder.persistenceErrorMessage ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persisted recordings detected</dt>
+            <dd>{summary.persistedRecordingCount}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Current recording persisted</dt>
+            <dd>{summary.currentRecordingPersisted ? 'Yes' : 'No'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Recording error</dt>
+            <dd>{recorder.snapshot.errorMessage ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Upload status</dt>
+            <dd className="status-pill status-pill--warning" style={{ display: 'inline-block', width: 'auto', padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>
+              Local copy only
+            </dd>
+          </div>
+          {recorder.manifest?.sessionId && (
+            <div className="detail-card">
+              <dt>Session ID</dt>
+              <dd className="mono">{recorder.manifest.sessionId}</dd>
+            </div>
+          )}
+          {recorder.manifest?.participantId && (
+            <div className="detail-card">
+              <dt>Participant ID</dt>
+              <dd className="mono">{recorder.manifest.participantId}</dd>
+            </div>
+          )}
+          {recorder.manifest?.role && (
+            <div className="detail-card">
+              <dt>Role</dt>
+              <dd className="mono">{recorder.manifest.role}</dd>
+            </div>
+          )}
+          <div className="detail-card">
+            <dt>Available next actions</dt>
+            <dd className="mono">{formatRecordingEventList(allowedEvents)}</dd>
+          </div>
+        </dl>
 
-      <LocalBrowserStoragePanel recorder={recorder} />
+        <LocalBrowserStoragePanel recorder={recorder} />
+      </DebugOnly>
 
       <section
         className="recording-prototype__preview"
@@ -736,22 +737,18 @@ function LocalRecordingPrototype({
         </dl>
 
         <div className="message message--warning recording-prototype__preview-warning" role="status">
-          Temporary local preview only. The persisted copy is listed below for discard
-          and recovered playback from IndexedDB is available in the recovery panel.
+          This preview stays local until you are done.
         </div>
       </section>
 
       <UploadReadinessPanel recorder={recorder} />
       <ProcessingExportPanel recorder={recorder} />
 
-      <section
-        className="recording-recovery"
-        aria-labelledby="local-recording-recovery-title"
-      >
+      <section className="recording-recovery" aria-labelledby="local-recording-recovery-title">
         <div className="panel__header">
           <div>
             <p className="eyebrow">Recovery</p>
-            <h4 id="local-recording-recovery-title">Local recording found in this browser</h4>
+            <h4 id="local-recording-recovery-title">Saved local copy</h4>
           </div>
           <span
             className={`status-pill ${
@@ -763,37 +760,33 @@ function LocalRecordingPrototype({
         </div>
 
         <p className="api-note recording-recovery__note">
-          Local recording recovery stays browser-only. The app can detect persisted
-          recordings in IndexedDB after refresh for the current session, participant,
-          and role context, preview a local copy from browser storage, and discard the
-          local copy. Upload and recovery now sync separately through the upload queue.
+          Saved copies stay in the browser so you can recover after a refresh.
         </p>
 
-        <div className="recording-integrity__intro">
-          <p className="api-note recording-integrity__note">
-            Local integrity check: checks this browser&apos;s local copy. No upload is
-            performed, and this is not final export validation.
-          </p>
-          {recorder.integrityCheckStatus === 'checking' ? (
-            <div className="message recording-integrity__message" role="status">
-              Checking local copy integrity…
-            </div>
-          ) : null}
-          {recorder.integrityCheckStatus === 'failed' &&
-          recorder.integrityCheckError !== null ? (
-            <div className="message message--error recording-integrity__message" role="alert">
-              {recorder.integrityCheckError}
-            </div>
-          ) : null}
-        </div>
+        <DebugOnly>
+          <div className="recording-integrity__intro">
+            <p className="api-note recording-integrity__note">
+              Local integrity check: checks this browser&apos;s local copy. No upload is performed.
+            </p>
+            {recorder.integrityCheckStatus === 'checking' ? (
+              <div className="message recording-integrity__message" role="status">
+                Checking local copy integrity…
+              </div>
+            ) : null}
+            {recorder.integrityCheckStatus === 'failed' &&
+            recorder.integrityCheckError !== null ? (
+              <div className="message message--error recording-integrity__message" role="alert">
+                {recorder.integrityCheckError}
+              </div>
+            ) : null}
+          </div>
+        </DebugOnly>
 
         <article className="recording-recovery__preview">
           <div className="panel__header recording-recovery__preview-header">
             <div>
               <p className="eyebrow">Recovered playback</p>
-              <h5 className="recording-recovery__preview-title">
-                Recovered local browser copy
-              </h5>
+              <h5 className="recording-recovery__preview-title">Recovered local copy</h5>
             </div>
             <span
               className={`status-pill recording-recovery__preview-status recording-recovery__preview-status--${recoveredPreview.status}`}
@@ -803,15 +796,12 @@ function LocalRecordingPrototype({
           </div>
 
           <p className="api-note recording-recovery__preview-note">
-            Recovered playback is read from local browser storage only. It is labeled
-            here as a browser copy so it is easy to distinguish from the live preview
-            rebuilt from IndexedDB.
+            Recovered playback stays in the browser.
           </p>
 
           {recoveredPreview.status === 'idle' ? (
             <div className="message recording-recovery__empty" role="status">
-              Choose Preview local copy on a persisted recording to load the recovered
-              browser copy here.
+              Choose Preview local copy to open a saved copy.
             </div>
           ) : null}
 
@@ -844,87 +834,93 @@ function LocalRecordingPrototype({
                   href={recoveredPreview.previewUrl}
                   download={recoveredPreviewDownloadFilename}
                 >
-                  Download raw local copy
+                  Download local copy
                 </a>
                 <p className="api-note recording-recovery__download-note">
-                  This raw browser recording comes from browser local storage only. It is
-                  not the final exported interview, and no upload is performed.
+                  This is the local recording copy, not the final export.
                 </p>
               </div>
             </>
           ) : null}
 
-          <dl className="details-grid recording-recovery__preview-details">
-            <div className="detail-card">
-              <dt>Recording ID</dt>
-              <dd className="mono">{formatNullableText(recoveredPreview.recordingId)}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Browser storage status</dt>
-              <dd className="mono">{recoveredPreviewStatusLabel}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Source kind</dt>
-              <dd className="mono">
-                {formatNullableText(recoveredRecording?.manifest.sourceKind ?? null)}
-              </dd>
-            </div>
-            <div className="detail-card">
-              <dt>Selected MIME type</dt>
-              <dd className="mono">
-                {formatNullableText(recoveredRecording?.manifest.selectedMimeType ?? null)}
-              </dd>
-            </div>
-            <div className="detail-card">
-              <dt>Preview MIME type</dt>
-              <dd className="mono">{formatNullableText(recoveredPreview.previewMimeType)}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Preview blob size</dt>
-              <dd>
-                {recoveredPreview.previewAvailable
-                  ? formatByteCount(recoveredPreview.previewBlobSizeBytes)
-                  : '—'}
-              </dd>
-            </div>
-            <div className="detail-card">
-              <dt>Started at</dt>
-              <dd>{formatDiagnosticTimestamp(recoveredRecording?.manifest.startedAt ?? null)}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Stopped at</dt>
-              <dd>{formatDiagnosticTimestamp(recoveredRecording?.manifest.stoppedAt ?? null)}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Chunk count</dt>
-              <dd>{recoveredRecording?.manifest.chunkCount ?? '—'}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Total bytes</dt>
-              <dd>
-                {recoveredRecording?.manifest.totalBytes !== undefined
-                  ? formatByteCount(recoveredRecording.manifest.totalBytes)
-                  : '—'}
-              </dd>
-            </div>
-            <div className="detail-card">
-              <dt>Approximate duration</dt>
-              <dd>
-                {recoveredRecording?.manifest.approximateDurationMs !== undefined
-                  ? formatApproximateDuration(recoveredRecording.manifest.approximateDurationMs)
-                  : '—'}
-              </dd>
-            </div>
-            <div className="detail-card">
-              <dt>Recovery note</dt>
-              <dd>Recovered from local browser storage only.</dd>
-            </div>
-          </dl>
+          <DebugOnly>
+            <dl className="details-grid recording-recovery__preview-details">
+              <div className="detail-card">
+                <dt>Recording ID</dt>
+                <dd className="mono">{formatNullableText(recoveredPreview.recordingId)}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Browser storage status</dt>
+                <dd className="mono">{recoveredPreviewStatusLabel}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Source kind</dt>
+                <dd className="mono">
+                  {formatNullableText(recoveredRecording?.manifest.sourceKind ?? null)}
+                </dd>
+              </div>
+              <div className="detail-card">
+                <dt>Selected MIME type</dt>
+                <dd className="mono">
+                  {formatNullableText(recoveredRecording?.manifest.selectedMimeType ?? null)}
+                </dd>
+              </div>
+              <div className="detail-card">
+                <dt>Preview MIME type</dt>
+                <dd className="mono">{formatNullableText(recoveredPreview.previewMimeType)}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Preview blob size</dt>
+                <dd>
+                  {recoveredPreview.previewAvailable
+                    ? formatByteCount(recoveredPreview.previewBlobSizeBytes)
+                    : '—'}
+                </dd>
+              </div>
+              <div className="detail-card">
+                <dt>Started at</dt>
+                <dd>{formatDiagnosticTimestamp(recoveredRecording?.manifest.startedAt ?? null)}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Stopped at</dt>
+                <dd>{formatDiagnosticTimestamp(recoveredRecording?.manifest.stoppedAt ?? null)}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Chunk count</dt>
+                <dd>{recoveredRecording?.manifest.chunkCount ?? '—'}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Total bytes</dt>
+                <dd>
+                  {recoveredRecording?.manifest.totalBytes !== undefined
+                    ? formatByteCount(recoveredRecording.manifest.totalBytes)
+                    : '—'}
+                </dd>
+              </div>
+              <div className="detail-card">
+                <dt>Approximate duration</dt>
+                <dd>
+                  {recoveredRecording?.manifest.approximateDurationMs !== undefined
+                    ? formatApproximateDuration(recoveredRecording.manifest.approximateDurationMs)
+                    : '—'}
+                </dd>
+              </div>
+              <div className="detail-card">
+                <dt>Recovery note</dt>
+                <dd>Recovered from local browser storage only.</dd>
+              </div>
+            </dl>
+          </DebugOnly>
         </article>
 
         {recorder.persistedRecordings.length > 0 ? (
-          <div className="recording-recovery__list">
-            {recorder.persistedRecordings.map((record) => {
+          <>
+            <div className="message recording-recovery__empty" role="status">
+              Saved local copies are available in debug mode.
+            </div>
+            <DebugOnly>
+              <div className="recording-recovery__list">
+                {recorder.persistedRecordings.map((record) => {
               const isPreviewLoadingForRecord =
                 recoveredPreview.status === 'loading' &&
                 recoveredPreview.recordingId === record.recordingId;
@@ -1042,20 +1038,22 @@ function LocalRecordingPrototype({
                   />
                 </article>
               );
-            })}
-          </div>
+                })}
+              </div>
+            </DebugOnly>
+          </>
         ) : (
           <div className="message recording-recovery__empty" role="status">
-            No persisted local recordings were detected in this browser.
+            No saved local copies were found.
           </div>
         )}
       </section>
 
-      <div className="message message--warning recording-prototype__warning" role="status">
-        Prototype only: the local playback preview stays separate from the recovered
-        browser copy. IndexedDB keeps a local manifest/chunk copy for recovery
-        detection and local preview when available.
-      </div>
+      <DebugOnly>
+        <div className="message message--warning recording-prototype__warning" role="status">
+          Prototype only: the local playback preview stays separate from the saved browser copy.
+        </div>
+      </DebugOnly>
     </section>
   );
 
