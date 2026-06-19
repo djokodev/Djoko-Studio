@@ -603,7 +603,8 @@ impl ExportService {
             code: code.to_string(),
             message: message.to_string(),
         });
-        self.store_export_manifest(&export_manifest_key(&manifest.export_id), &failed)
+        let _ = self
+            .store_terminal_manifest_if_current_attempt(&failed)
             .await?;
 
         Err(ExportServiceError::processing(
@@ -1407,6 +1408,188 @@ mod tests {
             .expect("stale output should exist");
         assert_eq!(newer_output, b"newer-attempt-mp4".to_vec());
         assert_eq!(stale_output, b"stale-attempt-mp4".to_vec());
+    }
+
+    #[tokio::test]
+    async fn obsolete_attempt_validation_failure_cannot_overwrite_ready_manifest() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request(
+            "recording-obsolete-validation",
+            "upload-obsolete-validation",
+        );
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+
+        service
+            .store_export_manifest(&export_manifest_key(&attempt_b.export_id), &attempt_b)
+            .await
+            .expect("store attempt b");
+
+        let mut ready_b = attempt_b.clone();
+        ready_b.status = ExportStatus::Ready;
+        ready_b.output_bytes = Some(10);
+        ready_b.completed_at = Some(timestamp() + TimeDelta::seconds(6));
+        ready_b.updated_at = timestamp() + TimeDelta::seconds(6);
+        storage
+            .put_object(
+                &ready_b.output_object_key,
+                b"ready-bytes".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store ready bytes");
+        service
+            .store_terminal_manifest_if_current_attempt(&ready_b)
+            .await
+            .expect("persist ready attempt");
+
+        let invalid_source = UploadManifest {
+            uploaded_bytes: 1,
+            total_bytes: 2,
+            ..uploaded_manifest(
+                "recording-obsolete-validation",
+                "upload-obsolete-validation",
+                &[b"chunk-a".to_vec()],
+                true,
+                true,
+            )
+        };
+
+        let error = service
+            .validate_upload_manifest(&invalid_source, &request, &attempt_a)
+            .await
+            .expect_err("validation should fail");
+        assert_eq!(error.code(), "incomplete_upload");
+
+        let final_manifest = service
+            .get_export(&attempt_a.export_id)
+            .await
+            .expect("final manifest");
+        assert_eq!(final_manifest.status, ExportStatus::Ready);
+        assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
+        assert_eq!(
+            final_manifest.output_object_key,
+            attempt_b.output_object_key
+        );
+    }
+
+    #[tokio::test]
+    async fn obsolete_attempt_checksum_failure_cannot_overwrite_ready_manifest() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-obsolete-checksum", "upload-obsolete-checksum");
+        let chunk_bytes = vec![b"chunk-a".to_vec()];
+        let source_manifest = uploaded_manifest(
+            "recording-obsolete-checksum",
+            "upload-obsolete-checksum",
+            &chunk_bytes,
+            true,
+            false,
+        );
+        seed_upload(&storage, &source_manifest, &chunk_bytes).await;
+
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+        service
+            .store_export_manifest(&export_manifest_key(&attempt_b.export_id), &attempt_b)
+            .await
+            .expect("store attempt b");
+
+        let mut ready_b = attempt_b.clone();
+        ready_b.status = ExportStatus::Ready;
+        ready_b.output_bytes = Some(10);
+        ready_b.completed_at = Some(timestamp() + TimeDelta::seconds(6));
+        ready_b.updated_at = timestamp() + TimeDelta::seconds(6);
+        storage
+            .put_object(
+                &ready_b.output_object_key,
+                b"ready-bytes".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store ready bytes");
+        service
+            .store_terminal_manifest_if_current_attempt(&ready_b)
+            .await
+            .expect("persist ready attempt");
+
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let input_path = temp_dir.path().join("source.webm");
+        let chunks = source_manifest.chunks.clone();
+
+        let error = service
+            .rebuild_webm(&source_manifest, &chunks, &attempt_a, &input_path)
+            .await
+            .expect_err("checksum mismatch should fail");
+        assert_eq!(error.code(), "checksum_mismatch");
+
+        let final_manifest = service
+            .get_export(&attempt_a.export_id)
+            .await
+            .expect("final manifest");
+        assert_eq!(final_manifest.status, ExportStatus::Ready);
+        assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
+        assert_eq!(
+            final_manifest.output_object_key,
+            attempt_b.output_object_key
+        );
+    }
+
+    #[tokio::test]
+    async fn obsolete_attempt_missing_chunk_failure_cannot_overwrite_ready_manifest() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-obsolete-missing", "upload-obsolete-missing");
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+
+        service
+            .store_export_manifest(&export_manifest_key(&attempt_b.export_id), &attempt_b)
+            .await
+            .expect("store attempt b");
+
+        let mut ready_b = attempt_b.clone();
+        ready_b.status = ExportStatus::Ready;
+        ready_b.output_bytes = Some(10);
+        ready_b.completed_at = Some(timestamp() + TimeDelta::seconds(6));
+        ready_b.updated_at = timestamp() + TimeDelta::seconds(6);
+        storage
+            .put_object(
+                &ready_b.output_object_key,
+                b"ready-bytes".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store ready bytes");
+        service
+            .store_terminal_manifest_if_current_attempt(&ready_b)
+            .await
+            .expect("persist ready attempt");
+
+        let mut missing_chunk_source = uploaded_manifest(
+            "recording-obsolete-missing",
+            "upload-obsolete-missing",
+            &[b"chunk-a".to_vec(), b"chunk-b".to_vec()],
+            true,
+            true,
+        );
+        missing_chunk_source.chunks.pop();
+        missing_chunk_source.uploaded_chunk_count = 1;
+
+        let error = service
+            .validate_upload_manifest(&missing_chunk_source, &request, &attempt_a)
+            .await
+            .expect_err("missing chunk should fail");
+        assert_eq!(error.code(), "incomplete_upload");
+
+        let final_manifest = service
+            .get_export(&attempt_a.export_id)
+            .await
+            .expect("final manifest");
+        assert_eq!(final_manifest.status, ExportStatus::Ready);
+        assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
+        assert_eq!(
+            final_manifest.output_object_key,
+            attempt_b.output_object_key
+        );
     }
 
     #[tokio::test]
