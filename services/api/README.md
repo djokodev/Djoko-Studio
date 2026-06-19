@@ -20,14 +20,22 @@ It currently provides only the technical scaffold needed for future API work.
 - `POST /v1/sessions/{session_id}/end`
 - `GET /v1/sessions/{id}`
 - `GET /v1/studios/{studio_id}/sessions`
+- `GET /v1/recordings/{recording_id}/export`
+- `POST /v1/recordings/{recording_id}/export`
 - optional PostgreSQL connection foundation behind `DATABASE_URL`
 - session-oriented domain and storage interfaces under `services/api/internal`
 - a PostgreSQL-backed session store foundation targeting the `sessions` table
 - a PostgreSQL-backed participant store foundation targeting guest joins in the `participants` table
+- a PostgreSQL-backed export store foundation targeting the `exports` table
 - server-side guest invite token generation with hash-only storage
 - guest participant join/update behavior for the single guest supported in v0.1
 - graceful shutdown on interrupt or termination signals
 - tests for the health routes, initial session routes, 404 behavior, database foundation, and storage helpers
+
+The export routes intentionally remain a narrow persistence seam for now. The
+browser-facing DS-065 export flow talks directly to the local export worker,
+while this Go API keeps the durable export row and `last_error` foundation for
+future coordination work.
 
 ## What is intentionally not implemented yet
 
@@ -40,7 +48,7 @@ It currently provides only the technical scaffold needed for future API work.
 - dashboard data
 - quotas
 - authentication
-- repository coverage beyond the initial sessions store
+- repository coverage beyond the core session, participant, and export stores
 - additional product migrations
 - Docker configuration
 - external service integration
@@ -75,6 +83,7 @@ When `DATABASE_URL` is empty, the API starts without a database connection. `GET
 Session and join routes are still registered when `DATABASE_URL` is empty, but they return `503 Service Unavailable` with a small JSON error payload because the required stores are not configured.
 Session lifecycle routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` for the same reason.
 Guest leave and host leave routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` when the required stores are not configured.
+Export routes are also registered when `DATABASE_URL` is empty, and they return `503 Service Unavailable` when the export store is not configured.
 
 ## Browser CORS and preflight
 
@@ -90,6 +99,7 @@ Migration tooling is in place for `services/api`, but migrations are still manua
 
 - the initial schema migration is `services/api/migrations/00001_create_v0_1_core_tables.sql`
 - it creates the `users`, `studios`, `sessions`, `participants`, `recordings`, `recording_tracks`, `uploads`, and `exports` tables
+- `00002_add_export_last_error.sql` adds the nullable `last_error` column to `exports`
 - app startup does not run migrations
 - `./scripts/validate.sh` does not require PostgreSQL
 - `DATABASE_URL` is required only when running migration commands

@@ -3,3 +3,5 @@
 This folder contains documentation-first contract drafts for Djoko Studio.
 
 - [`recording-upload-api.md`](./recording-upload-api.md)
+- [`export-api.md`](./export-api.md)
+- [`export-worker-api.md`](./export-worker-api.md)

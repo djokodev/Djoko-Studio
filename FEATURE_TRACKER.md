@@ -74,6 +74,7 @@
 | DS-062 | v0.1 WebRTC Foundation | Add signaling presence events and local host/guest smoke flow | merged | Merged in PR #62. |
 | DS-063 | v0.1 Recording Core | Real local recording session and recovery | merged | Merged in PR #63. |
 | DS-064 | Resumable upload + MinIO storage + upload status | ✅ Merged | PR #64 merged — resumable browser upload, MinIO chunk storage, manifest persistence, backend status recovery, browser refresh recovery, upload service restart recovery validated. Pause/resume/cancel throttled-network QA pending follow-up. |
+| DS-065 | v0.1 Recording Core | Add export foundation API and storage seam | in_review | Go API export row, export contract, last_error migration, export worker, and web export dashboard slice. |
 
 ## Allowed Statuses
 
