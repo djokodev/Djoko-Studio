@@ -5,6 +5,7 @@ import { useRecordingUploadQueue } from '../upload/useRecordingUploadQueue';
 import {
   createRecordingExportApiClient,
   getExportBaseUrl,
+  isExportWorkerReady,
   type RecordingExportManifest,
   type RecordingExportReadyzResponse,
 } from '../export/recordingExportApiClient';
@@ -50,6 +51,7 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
   const candidate = selectLatestExportCandidate(uploadQueue.items);
   const hasConfiguredService = exportBaseUrl !== '';
   const exportReady = exportManifest?.status === 'ready';
+  const workerReady = readinessState.status === 'ready' && isExportWorkerReady(readinessState.response);
   const targetLabel = getExportTargetLabel();
 
   useEffect(() => {
@@ -147,12 +149,14 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
     };
   }, [candidate?.recordingId, uploadQueue.summaryRevision]);
 
-  const startDisabled =
-    !hasConfiguredService ||
-    candidate === null ||
-    isSubmitting ||
-    readinessState.status === 'failed' ||
-    readinessState.status === 'loading' && readinessState.configured;
+  const startDisabled = isStartExportDisabled({
+    hasConfiguredService,
+    hasCandidate: candidate !== null,
+    isSubmitting,
+    readinessStatus: readinessState.status,
+    readinessConfigured: readinessState.configured,
+    workerReady,
+  });
   const refreshDisabled = !hasConfiguredService || isRefreshing;
   const downloadDisabled = !exportReady || isDownloading || activeExportId === null;
 
@@ -397,14 +401,7 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
     setExportError('');
 
     try {
-      const blob = await exportClient.downloadExport(activeExportId);
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = `${activeExportId}-1080p.mp4`;
-      anchor.rel = 'noopener';
-      anchor.click();
-      URL.revokeObjectURL(objectUrl);
+      window.location.assign(exportClient.getDownloadUrl(activeExportId));
     } catch (error) {
       setExportError(getErrorMessage(error, 'Unable to download export.'));
     } finally {
@@ -419,6 +416,24 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
 
     return `exp-${recordingId.trim()}`;
   }
+}
+
+export function isStartExportDisabled(input: {
+  hasConfiguredService: boolean;
+  hasCandidate: boolean;
+  isSubmitting: boolean;
+  readinessStatus: ExportReadinessState['status'];
+  readinessConfigured: boolean;
+  workerReady: boolean;
+}): boolean {
+  return (
+    !input.hasConfiguredService ||
+    !input.hasCandidate ||
+    input.isSubmitting ||
+    !input.workerReady ||
+    input.readinessStatus === 'failed' ||
+    (input.readinessStatus === 'loading' && input.readinessConfigured)
+  );
 }
 
 export function getExportFailureMessage(

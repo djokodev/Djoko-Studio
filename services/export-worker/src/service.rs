@@ -1,6 +1,6 @@
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc, time::Duration};
 
-use chrono::Utc;
+use chrono::{TimeDelta, Utc};
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -17,11 +17,17 @@ use crate::{
 pub struct ExportService {
     storage: Arc<dyn ExportStorage>,
     ffmpeg: Arc<dyn FfmpegRunner>,
+    processing_stale_after: TimeDelta,
 }
 
 pub struct ExportDownload {
     pub body: ExportDownloadBody,
     pub content_length: Option<u64>,
+}
+
+pub struct ExportCreateResult {
+    pub manifest: ExportManifest,
+    pub status_code: http::StatusCode,
 }
 
 impl std::fmt::Debug for ExportDownload {
@@ -131,7 +137,26 @@ impl ExportServiceError {
 
 impl ExportService {
     pub fn new(storage: Arc<dyn ExportStorage>, ffmpeg: Arc<dyn FfmpegRunner>) -> Self {
-        Self { storage, ffmpeg }
+        Self::with_processing_stale_after(
+            storage,
+            ffmpeg,
+            duration_from_env("PROCESSING_STALE_AFTER_SECONDS", 1800),
+        )
+    }
+
+    pub fn with_processing_stale_after(
+        storage: Arc<dyn ExportStorage>,
+        ffmpeg: Arc<dyn FfmpegRunner>,
+        processing_stale_after: Duration,
+    ) -> Self {
+        let processing_stale_after = TimeDelta::from_std(processing_stale_after)
+            .unwrap_or_else(|_| TimeDelta::seconds(1800));
+
+        Self {
+            storage,
+            ffmpeg,
+            processing_stale_after,
+        }
     }
 
     pub async fn readyz(&self) -> ExportReadyzResponse {
@@ -166,37 +191,55 @@ impl ExportService {
     pub async fn create_export(
         &self,
         request: CreateExportRequest,
-    ) -> Result<(ExportManifest, bool), ExportServiceError> {
+    ) -> Result<ExportCreateResult, ExportServiceError> {
         validate_export_request(&request)?;
         let export_id = export_id_for_recording(&request.recording_id);
         let manifest_key = export_manifest_key(&export_id);
+        let now = Utc::now();
 
         if let Some(existing) = self.load_export_manifest(&manifest_key).await? {
             self.validate_request_matches_manifest(&request, &existing)?;
             return match existing.status {
-                ExportStatus::Ready => Ok((existing, false)),
-                ExportStatus::Processing | ExportStatus::Pending => {
-                    Err(ExportServiceError::conflict(
-                        "export_processing",
-                        "Export is already processing.",
-                    ))
-                }
-                ExportStatus::Failed => {
-                    let restarted = existing.restart_processing(Utc::now());
+                ExportStatus::Ready => Ok(ExportCreateResult {
+                    manifest: existing,
+                    status_code: http::StatusCode::OK,
+                }),
+                ExportStatus::Processing | ExportStatus::Pending
+                    if self.processing_manifest_is_stale(&existing, now) =>
+                {
+                    let restarted = existing.restart_processing(now);
                     self.store_export_manifest(&manifest_key, &restarted)
                         .await?;
-                    let outcome = self.process_export(&request, &restarted).await?;
-                    Ok((outcome, false))
+                    self.spawn_export_task(request.clone(), restarted.clone());
+                    Ok(ExportCreateResult {
+                        manifest: restarted,
+                        status_code: http::StatusCode::ACCEPTED,
+                    })
+                }
+                ExportStatus::Processing | ExportStatus::Pending => Ok(ExportCreateResult {
+                    manifest: existing,
+                    status_code: http::StatusCode::OK,
+                }),
+                ExportStatus::Failed => {
+                    let restarted = existing.restart_processing(now);
+                    self.store_export_manifest(&manifest_key, &restarted)
+                        .await?;
+                    self.spawn_export_task(request.clone(), restarted.clone());
+                    Ok(ExportCreateResult {
+                        manifest: restarted,
+                        status_code: http::StatusCode::ACCEPTED,
+                    })
                 }
             };
         }
 
-        let now = Utc::now();
         let manifest = ExportManifest::new_processing(&request, now);
         self.store_export_manifest(&manifest_key, &manifest).await?;
-
-        let outcome = self.process_export(&request, &manifest).await?;
-        Ok((outcome, true))
+        self.spawn_export_task(request, manifest.clone());
+        Ok(ExportCreateResult {
+            manifest,
+            status_code: http::StatusCode::ACCEPTED,
+        })
     }
 
     pub async fn get_export(&self, export_id: &str) -> Result<ExportManifest, ExportServiceError> {
@@ -240,6 +283,21 @@ impl ExportService {
                 Err(error)
             }
         }
+    }
+
+    fn processing_manifest_is_stale(
+        &self,
+        manifest: &ExportManifest,
+        now: chrono::DateTime<Utc>,
+    ) -> bool {
+        now.signed_duration_since(manifest.updated_at) > self.processing_stale_after
+    }
+
+    fn spawn_export_task(&self, request: CreateExportRequest, manifest: ExportManifest) {
+        let service = self.clone();
+        tokio::spawn(async move {
+            let _ = service.process_export(&request, &manifest).await;
+        });
     }
 
     async fn process_export_inner(
@@ -592,6 +650,14 @@ fn sha256_hex(bytes: &[u8]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+fn duration_from_env(name: &str, default_seconds: u64) -> Duration {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or_else(|| Duration::from_secs(default_seconds))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -599,11 +665,17 @@ mod tests {
     use std::{
         collections::HashMap,
         path::{Path, PathBuf},
+        sync::atomic::{AtomicUsize, Ordering},
         sync::Arc,
+        time::Duration,
     };
 
     use chrono::{TimeZone, Utc};
-    use tokio::{io::AsyncWriteExt, sync::Mutex};
+    use tokio::{
+        io::AsyncWriteExt,
+        sync::{Mutex, Notify},
+        time::{sleep, timeout},
+    };
 
     use crate::{
         ffmpeg::FakeFfmpegRunner,
@@ -621,8 +693,20 @@ mod tests {
         storage: Arc<RecordingStorage>,
         ffmpeg: Arc<dyn FfmpegRunner>,
     ) -> (ExportService, Arc<RecordingStorage>) {
-        let service = ExportService::new(storage.clone(), ffmpeg);
+        let service = ExportService::with_processing_stale_after(
+            storage.clone(),
+            ffmpeg,
+            Duration::from_secs(1800),
+        );
         (service, storage)
+    }
+
+    fn service_with_custom_stale_after(
+        storage: Arc<dyn ExportStorage>,
+        ffmpeg: Arc<dyn FfmpegRunner>,
+        stale_after: Duration,
+    ) -> ExportService {
+        ExportService::with_processing_stale_after(storage, ffmpeg, stale_after)
     }
 
     fn timestamp() -> chrono::DateTime<Utc> {
@@ -750,6 +834,27 @@ mod tests {
         manifest
     }
 
+    async fn wait_for_export_status(
+        service: &ExportService,
+        export_id: &str,
+        status: ExportStatus,
+    ) -> ExportManifest {
+        timeout(Duration::from_secs(1), async {
+            loop {
+                let manifest = service
+                    .get_export(export_id)
+                    .await
+                    .expect("export manifest should exist");
+                if manifest.status == status {
+                    return manifest;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for export status")
+    }
+
     #[derive(Clone)]
     struct RecordingStorage {
         objects: Arc<Mutex<HashMap<String, ObjectData>>>,
@@ -874,6 +979,46 @@ mod tests {
         }
     }
 
+    struct BlockingFfmpegRunner {
+        started: Arc<Notify>,
+        release: Arc<Notify>,
+        calls: Arc<AtomicUsize>,
+        output_bytes: Vec<u8>,
+    }
+
+    impl BlockingFfmpegRunner {
+        fn new(output_bytes: Vec<u8>) -> Self {
+            Self {
+                started: Arc::new(Notify::new()),
+                release: Arc::new(Notify::new()),
+                calls: Arc::new(AtomicUsize::new(0)),
+                output_bytes,
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::ffmpeg::FfmpegRunner for BlockingFfmpegRunner {
+        async fn is_available(&self) -> Result<(), ExportServiceError> {
+            Ok(())
+        }
+
+        async fn render(
+            &self,
+            _input_webm: &std::path::Path,
+            output_mp4: &std::path::Path,
+            _target: &crate::model::ExportTargetRequest,
+        ) -> Result<(), ExportServiceError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.started.notify_waiters();
+            self.release.notified().await;
+            tokio::fs::write(output_mp4, &self.output_bytes)
+                .await
+                .expect("write blocking ffmpeg output");
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn create_export_retries_failed_manifest() {
         let (service, storage) = service_with_memory_storage();
@@ -893,20 +1038,90 @@ mod tests {
             .await
             .expect("seed failed manifest");
 
-        let (retried_manifest, created) = service
+        let result = service
             .create_export(request.clone())
             .await
             .expect("failed export should retry");
-        assert!(!created);
-        assert_eq!(retried_manifest.status, ExportStatus::Ready);
-        assert!(retried_manifest.error.is_none());
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+        assert_eq!(result.manifest.status, ExportStatus::Processing);
+        assert!(result.manifest.error.is_none());
 
-        let persisted = service
-            .get_export(&retried_manifest.export_id)
-            .await
-            .expect("persisted retried manifest");
+        let persisted =
+            wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
         assert_eq!(persisted.status, ExportStatus::Ready);
         assert!(persisted.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn create_export_returns_existing_recent_processing_manifest() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-recent", "upload-recent");
+        let existing = ExportManifest::new_processing(&request, timestamp());
+
+        storage
+            .put_object(
+                &export_manifest_key(&existing.export_id),
+                serde_json::to_vec_pretty(&existing).expect("serialize existing export manifest"),
+                "application/json",
+            )
+            .await
+            .expect("seed existing manifest");
+
+        let result = service
+            .create_export(request)
+            .await
+            .expect("recent processing manifest should be returned");
+        assert_eq!(result.status_code, http::StatusCode::OK);
+        assert_eq!(result.manifest.status, ExportStatus::Processing);
+        assert_eq!(result.manifest.updated_at, existing.updated_at);
+    }
+
+    #[tokio::test]
+    async fn create_export_restarts_stale_processing_manifest() {
+        let storage = StorageBackend::memory().into_shared();
+        let ffmpeg = Arc::new(BlockingFfmpegRunner::new(b"stale-mp4".to_vec()));
+        let service = service_with_custom_stale_after(
+            storage.clone(),
+            ffmpeg.clone(),
+            Duration::from_secs(60),
+        );
+        let request = create_request("recording-stale", "upload-stale");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let upload_manifest =
+            uploaded_manifest("recording-stale", "upload-stale", &chunk_bytes, true, true);
+        seed_upload(&storage, &upload_manifest, &chunk_bytes).await;
+
+        let stale_time = Utc::now() - TimeDelta::seconds(3600);
+        let mut stale_manifest = ExportManifest::new_processing(&request, stale_time);
+        stale_manifest.updated_at = stale_time;
+        stale_manifest.error = Some(ExportFailure {
+            code: "stale_processing".to_string(),
+            message: "old worker disappeared".to_string(),
+        });
+        storage
+            .put_object(
+                &export_manifest_key(&stale_manifest.export_id),
+                serde_json::to_vec_pretty(&stale_manifest).expect("serialize stale manifest"),
+                "application/json",
+            )
+            .await
+            .expect("seed stale manifest");
+
+        let result = service
+            .create_export(request)
+            .await
+            .expect("stale processing manifest should restart");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+        assert_eq!(result.manifest.status, ExportStatus::Processing);
+        assert!(result.manifest.updated_at > stale_manifest.updated_at);
+        assert!(result.manifest.error.is_none());
+
+        ffmpeg.started.notified().await;
+        ffmpeg.release.notify_waiters();
+        let ready_manifest =
+            wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
+        assert_eq!(ready_manifest.output_bytes, Some(b"stale-mp4".len() as u64));
+        assert_eq!(ffmpeg.calls.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -924,12 +1139,14 @@ mod tests {
         let storage_trait: Arc<dyn ExportStorage> = storage.clone();
         seed_upload(&storage_trait, &manifest, &chunk_bytes).await;
 
-        let (created_manifest, created) = service
+        let result = service
             .create_export(request.clone())
             .await
             .expect("export should complete");
-        assert!(created);
-        assert_eq!(created_manifest.status, ExportStatus::Ready);
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+        assert_eq!(result.manifest.status, ExportStatus::Processing);
+        let created_manifest =
+            wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
         assert_eq!(
             created_manifest.output_bytes,
             Some(b"encoded-mp4".len() as u64)
@@ -946,13 +1163,18 @@ mod tests {
         manifest.chunks[1].chunk_index = 0;
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
-
-        let persisted = service
-            .get_export(&export_id_for_recording(&request.recording_id))
+        let result = service
+            .create_export(request.clone())
             .await
-            .expect("failed export manifest");
+            .expect("create export should return processing");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+
+        let persisted = wait_for_export_status(
+            &service,
+            &export_id_for_recording(&request.recording_id),
+            ExportStatus::Failed,
+        )
+        .await;
         assert_eq!(
             persisted.error.as_ref().map(|error| error.code.as_str()),
             Some("duplicate_chunk_indexes")
@@ -974,13 +1196,18 @@ mod tests {
         manifest.chunks[1].status = UploadChunkStatus::Failed;
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
-
-        let persisted = service
-            .get_export(&export_id_for_recording(&request.recording_id))
+        let result = service
+            .create_export(request.clone())
             .await
-            .expect("failed export manifest");
+            .expect("create export should return processing");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+
+        let persisted = wait_for_export_status(
+            &service,
+            &export_id_for_recording(&request.recording_id),
+            ExportStatus::Failed,
+        )
+        .await;
         assert_eq!(
             persisted.error.as_ref().map(|error| error.code.as_str()),
             Some("failed_chunk_status")
@@ -997,13 +1224,18 @@ mod tests {
         manifest.chunks[1].uploaded_bytes = manifest.chunks[1].uploaded_bytes.saturating_sub(1);
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
-
-        let persisted = service
-            .get_export(&export_id_for_recording(&request.recording_id))
+        let result = service
+            .create_export(request.clone())
             .await
-            .expect("failed export manifest");
+            .expect("create export should return processing");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+
+        let persisted = wait_for_export_status(
+            &service,
+            &export_id_for_recording(&request.recording_id),
+            ExportStatus::Failed,
+        )
+        .await;
         assert_eq!(
             persisted.error.as_ref().map(|error| error.code.as_str()),
             Some("chunk_byte_mismatch")
@@ -1024,11 +1256,13 @@ mod tests {
         let storage_trait: Arc<dyn ExportStorage> = storage.clone();
         seed_upload(&storage_trait, &manifest, &chunk_bytes).await;
 
-        let (_created_manifest, created) = service
+        let result = service
             .create_export(request.clone())
             .await
             .expect("export should complete");
-        assert!(created);
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+
+        wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
 
         let file_put_paths = storage.file_put_paths().await;
         assert_eq!(file_put_paths.len(), 1);
@@ -1104,14 +1338,14 @@ mod tests {
         let (service, storage) = service_with_memory_storage();
         let request = create_request("recording-1", "upload-1");
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
+        let result = service
+            .create_export(request.clone())
+            .await
+            .expect("create export should return processing");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
 
         let export_id = export_id_for_recording(&request.recording_id);
-        let manifest = service
-            .get_export(&export_id)
-            .await
-            .expect("failed export manifest");
+        let manifest = wait_for_export_status(&service, &export_id, ExportStatus::Failed).await;
         assert_eq!(manifest.status, ExportStatus::Failed);
         assert_eq!(
             manifest.error.as_ref().map(|error| error.code.as_str()),
@@ -1144,14 +1378,14 @@ mod tests {
         };
         seed_upload(&storage, &manifest, &[b"chunk-1".to_vec()]).await;
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
+        let result = service
+            .create_export(request.clone())
+            .await
+            .expect("create export should return processing");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
 
         let export_id = export_id_for_recording(&request.recording_id);
-        let persisted = service
-            .get_export(&export_id)
-            .await
-            .expect("failed export manifest");
+        let persisted = wait_for_export_status(&service, &export_id, ExportStatus::Failed).await;
         assert_eq!(persisted.status, ExportStatus::Failed);
         assert_eq!(
             persisted.error.as_ref().map(|error| error.code.as_str()),
@@ -1167,11 +1401,13 @@ mod tests {
         let manifest = uploaded_manifest("recording-3", "upload-3", &chunk_bytes, false, true);
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let (created_manifest, created) = service
+        let result = service
             .create_export(request.clone())
             .await
             .expect("export should complete");
-        assert!(created);
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+        let created_manifest =
+            wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
         assert_eq!(created_manifest.status, ExportStatus::Ready);
     }
 
@@ -1183,14 +1419,14 @@ mod tests {
         let manifest = uploaded_manifest("recording-4", "upload-4", &chunk_bytes, true, false);
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let result = service.create_export(request.clone()).await;
-        assert!(result.is_err());
+        let result = service
+            .create_export(request.clone())
+            .await
+            .expect("create export should return processing");
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
 
         let export_id = export_id_for_recording(&request.recording_id);
-        let persisted = service
-            .get_export(&export_id)
-            .await
-            .expect("failed export manifest");
+        let persisted = wait_for_export_status(&service, &export_id, ExportStatus::Failed).await;
         assert_eq!(
             persisted.error.as_ref().map(|error| error.code.as_str()),
             Some("checksum_mismatch")
@@ -1205,11 +1441,13 @@ mod tests {
         let manifest = uploaded_manifest("recording-5", "upload-5", &chunk_bytes, true, true);
         seed_upload(&storage, &manifest, &chunk_bytes).await;
 
-        let (created_manifest, created) = service
+        let result = service
             .create_export(request.clone())
             .await
             .expect("export should complete");
-        assert!(created);
+        assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
+        let created_manifest =
+            wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
         assert_eq!(created_manifest.status, ExportStatus::Ready);
         assert_eq!(
             created_manifest.output_bytes,

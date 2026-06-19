@@ -20,7 +20,8 @@ For local development the expected value is:
 http://localhost:8083
 ```
 
-The worker is configured through `EXPORT_WORKER_PORT` and `FFMPEG_BINARY`.
+The worker is configured through `EXPORT_WORKER_PORT`, `FFMPEG_BINARY`, and
+`PROCESSING_STALE_AFTER_SECONDS` (default `1800` seconds).
 Local MinIO integration uses `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`,
 `S3_SECRET_KEY`, `S3_REGION`, and `S3_FORCE_PATH_STYLE`.
 
@@ -88,11 +89,27 @@ Behavior:
 
 - creates the primary export manifest if needed
 - is idempotent for a recording
-- returns `409 Conflict` when a matching export is already processing
-- validates that the source upload is complete before rendering
+- returns the current manifest for the recording on every call
+- starts background export work with a local `tokio::spawn` orchestration in V1
+- returns `202 Accepted` with `status: processing` when work was started or restarted
+- returns `200 OK` with `status: processing` when a recent matching export is already running
+- returns `200 OK` when the export is already `ready`
+- restarts stale `processing` or `pending` manifests when `updatedAt` is older than `PROCESSING_STALE_AFTER_SECONDS`
+- restarts `failed` manifests on the next matching `POST`
+- validates the source upload in the background before rendering
 - sorts uploaded chunks by numeric `chunkIndex` before reconstruction
 - rejects uploads with missing chunks, duplicate chunk indexes, failed chunk statuses, invalid byte counts, or checksum mismatches
+- captures FFmpeg stderr on failure, truncates the stored summary, and persists the error on the export manifest
 - streams the final MP4 into MinIO and persists the export manifest
+
+Status summary:
+
+- `202 Accepted`: new export work started
+- `202 Accepted`: stale or failed export was restarted
+- `200 OK`: current export already `processing`
+- `200 OK`: current export already `ready`
+- `400 Bad Request`: request payload or target is invalid
+- `409 Conflict`: request identifiers do not match the existing primary export for the recording
 
 Response fields:
 
@@ -123,6 +140,7 @@ Responses:
 
 - `200 OK` when the manifest exists
 - `404 Not Found` when the export is unknown
+- the returned manifest can move through `processing`, `ready`, or `failed`
 
 ## Download export
 
@@ -151,6 +169,7 @@ The V1 local worker stores assets in MinIO with these keys:
 This contract does not include:
 
 - queue consumers
+- NATS orchestration
 - retry policies
 - multiple export presets
 - the Go API export seam as a runtime dependency for the browser

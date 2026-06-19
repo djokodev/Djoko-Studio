@@ -1,11 +1,16 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProcessingExportPanel, getExportFailureMessage } from '../components/ProcessingExportPanel';
+import {
+  ProcessingExportPanel,
+  getExportFailureMessage,
+  isStartExportDisabled,
+} from '../components/ProcessingExportPanel';
 import {
   buildExportUrl,
   createRecordingExportApiClient,
   createRecordingExportApiPaths,
+  isExportWorkerReady,
   type RecordingExportManifest,
 } from '../export/recordingExportApiClient';
 import {
@@ -105,19 +110,19 @@ describe('export client', () => {
               sessionId: 'session-1',
               participantId: 'participant-1',
               role: 'host',
-              status: 'ready',
+              status: 'processing',
               targetFormat: 'mp4',
               targetResolution: '1920x1080',
               sourceManifestKey: 'recordings/recording-1/uploads/upload-1/manifest.json',
               outputObjectKey:
                 'sessions/session-1/participants/participant-1/recordings/recording-1/exports/exp-recording-1/output-1080p.mp4',
-              outputBytes: 8,
+              outputBytes: null,
               createdAt: '2026-06-19T10:00:00Z',
               updatedAt: '2026-06-19T10:00:00Z',
-              completedAt: '2026-06-19T10:00:00Z',
+              completedAt: null,
               error: null,
             }),
-            { status: 201, headers: { 'Content-Type': 'application/json' } },
+            { status: 202, headers: { 'Content-Type': 'application/json' } },
           );
         }
 
@@ -155,6 +160,10 @@ describe('export client', () => {
       },
     });
     expect(manifest.exportId).toBe('exp-recording-1');
+    expect(manifest.status).toBe('processing');
+
+    const downloadUrl = client.getDownloadUrl('exp-recording-1');
+    expect(downloadUrl).toBe('http://localhost:8083/api/exports/exp-recording-1/download');
 
     const download = await client.downloadExport('exp-recording-1');
     expect(download.size).toBe(8);
@@ -216,6 +225,83 @@ describe('export client', () => {
     };
 
     expect(getExportFailureMessage(manifest)).toBe('Chunk checksum mismatch.');
+  });
+
+  it('download_export_uses_direct_download_url_without_fetching_blob', () => {
+    const client = createRecordingExportApiClient('http://localhost:8083');
+
+    expect(client.getDownloadUrl('exp-recording-1')).toBe(
+      'http://localhost:8083/api/exports/exp-recording-1/download',
+    );
+  });
+
+  it('export_button_disabled_when_ffmpeg_unavailable', () => {
+    expect(
+      isStartExportDisabled({
+        hasConfiguredService: true,
+        hasCandidate: true,
+        isSubmitting: false,
+        readinessStatus: 'ready',
+        readinessConfigured: true,
+        workerReady: isExportWorkerReady({
+          status: 'degraded',
+          service: 'export-worker',
+          storage: 'ready',
+          ffmpeg: 'unavailable',
+          message: 'ffmpeg missing',
+        }),
+      }),
+    ).toBe(true);
+  });
+
+  it('export_button_disabled_when_storage_unavailable', () => {
+    expect(
+      isStartExportDisabled({
+        hasConfiguredService: true,
+        hasCandidate: true,
+        isSubmitting: false,
+        readinessStatus: 'ready',
+        readinessConfigured: true,
+        workerReady: isExportWorkerReady({
+          status: 'degraded',
+          service: 'export-worker',
+          storage: 'unavailable',
+          ffmpeg: 'available',
+          message: 'storage unavailable',
+        }),
+      }),
+    ).toBe(true);
+  });
+
+  it('export_button_enabled_only_when_worker_ok_and_upload_ready', () => {
+    const workerReady = isExportWorkerReady({
+      status: 'ok',
+      service: 'export-worker',
+      storage: 'ready',
+      ffmpeg: 'available',
+      message: null,
+    });
+    expect(workerReady).toBe(true);
+    expect(
+      isStartExportDisabled({
+        hasConfiguredService: true,
+        hasCandidate: true,
+        isSubmitting: false,
+        readinessStatus: 'ready',
+        readinessConfigured: true,
+        workerReady,
+      }),
+    ).toBe(false);
+    expect(
+      isStartExportDisabled({
+        hasConfiguredService: true,
+        hasCandidate: false,
+        isSubmitting: false,
+        readinessStatus: 'ready',
+        readinessConfigured: true,
+        workerReady,
+      }),
+    ).toBe(true);
   });
 });
 

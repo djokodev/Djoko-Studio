@@ -44,14 +44,7 @@ async fn create_export_handler(
     Json(request): Json<CreateExportRequest>,
 ) -> Response {
     match service.create_export(request).await {
-        Ok((manifest, created)) => {
-            let status = if created {
-                StatusCode::CREATED
-            } else {
-                StatusCode::OK
-            };
-            (status, Json(manifest)).into_response()
-        }
+        Ok(result) => (result.status_code, Json(result.manifest)).into_response(),
         Err(error) => error.into_response(),
     }
 }
@@ -156,15 +149,19 @@ fn download_response(download: ExportDownload, export_id: &str) -> Response {
 mod tests {
     use super::*;
 
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
 
     use axum::body::to_bytes;
     use chrono::TimeZone;
     use serde_json::Value;
+    use tokio::sync::Notify;
     use tower::ServiceExt;
 
     use crate::{
-        ffmpeg::FakeFfmpegRunner,
+        ffmpeg::{FakeFfmpegRunner, FfmpegRunner},
         model::{
             upload_manifest_key, CreateExportRequest, ParticipantRole, UploadChunkManifest,
             UploadChunkStatus, UploadManifest, UploadStatus, TARGET_FORMAT, TARGET_RESOLUTION,
@@ -178,6 +175,15 @@ mod tests {
         let ffmpeg = Arc::new(FakeFfmpegRunner::available());
         let router = build_router(ExportService::new(storage.clone(), ffmpeg));
         (router, storage, "recording-1".to_string())
+    }
+
+    fn build_router_with_ffmpeg(
+        ffmpeg: Arc<dyn FfmpegRunner>,
+    ) -> (Router, Arc<dyn ExportStorage>, String, ExportService) {
+        let storage = StorageBackend::memory().into_shared();
+        let service = ExportService::new(storage.clone(), ffmpeg);
+        let router = build_router(service.clone());
+        (router, storage, "recording-1".to_string(), service)
     }
 
     fn request_payload(
@@ -286,9 +292,71 @@ mod tests {
         digest.iter().map(|byte| format!("{byte:02x}")).collect()
     }
 
+    async fn wait_for_export_status(
+        service: &ExportService,
+        export_id: &str,
+        status: crate::model::ExportStatus,
+    ) -> crate::model::ExportManifest {
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                let manifest = service
+                    .get_export(export_id)
+                    .await
+                    .expect("export manifest should exist");
+                if manifest.status == status {
+                    return manifest;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for export status")
+    }
+
+    struct BlockingFfmpegRunner {
+        started: Arc<Notify>,
+        release: Arc<Notify>,
+        calls: Arc<AtomicUsize>,
+        output_bytes: Vec<u8>,
+    }
+
+    impl BlockingFfmpegRunner {
+        fn new(output_bytes: Vec<u8>) -> Self {
+            Self {
+                started: Arc::new(Notify::new()),
+                release: Arc::new(Notify::new()),
+                calls: Arc::new(AtomicUsize::new(0)),
+                output_bytes,
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl FfmpegRunner for BlockingFfmpegRunner {
+        async fn is_available(&self) -> Result<(), crate::service::ExportServiceError> {
+            Ok(())
+        }
+
+        async fn render(
+            &self,
+            _input_webm: &std::path::Path,
+            output_mp4: &std::path::Path,
+            _target: &crate::model::ExportTargetRequest,
+        ) -> Result<(), crate::service::ExportServiceError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.started.notify_waiters();
+            self.release.notified().await;
+            tokio::fs::write(output_mp4, &self.output_bytes)
+                .await
+                .expect("write fake output");
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn post_export_creates_export_and_returns_serialized_manifest() {
-        let (router, storage, recording_id) = build_router_for_tests();
+        let (router, storage, recording_id, service) =
+            build_router_with_ffmpeg(Arc::new(FakeFfmpegRunner::available()));
         let upload_id = "upload-1";
         let manifest = uploaded_manifest(&recording_id, upload_id);
         seed_upload(&storage, &manifest).await;
@@ -308,14 +376,19 @@ mod tests {
             .expect("request");
 
         let response = router.clone().oneshot(request).await.expect("response");
-        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
 
         let body = to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("read body");
         let payload: Value = serde_json::from_slice(&body).expect("parse response");
         assert_eq!(payload["recordingId"], recording_id);
-        assert_eq!(payload["status"], "ready");
+        assert_eq!(payload["status"], "processing");
+
+        let export_id = payload["exportId"].as_str().expect("export id");
+        let ready_manifest =
+            wait_for_export_status(&service, export_id, crate::model::ExportStatus::Ready).await;
+        assert_eq!(ready_manifest.status, crate::model::ExportStatus::Ready);
 
         let repeat_request = http::Request::builder()
             .method(http::Method::POST)
@@ -332,6 +405,109 @@ mod tests {
             .expect("request");
         let repeat_response = router.oneshot(repeat_request).await.expect("response");
         assert_eq!(repeat_response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn post_export_returns_processing_before_render_finishes() {
+        let blocking = Arc::new(BlockingFfmpegRunner::new(b"fake-mp4".to_vec()));
+        let (router, storage, recording_id, _) = build_router_with_ffmpeg(blocking.clone());
+        let upload_id = "upload-1";
+        let manifest = uploaded_manifest(&recording_id, upload_id);
+        seed_upload(&storage, &manifest).await;
+
+        let request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("/api/exports")
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_string(&request_payload(
+                    &recording_id,
+                    upload_id,
+                    TARGET_RESOLUTION,
+                ))
+                .expect("serialize request"),
+            ))
+            .expect("request");
+
+        let response = router.oneshot(request).await.expect("response");
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let payload: Value = serde_json::from_slice(&body).expect("parse response");
+        assert_eq!(payload["status"], "processing");
+        assert_eq!(blocking.calls.load(Ordering::SeqCst), 0);
+        blocking.started.notified().await;
+        assert_eq!(blocking.calls.load(Ordering::SeqCst), 1);
+        blocking.release.notify_waiters();
+    }
+
+    #[tokio::test]
+    async fn get_export_transitions_to_ready_after_background_render() {
+        let blocking = Arc::new(BlockingFfmpegRunner::new(b"fake-mp4".to_vec()));
+        let (router, storage, recording_id, service) = build_router_with_ffmpeg(blocking.clone());
+        let upload_id = "upload-1";
+        let manifest = uploaded_manifest(&recording_id, upload_id);
+        seed_upload(&storage, &manifest).await;
+
+        let create_request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("/api/exports")
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_string(&request_payload(
+                    &recording_id,
+                    upload_id,
+                    TARGET_RESOLUTION,
+                ))
+                .expect("serialize request"),
+            ))
+            .expect("request");
+        let create_response = router
+            .clone()
+            .oneshot(create_request)
+            .await
+            .expect("response");
+        let create_body = to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let payload: Value = serde_json::from_slice(&create_body).expect("parse response");
+        let export_id = payload["exportId"].as_str().expect("export id");
+
+        let get_processing_request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri(format!("/api/exports/{export_id}"))
+            .body(axum::body::Body::empty())
+            .expect("request");
+        let processing_response = router
+            .clone()
+            .oneshot(get_processing_request)
+            .await
+            .expect("response");
+        let processing_body = to_bytes(processing_response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let processing_payload: Value =
+            serde_json::from_slice(&processing_body).expect("parse response");
+        assert_eq!(processing_payload["status"], "processing");
+
+        blocking.started.notified().await;
+        blocking.release.notify_waiters();
+        let _ =
+            wait_for_export_status(&service, export_id, crate::model::ExportStatus::Ready).await;
+
+        let get_ready_request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri(format!("/api/exports/{export_id}"))
+            .body(axum::body::Body::empty())
+            .expect("request");
+        let ready_response = router.oneshot(get_ready_request).await.expect("response");
+        let ready_body = to_bytes(ready_response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let ready_payload: Value = serde_json::from_slice(&ready_body).expect("parse response");
+        assert_eq!(ready_payload["status"], "ready");
     }
 
     #[tokio::test]

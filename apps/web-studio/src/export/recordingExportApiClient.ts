@@ -71,6 +71,7 @@ export interface RecordingExportClient {
   getReadyz: () => Promise<RecordingExportReadyzResponse>;
   createExport: (request: CreateRecordingExportRequest) => Promise<RecordingExportManifest>;
   getExport: (exportId: string) => Promise<RecordingExportManifest>;
+  getDownloadUrl: (exportId: string) => string;
   downloadExport: (exportId: string) => Promise<Blob>;
 }
 
@@ -146,6 +147,9 @@ export function createRecordingExportApiClient(baseUrl?: string): RecordingExpor
         },
       );
     },
+    getDownloadUrl: (exportId) => {
+      return buildExportUrl(resolvedBaseUrl, paths.downloadPath(exportId));
+    },
     downloadExport: async (exportId) => {
       const response = await fetch(buildExportUrl(resolvedBaseUrl, paths.downloadPath(exportId)), {
         method: 'GET',
@@ -164,6 +168,18 @@ export function createRecordingExportApiClient(baseUrl?: string): RecordingExpor
       return response.blob();
     },
   };
+}
+
+export function isExportWorkerReady(response: RecordingExportReadyzResponse | null): boolean {
+  if (response === null) {
+    return false;
+  }
+
+  return (
+    response.status === 'ok' &&
+    response.storage === 'ready' &&
+    response.ffmpeg === 'available'
+  );
 }
 
 async function requestJson<T>(baseUrl: string, path: string, init: RequestInit): Promise<T> {

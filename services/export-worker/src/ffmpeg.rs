@@ -31,13 +31,20 @@ impl CommandFfmpegRunner {
         }
     }
 
+    #[cfg(test)]
+    fn with_binary(binary: impl Into<String>) -> Self {
+        Self {
+            binary: binary.into(),
+        }
+    }
+
     fn output_arguments(input_webm: &Path, output_mp4: &Path) -> Vec<String> {
         vec![
             "-y".to_string(),
             "-i".to_string(),
             input_webm.display().to_string(),
             "-vf".to_string(),
-            "scale=-2:1080,pad=1920:1080:(ow-iw)/2:(oh-ih)/2".to_string(),
+            "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2".to_string(),
             "-c:v".to_string(),
             "libx264".to_string(),
             "-pix_fmt".to_string(),
@@ -91,24 +98,41 @@ impl FfmpegRunner for CommandFfmpegRunner {
             ));
         }
 
-        let status = Command::new(&self.binary)
+        let output = Command::new(&self.binary)
             .args(Self::output_arguments(input_webm, output_mp4))
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
+            .stderr(Stdio::piped())
+            .output()
             .await
             .map_err(|error| {
                 ExportServiceError::internal(format!("Unable to run FFmpeg: {error}"))
             })?;
 
-        if status.success() {
+        if output.status.success() {
             Ok(())
         } else {
+            let stderr = summarize_stderr(&output.stderr, 4000);
             Err(ExportServiceError::processing(
                 "ffmpeg_failed",
-                "FFmpeg failed to render the export.",
+                format!("FFmpeg failed to render the export. {stderr}"),
             ))
         }
+    }
+}
+
+fn summarize_stderr(stderr: &[u8], limit: usize) -> String {
+    let decoded = String::from_utf8_lossy(stderr);
+    let trimmed = decoded.trim();
+
+    if trimmed.is_empty() {
+        return "No FFmpeg stderr output was captured.".to_string();
+    }
+
+    let summary: String = trimmed.chars().take(limit).collect();
+    if trimmed.chars().count() > limit {
+        format!("stderr: {summary}…")
+    } else {
+        format!("stderr: {summary}")
     }
 }
 
@@ -182,6 +206,10 @@ impl FfmpegRunner for FakeFfmpegRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    use tempfile::tempdir;
+    use tokio::runtime::Runtime;
 
     #[test]
     fn output_arguments_preserve_aspect_ratio() {
@@ -191,9 +219,52 @@ mod tests {
         let arguments = CommandFfmpegRunner::output_arguments(input, output);
         assert!(arguments
             .iter()
-            .any(|argument| argument == "scale=-2:1080,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"));
+            .any(|argument| argument.contains("force_original_aspect_ratio=decrease")));
+        assert!(arguments
+            .iter()
+            .any(|argument| argument.contains("pad=1920:1080:(ow-iw)/2:(oh-ih)/2")));
         assert!(!arguments
             .iter()
             .any(|argument| argument == "scale=1920:1080"));
+    }
+
+    #[test]
+    fn render_failure_includes_truncated_ffmpeg_stderr() {
+        let temp_dir = tempdir().expect("temp dir");
+        let script_path = temp_dir.path().join("fake-ffmpeg.sh");
+        let long_stderr = "x".repeat(4500);
+        let script = format!("#!/bin/sh\nprintf '%s' \"{}\" >&2\nexit 1\n", long_stderr);
+        fs::write(&script_path, script).expect("write fake ffmpeg script");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&script_path)
+                .expect("script metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&script_path, permissions).expect("set executable bit");
+        }
+
+        let runner = CommandFfmpegRunner::with_binary(script_path.display().to_string());
+        let runtime = Runtime::new().expect("tokio runtime");
+        let error = runtime
+            .block_on(async {
+                runner
+                    .render(
+                        Path::new("/tmp/input.webm"),
+                        Path::new("/tmp/output.mp4"),
+                        &ExportTargetRequest {
+                            format: TARGET_FORMAT.to_string(),
+                            resolution: TARGET_RESOLUTION.to_string(),
+                        },
+                    )
+                    .await
+            })
+            .expect_err("render should fail");
+
+        assert_eq!(error.code(), "ffmpeg_failed");
+        assert!(error.message().contains("stderr:"));
+        assert!(error.message().contains("…"));
+        assert!(error.message().len() < 4200);
     }
 }
