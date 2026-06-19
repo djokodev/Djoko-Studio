@@ -40,6 +40,8 @@ v0.1 uses a single primary export per recording.
   and download routes directly to the browser for V1
 - the export worker stores its manifest and final MP4 in MinIO using the
   existing upload object layout as input and a dedicated export layout as output
+- export artifacts are attempt-scoped so stale background jobs cannot overwrite
+  a newer successful MP4 object
 
 ## Consequences
 
@@ -53,6 +55,9 @@ v0.1 uses a single primary export per recording.
   be revisited before production hardening
 - the Go API export seam remains the durable foundation for later worker
   orchestration instead of becoming the browser runtime dependency in DS-065
+- the manifest `outputObjectKey` is the source of truth for download, because
+  multiple attempt-scoped output artifacts may exist for the same primary
+  export during stale recovery
 
 ## Alternatives considered
 

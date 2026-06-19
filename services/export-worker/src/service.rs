@@ -1240,6 +1240,10 @@ mod tests {
         assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
         assert_eq!(result.manifest.status, ExportStatus::Processing);
         assert_ne!(result.manifest.attempt_id, stale_manifest.attempt_id);
+        assert_ne!(
+            result.manifest.output_object_key,
+            stale_manifest.output_object_key
+        );
         assert!(result.manifest.updated_at > stale_manifest.updated_at);
         assert!(result.manifest.error.is_none());
 
@@ -1258,8 +1262,26 @@ mod tests {
         let restarted = original.restart_processing(timestamp() + TimeDelta::seconds(60));
 
         assert_ne!(restarted.attempt_id, original.attempt_id);
+        assert_ne!(restarted.output_object_key, original.output_object_key);
         assert_eq!(restarted.status, ExportStatus::Processing);
         assert!(restarted.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn restarted_attempt_gets_distinct_output_object_key() {
+        let request = create_request("recording-output-key", "upload-output-key");
+        let first_attempt = ExportManifest::new_processing(&request, timestamp());
+        let restarted_attempt =
+            first_attempt.restart_processing(timestamp() + TimeDelta::seconds(1));
+
+        assert_ne!(restarted_attempt.attempt_id, first_attempt.attempt_id);
+        assert_ne!(
+            restarted_attempt.output_object_key,
+            first_attempt.output_object_key
+        );
+        assert!(restarted_attempt
+            .output_object_key
+            .contains(&format!("/attempts/{}/", restarted_attempt.attempt_id)));
     }
 
     #[tokio::test]
@@ -1308,6 +1330,83 @@ mod tests {
         assert_eq!(final_manifest.status, ExportStatus::Ready);
         assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
         assert_eq!(final_manifest.output_bytes, Some(42));
+    }
+
+    #[tokio::test]
+    async fn stale_attempt_cannot_overwrite_newer_attempt_output_object() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-output-race", "upload-output-race");
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        storage
+            .put_object(
+                &export_manifest_key(&attempt_a.export_id),
+                serde_json::to_vec_pretty(&attempt_a).expect("serialize attempt a"),
+                "application/json",
+            )
+            .await
+            .expect("store attempt a");
+
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+        service
+            .store_export_manifest(&export_manifest_key(&attempt_b.export_id), &attempt_b)
+            .await
+            .expect("store attempt b");
+
+        storage
+            .put_object(
+                &attempt_b.output_object_key,
+                b"newer-attempt-mp4".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store newer attempt output");
+        let mut ready_b = attempt_b.clone();
+        ready_b.status = ExportStatus::Ready;
+        ready_b.output_bytes = Some(b"newer-attempt-mp4".len() as u64);
+        ready_b.completed_at = Some(timestamp() + TimeDelta::seconds(6));
+        ready_b.updated_at = timestamp() + TimeDelta::seconds(6);
+        service
+            .store_terminal_manifest_if_current_attempt(&ready_b)
+            .await
+            .expect("persist ready attempt b");
+
+        storage
+            .put_object(
+                &attempt_a.output_object_key,
+                b"stale-attempt-mp4".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store stale attempt output");
+        service
+            .mark_export_failed(
+                &attempt_a,
+                &ExportServiceError::processing("ffmpeg_failed", "stale attempt failed"),
+            )
+            .await
+            .expect("obsolete failure should not overwrite manifest");
+
+        let final_manifest = service
+            .get_export(&attempt_a.export_id)
+            .await
+            .expect("final manifest");
+        assert_eq!(final_manifest.status, ExportStatus::Ready);
+        assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
+        assert_eq!(
+            final_manifest.output_object_key,
+            attempt_b.output_object_key
+        );
+
+        let newer_output = storage
+            .get_object(&attempt_b.output_object_key)
+            .await
+            .expect("newer output should exist");
+        let stale_output = storage
+            .get_object(&attempt_a.output_object_key)
+            .await
+            .expect("stale output should exist");
+        assert_eq!(newer_output, b"newer-attempt-mp4".to_vec());
+        assert_eq!(stale_output, b"stale-attempt-mp4".to_vec());
     }
 
     #[tokio::test]
@@ -1538,6 +1637,7 @@ mod tests {
                 "participant-1",
                 "recording-stream",
                 &export_id,
+                "attempt_stream",
             ),
             output_bytes: Some(b"streamed-mp4".len() as u64),
             created_at: timestamp(),
@@ -1714,6 +1814,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ready_manifest_download_uses_current_attempt_output_key() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-download-key", "upload-download-key");
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+
+        storage
+            .put_object(
+                &attempt_a.output_object_key,
+                b"stale-attempt-bytes".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store stale bytes");
+        storage
+            .put_object(
+                &attempt_b.output_object_key,
+                b"current-attempt-bytes".to_vec(),
+                "video/mp4",
+            )
+            .await
+            .expect("store current bytes");
+
+        let mut ready_manifest = attempt_b.clone();
+        ready_manifest.status = ExportStatus::Ready;
+        ready_manifest.output_bytes = Some(b"current-attempt-bytes".len() as u64);
+        ready_manifest.completed_at = Some(timestamp() + TimeDelta::seconds(6));
+        ready_manifest.updated_at = timestamp() + TimeDelta::seconds(6);
+
+        storage
+            .put_object(
+                &export_manifest_key(&ready_manifest.export_id),
+                serde_json::to_vec_pretty(&ready_manifest).expect("serialize ready manifest"),
+                "application/json",
+            )
+            .await
+            .expect("store ready manifest");
+
+        let output = service
+            .download_export(&ready_manifest.export_id)
+            .await
+            .expect("download current attempt output");
+        match output.body {
+            ExportDownloadBody::Bytes(bytes) => {
+                assert_eq!(bytes, b"current-attempt-bytes".to_vec())
+            }
+            ExportDownloadBody::Stream(_) => panic!("expected in-memory bytes"),
+        }
+    }
+
+    #[tokio::test]
     async fn download_export_rejects_unfinished_exports() {
         let (service, storage) = service_with_memory_storage();
         let export_id = export_id_for_recording("recording-6");
@@ -1735,6 +1886,7 @@ mod tests {
                 "participant-1",
                 "recording-6",
                 &export_id,
+                "attempt_processing",
             ),
             output_bytes: None,
             created_at: timestamp(),

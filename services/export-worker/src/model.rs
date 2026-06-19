@@ -157,18 +157,20 @@ pub struct UploadManifest {
 impl ExportManifest {
     pub fn new_processing(request: &CreateExportRequest, now: DateTime<Utc>) -> Self {
         let export_id = export_id_for_recording(&request.recording_id);
+        let attempt_id = next_attempt_id();
         let source_manifest_key = upload_manifest_key(&request.recording_id, &request.upload_id);
         let output_object_key = export_output_key(
             &request.session_id,
             &request.participant_id,
             &request.recording_id,
             &export_id,
+            &attempt_id,
         );
 
         Self {
             manifest_version: EXPORT_MANIFEST_VERSION,
             export_id,
-            attempt_id: next_attempt_id(),
+            attempt_id,
             recording_id: request.recording_id.trim().to_string(),
             upload_id: request.upload_id.trim().to_string(),
             session_id: request.session_id.trim().to_string(),
@@ -190,6 +192,13 @@ impl ExportManifest {
     pub fn restart_processing(&self, now: DateTime<Utc>) -> Self {
         let mut manifest = self.clone();
         manifest.attempt_id = next_attempt_id();
+        manifest.output_object_key = export_output_key(
+            &manifest.session_id,
+            &manifest.participant_id,
+            &manifest.recording_id,
+            &manifest.export_id,
+            &manifest.attempt_id,
+        );
         manifest.status = ExportStatus::Processing;
         manifest.updated_at = now;
         manifest.completed_at = None;
@@ -216,9 +225,10 @@ pub fn export_output_key(
     participant_id: &str,
     recording_id: &str,
     export_id: &str,
+    attempt_id: &str,
 ) -> String {
     format!(
-        "sessions/{session_id}/participants/{participant_id}/recordings/{recording_id}/exports/{export_id}/output-1080p.mp4"
+        "sessions/{session_id}/participants/{participant_id}/recordings/{recording_id}/exports/{export_id}/attempts/{attempt_id}/output-1080p.mp4"
     )
 }
 

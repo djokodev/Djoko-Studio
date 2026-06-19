@@ -99,12 +99,18 @@ Behavior:
 - restarts `failed` manifests on the next matching `POST`
 - assigns a new `attemptId` on each new or restarted processing attempt
 - only lets the current `attemptId` write terminal `ready` or `failed` states
+- stores final MP4 artifacts under attempt-scoped object keys
 - validates the source upload in the background before rendering
 - sorts uploaded chunks by numeric `chunkIndex` before reconstruction
 - rejects uploads with missing chunks, duplicate chunk indexes, failed chunk statuses, invalid byte counts, or checksum mismatches
 - applies an FFmpeg timeout using `FFMPEG_TIMEOUT_SECONDS`
 - captures FFmpeg stderr on failure, truncates the stored summary, and persists the error on the export manifest
 - streams the final MP4 into MinIO and persists the export manifest
+
+Artifact note:
+
+- Export artifacts are attempt-scoped to prevent stale background jobs from overwriting a newer successful export artifact.
+- The current manifest `outputObjectKey` is the source of truth for download.
 
 Status summary:
 
@@ -168,7 +174,7 @@ The V1 local worker stores assets in MinIO with these keys:
 - upload manifest: `recordings/{recordingId}/uploads/{uploadId}/manifest.json`
 - upload chunks: `sessions/{sessionId}/participants/{participantId}/recordings/{recordingId}/uploads/{uploadId}/chunks/{chunkIndex}`
 - export manifest: `exports/{exportId}/manifest.json`
-- export output: `sessions/{sessionId}/participants/{participantId}/recordings/{recordingId}/exports/{exportId}/output-1080p.mp4`
+- export output: `sessions/{sessionId}/participants/{participantId}/recordings/{recordingId}/exports/{exportId}/attempts/{attemptId}/output-1080p.mp4`
 
 ## Non-goals
 

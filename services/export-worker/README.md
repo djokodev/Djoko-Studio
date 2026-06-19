@@ -18,6 +18,7 @@ the final MP4, and shuts down cleanly when interrupted.
 - export manifest persistence in MinIO
 - a temporary WebM reconstruction step before MP4 rendering
 - tracing-based logging
+- attempt-scoped export artifact keys to protect newer successful exports from stale async jobs
 - unit tests for readiness, validation, manifest persistence, and download behavior
 
 ## What is intentionally not implemented yet
@@ -65,9 +66,21 @@ The worker reads:
 - `S3_REGION`
 - `S3_FORCE_PATH_STYLE`, defaulting to `true`
 - `FFMPEG_BINARY`, defaulting to `ffmpeg`
+- `PROCESSING_STALE_AFTER_SECONDS`, defaulting to `1800`
+- `FFMPEG_TIMEOUT_SECONDS`, defaulting to `1800`
 
 `EXPORT_WORKER_PORT` and `FFMPEG_BINARY` are the canonical local configuration
 names for this slice.
+
+## Artifact safety
+
+Final MP4 artifacts are stored under attempt-scoped keys:
+
+`sessions/{sessionId}/participants/{participantId}/recordings/{recordingId}/exports/{exportId}/attempts/{attemptId}/output-1080p.mp4`
+
+This prevents stale background jobs from overwriting a newer successful export
+artifact. The current manifest `outputObjectKey` remains the source of truth
+for download.
 
 ## Contract
 
