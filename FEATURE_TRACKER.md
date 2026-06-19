@@ -75,7 +75,7 @@
 | DS-063 | v0.1 Recording Core | Real local recording session and recovery | merged | Merged in PR #63. |
 | DS-064 | Resumable upload + MinIO storage + upload status | ✅ Merged | PR #64 merged — resumable browser upload, MinIO chunk storage, manifest persistence, backend status recovery, browser refresh recovery, upload service restart recovery validated. Pause/resume/cancel throttled-network QA pending follow-up. |
 | DS-065 | v0.1 Recording Core | Add export foundation API and storage seam | merged | Merged in PR #65. Go API export row, export contract, last_error migration, export worker, and web export dashboard slice. |
-| DS-066 | v0.1 Recording Core | Fix latest uploaded recording selection for export dashboard | in_progress | Fix explicit export candidate ordering so the latest uploaded recording is selected deterministically. |
+| DS-066 | v0.1 Recording Core | Fix latest uploaded recording selection for export dashboard | merged | Merged in PR #66. |
 
 ## Allowed Statuses
 
