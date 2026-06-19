@@ -1,3 +1,5 @@
+import { buildGuestInvitePath } from '../navigation/routes';
+
 export type SessionStatus = 'draft' | 'waiting' | 'live' | 'ended' | 'cancelled';
 export type ParticipantRole = 'host' | 'guest';
 export type ParticipantStatus = 'joined' | 'left';
@@ -141,4 +143,3 @@ function extractErrorMessage(payload: unknown, response: Response): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
-import { buildGuestInvitePath } from '../navigation/routes';

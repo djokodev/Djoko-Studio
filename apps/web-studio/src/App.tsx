@@ -207,6 +207,10 @@ function HostSessionSummary({
       </p>
 
       <div className="session-form session-form--spaced">
+        <label className="field">
+          <span>Guest invite link</span>
+          <input type="text" value={inviteUrl} readOnly />
+        </label>
         <button className="submit-button signaling-button" type="button" onClick={handleCopyInviteLink}>
           {copyStatus === 'copying'
             ? 'Copying invite link…'
@@ -231,10 +235,6 @@ function HostSessionSummary({
           <div className="detail-card">
             <dt>Guest invite token</dt>
             <dd className="mono">{result.guest_invite_token}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Guest invite URL</dt>
-            <dd className="mono">{inviteUrl}</dd>
           </div>
         </dl>
       </DebugOnly>
