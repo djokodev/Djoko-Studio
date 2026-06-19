@@ -7,6 +7,7 @@ import {
   type UploadQueuePersistenceSummary,
 } from '../upload/recordingUploadPersistence';
 import { useRecordingUploadQueue } from '../upload/useRecordingUploadQueue';
+import { DebugOnly } from './debug/DebugOnly';
 
 interface UploadReadinessPanelProps {
   recorder: LocalMediaRecorderController;
@@ -108,57 +109,57 @@ export function UploadReadinessPanel({ recorder }: UploadReadinessPanelProps) {
       </div>
 
       <p className="api-note upload-readiness__note">
-        The browser keeps the local recording copy as the source of truth until the
-        upload service confirms completion. Upload progress is tracked separately from
-        local recording recovery so a refresh can resume from the last confirmed chunk.
+        The browser keeps the local copy until the server confirms the upload.
       </p>
 
       {uploadQueue.errorMessage ? (
         <div className="message message--warning upload-readiness__message" role="status">
-          {uploadQueue.errorMessage}
+          Upload progress needs attention.
         </div>
       ) : null}
 
       {queueState.status === 'failed' ? (
         <div className="message message--warning upload-readiness__message" role="status">
-          Upload queue persistence note: {queueState.errorMessage}
+          Upload queue is temporarily unavailable.
         </div>
       ) : null}
 
-      <dl className="details-grid upload-readiness__details">
-        <div className="detail-card">
-          <dt>Local safety copy</dt>
-          <dd>{localRecordingLabel}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Current recording persisted</dt>
-          <dd>{recorder.summary.currentRecordingPersisted ? 'Yes' : 'No'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persisted local recordings</dt>
-          <dd>{recorder.persistedRecordings.length}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Upload queue persistence</dt>
-          <dd>{queueAvailabilityLabel}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persisted upload sessions</dt>
-          <dd>{queueSummary.uploadSessionCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Persisted upload chunks</dt>
-          <dd>{queueSummary.uploadChunkCount}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Tracked expected bytes</dt>
-          <dd>{formatBytes(queueSummary.totalExpectedBytes)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Tracked uploaded bytes</dt>
-          <dd>{formatBytes(queueSummary.totalUploadedBytes)}</dd>
-        </div>
-      </dl>
+      <DebugOnly>
+        <dl className="details-grid upload-readiness__details">
+          <div className="detail-card">
+            <dt>Local safety copy</dt>
+            <dd>{localRecordingLabel}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Current recording persisted</dt>
+            <dd>{recorder.summary.currentRecordingPersisted ? 'Yes' : 'No'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persisted local recordings</dt>
+            <dd>{recorder.persistedRecordings.length}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Upload queue persistence</dt>
+            <dd>{queueAvailabilityLabel}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persisted upload sessions</dt>
+            <dd>{queueSummary.uploadSessionCount}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Persisted upload chunks</dt>
+            <dd>{queueSummary.uploadChunkCount}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Tracked expected bytes</dt>
+            <dd>{formatBytes(queueSummary.totalExpectedBytes)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Tracked uploaded bytes</dt>
+            <dd>{formatBytes(queueSummary.totalUploadedBytes)}</dd>
+          </div>
+        </dl>
+      </DebugOnly>
 
       {queueState.status === 'ready' && uploadQueue.items.length === 0 ? (
         <div className="message upload-readiness__message" role="status">
@@ -172,47 +173,49 @@ export function UploadReadinessPanel({ recorder }: UploadReadinessPanelProps) {
             <div className="panel__header recording-recovery__item-header">
               <div>
                 <p className="eyebrow">Upload queue item</p>
-                <h5 className="recording-recovery__item-title">
-                  {item.recording.recordingId}
-                </h5>
+                <h5 className="recording-recovery__item-title">Local recording</h5>
               </div>
               <span className="status-pill">{item.statusLabel}</span>
             </div>
 
-            <dl className="details-grid recording-recovery__details">
-              <div className="detail-card">
-                <dt>Session ID</dt>
-                <dd className="mono">{item.recording.manifest.sessionId ?? '—'}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Participant ID</dt>
-                <dd className="mono">{item.recording.manifest.participantId ?? '—'}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Role</dt>
-                <dd className="mono">{item.recording.manifest.role ?? '—'}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Upload status</dt>
-                <dd className="mono">{item.uploadLabel}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Progress</dt>
-                <dd>{item.progressLabel}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Chunk count</dt>
-                <dd>{item.recording.manifest.chunkCount}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Total bytes</dt>
-                <dd>{formatBytes(item.recording.manifest.totalBytes)}</dd>
-              </div>
-              <div className="detail-card">
-                <dt>Upload error</dt>
-                <dd>{item.state?.errorMessage ?? '—'}</dd>
-              </div>
-            </dl>
+            <p className="api-note upload-readiness__note">{item.progressLabel}</p>
+
+            <DebugOnly>
+              <dl className="details-grid recording-recovery__details">
+                <div className="detail-card">
+                  <dt>Session ID</dt>
+                  <dd className="mono">{item.recording.manifest.sessionId ?? '—'}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Participant ID</dt>
+                  <dd className="mono">{item.recording.manifest.participantId ?? '—'}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Role</dt>
+                  <dd className="mono">{item.recording.manifest.role ?? '—'}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Upload status</dt>
+                  <dd className="mono">{item.uploadLabel}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Progress</dt>
+                  <dd>{item.progressLabel}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Chunk count</dt>
+                  <dd>{item.recording.manifest.chunkCount}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Total bytes</dt>
+                  <dd>{formatBytes(item.recording.manifest.totalBytes)}</dd>
+                </div>
+                <div className="detail-card">
+                  <dt>Upload error</dt>
+                  <dd>{item.state?.errorMessage ?? '—'}</dd>
+                </div>
+              </dl>
+            </DebugOnly>
 
             <div className="upload-readiness__actions" aria-label="Upload actions">
               <button

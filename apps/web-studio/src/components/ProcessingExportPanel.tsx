@@ -18,6 +18,7 @@ import {
   getExportTargetLabel,
   selectLatestExportCandidate,
 } from '../export/recordingExportSelection';
+import { DebugOnly } from './debug/DebugOnly';
 
 interface ProcessingExportPanelProps {
   recorder: LocalMediaRecorderController;
@@ -166,87 +167,87 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
       <div className="panel__header">
         <div>
           <p className="eyebrow">Processing & export</p>
-          <h3 id="processing-export-title">Processing & Export dashboard</h3>
+          <h3 id="processing-export-title">Export your session</h3>
         </div>
         <span className={`status-pill ${readinessState.status === 'ready' ? 'status-pill--live' : ''}`}>
           {hasConfiguredService
             ? readinessState.status === 'ready'
               ? readinessState.response?.status === 'ok'
-                ? 'Configured'
-                : 'Degraded'
+                ? 'Ready'
+                : 'Needs attention'
               : readinessState.status === 'failed'
                 ? 'Unavailable'
                 : 'Checking'
-            : 'Not configured'}
+            : 'Not ready'}
         </span>
       </div>
 
       <p className="api-note export-panel__note">
-        The browser can start a direct export against the local export worker. The
-        source of truth for the source recording stays in IndexedDB and the upload
-        service until the export worker confirms the final MP4.
+        When the upload is ready, export the final video and download it from the browser.
       </p>
 
       {!hasConfiguredService ? (
         <div className="message message--warning export-panel__message" role="status">
-          Export service is not configured. Set VITE_EXPORT_BASE_URL.
+          Export is not ready yet.
         </div>
       ) : null}
 
       {readinessState.status === 'failed' ? (
         <div className="message message--warning export-panel__message" role="status">
-          Export service readiness: {readinessState.errorMessage}
+          Export status needs attention.
         </div>
       ) : null}
 
       {candidate === null ? (
         <div className="message export-panel__message" role="status">
-          No uploaded local recording is ready for export yet.
+          No uploaded recording is ready for export yet.
         </div>
       ) : null}
 
-      <dl className="details-grid export-panel__details">
-        <div className="detail-card">
-          <dt>Service configured</dt>
-          <dd>{hasConfiguredService ? 'Yes' : 'No'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Service status</dt>
-          <dd>{readinessState.response?.status ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Storage</dt>
-          <dd>{readinessState.response?.storage ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>FFmpeg</dt>
-          <dd>{readinessState.response?.ffmpeg ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Recording ID</dt>
-          <dd className="mono">{candidate?.recordingId ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Upload ID</dt>
-          <dd className="mono">{candidate?.uploadId ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Upload status</dt>
-          <dd>{candidate?.uploadStatus ?? '—'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Target</dt>
-          <dd>{targetLabel}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Export status</dt>
-          <dd>{getExportStatusSummaryLabel(exportManifest?.status ?? null)}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Output bytes</dt>
-          <dd>{exportManifest?.status === 'ready' && exportManifest.outputBytes !== null ? formatBytes(exportManifest.outputBytes) : '—'}</dd>
-        </div>
-      </dl>
+      <DebugOnly>
+        <dl className="details-grid export-panel__details">
+          <div className="detail-card">
+            <dt>Service configured</dt>
+            <dd>{hasConfiguredService ? 'Yes' : 'No'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Service status</dt>
+            <dd>{readinessState.response?.status ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Storage</dt>
+            <dd>{readinessState.response?.storage ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>FFmpeg</dt>
+            <dd>{readinessState.response?.ffmpeg ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Recording ID</dt>
+            <dd className="mono">{candidate?.recordingId ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Upload ID</dt>
+            <dd className="mono">{candidate?.uploadId ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Upload status</dt>
+            <dd>{candidate?.uploadStatus ?? '—'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Target</dt>
+            <dd>{targetLabel}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Export status</dt>
+            <dd>{getExportStatusSummaryLabel(exportManifest?.status ?? null)}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Output bytes</dt>
+            <dd>{exportManifest?.status === 'ready' && exportManifest.outputBytes !== null ? formatBytes(exportManifest.outputBytes) : '—'}</dd>
+          </div>
+        </dl>
+      </DebugOnly>
 
       {exportError ? (
         <div className="message message--error export-panel__message" role="alert">

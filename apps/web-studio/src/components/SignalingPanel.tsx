@@ -15,6 +15,8 @@ import {
   type WebRtcPeerConnectionState,
   type WebRtcSignalPayload,
 } from '../webrtc/peerConnection';
+import { DebugOnly } from './debug/DebugOnly';
+import { debugLog } from '../lib/debug';
 
 type SignalingStatus = 'idle' | 'connecting' | 'open' | 'closing' | 'closed' | 'error';
 type PeerPresence = 'unknown' | 'waiting' | 'connected' | 'disconnected';
@@ -80,19 +82,19 @@ function getLocalMediaAttachmentNote(
 ): string {
   if (!hasWebRtcController) {
     return localMediaStreamAvailable
-      ? 'Local preview is ready. Start WebRTC while it is active if you want media tracks attached during the initial negotiation.'
-      : 'Start local preview before starting WebRTC if you want media tracks attached during the initial negotiation.';
+      ? 'Local preview is ready for the next connection step.'
+      : 'Start local preview before connecting the studio.';
   }
 
   if (localTracksAttached) {
-    return 'Local preview tracks are attached to this peer connection.';
+    return 'Your local preview is attached to the connection.';
   }
 
   if (!localMediaStreamAvailable) {
-    return 'WebRTC started before local preview, so no media tracks were attached in this PR. The data channel still works.';
+    return 'The connection is live, but no local preview was available when it started.';
   }
 
-  return 'Local preview is active, but this peer connection was already negotiated before attachment. Renegotiation after preview start/stop is intentionally out of scope.';
+  return 'Local preview is active and ready for the next connection step.';
 }
 
 export function SignalingPanel({
@@ -203,6 +205,8 @@ export function SignalingPanel({
     if (!isMountedRef.current) {
       return;
     }
+
+    debugLog('signaling', kind, summary, details);
 
     const entry: PanelLogEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -335,16 +339,16 @@ export function SignalingPanel({
       await controller.handleSignal(payload);
 
       if (payload.kind === 'webrtc-offer') {
-        setWebRtcBanner('Guest accepted the host offer and sent an answer.');
+        setWebRtcBanner('The guest accepted the connection.');
         return;
       }
 
       if (payload.kind === 'webrtc-answer') {
-        setWebRtcBanner('Host accepted the guest answer and is waiting for ICE connectivity.');
+        setWebRtcBanner('The host accepted the connection.');
         return;
       }
 
-      setWebRtcBanner('Remote ICE candidate applied.');
+      setWebRtcBanner('Connection update applied.');
     } catch (error) {
       setWebRtcBanner(getErrorMessage(error, 'Unable to process WebRTC signaling payload.'), 'error');
       appendLog('error', getErrorMessage(error, 'Unable to process WebRTC signaling payload.'));
@@ -372,16 +376,16 @@ export function SignalingPanel({
       appendLog(
         'presence',
         message.peer === null
-          ? `Room state received for ${message.session_id}. Waiting for peer presence.`
-          : `Room state received for ${message.session_id}. Peer connected: ${describeParticipant(message.peer)}.`,
+          ? `Room state received for ${message.session_id}. Waiting for the other person.`
+          : `Room state received for ${message.session_id}. The other person is connected.`,
         message.peer === null
           ? `self=${describeParticipant(message.self)}, peer=none`
           : `self=${describeParticipant(message.self)}, peer=${describeParticipant(message.peer)}`,
       );
       setWebRtcBanner(
         message.peer === null
-          ? 'Room state received. Waiting for peer presence.'
-          : `Room state received. Peer connected: ${describeParticipant(message.peer)}.`,
+          ? 'Room state received. Waiting for the other person.'
+          : 'Room state received. The other person is connected.',
       );
       return;
     }
@@ -391,10 +395,10 @@ export function SignalingPanel({
       setPeerPresence('connected');
       appendLog(
         'presence',
-        `Peer joined the room: ${describeParticipant(message.participant)}.`,
+        `The other person joined the room: ${describeParticipant(message.participant)}.`,
         `session_id=${message.session_id}`,
       );
-      setWebRtcBanner(`Peer joined the room: ${describeParticipant(message.participant)}.`);
+      setWebRtcBanner('The other person joined the room.');
       return;
     }
 
@@ -406,10 +410,10 @@ export function SignalingPanel({
       setRemoteAudioEnabled(false);
       appendLog(
         'presence',
-        `Peer left the room: ${describeParticipant(message.participant)}.`,
+        `The other person left the room: ${describeParticipant(message.participant)}.`,
         `session_id=${message.session_id}`,
       );
-      setWebRtcBanner(`Peer left the room: ${describeParticipant(message.participant)}.`, 'error');
+      setWebRtcBanner('The other person left the room.', 'error');
       return;
     }
 
@@ -434,7 +438,7 @@ export function SignalingPanel({
 
     try {
       setStatus('connecting');
-      setStatusMessage(`Connecting to ${roomUrl}.`);
+      setStatusMessage('Connecting to the studio.');
       setPeerPresence('unknown');
       setPeerParticipant(null);
 
@@ -451,11 +455,11 @@ export function SignalingPanel({
             }
 
             setStatus('open');
-            setStatusMessage(`Connected to ${roomUrl}.`);
+            setStatusMessage('Connected to the studio.');
             setWebRtcBanner(
               role === 'host'
-                ? 'Connected to signaling. Waiting for peer presence before starting WebRTC.'
-                : 'Waiting for the host WebRTC offer.',
+                ? 'Connected. Waiting for the guest.'
+                : 'Connected. Waiting for the host.',
             );
             appendLog('open', 'WebSocket connection opened.', roomUrl);
           },
@@ -559,8 +563,8 @@ export function SignalingPanel({
     }
 
     if (role !== 'host') {
-      setWebRtcBanner('Only the host starts the WebRTC peer connection.', 'error');
-      appendLog('error', 'Only the host starts the WebRTC peer connection.');
+      setWebRtcBanner('Only the host starts the connection.', 'error');
+      appendLog('error', 'Only the host starts the connection.');
       return;
     }
 
@@ -571,8 +575,8 @@ export function SignalingPanel({
     }
 
     if (peerPresence !== 'connected') {
-      setWebRtcBanner('Wait for peer presence to connect before starting WebRTC.', 'error');
-      appendLog('error', 'Wait for peer presence to connect before starting WebRTC.');
+      setWebRtcBanner('Wait for the other person to join first.', 'error');
+      appendLog('error', 'Wait for the other person to join first.');
       return;
     }
 
@@ -584,9 +588,9 @@ export function SignalingPanel({
 
     try {
       const controller = ensureWebRtcController();
-      setWebRtcBanner('Starting the host WebRTC peer connection.');
+      setWebRtcBanner('Starting the connection.');
       await controller.startHost();
-      setWebRtcBanner('Host offer sent. Waiting for the guest answer and ICE candidates.');
+      setWebRtcBanner('Connection offer sent. Waiting for the response.');
     } catch (error) {
       closeWebRtcPeerConnection();
       setWebRtcBanner(getErrorMessage(error, 'Unable to start WebRTC peer connection.'), 'error');
@@ -620,7 +624,7 @@ export function SignalingPanel({
 
     try {
       peerConnectionRef.current?.sendTestMessage(`Hello from the ${role} data channel.`);
-      setWebRtcBanner('Sent a WebRTC test data-channel message.');
+      setWebRtcBanner('Sent a test message.');
     } catch (error) {
       setWebRtcBanner(getErrorMessage(error, 'Unable to send the WebRTC test message.'), 'error');
       appendLog('error', getErrorMessage(error, 'Unable to send the WebRTC test message.'));
@@ -739,6 +743,10 @@ export function SignalingPanel({
         </span>
       </div>
 
+      <p className="api-note signaling-note">
+        Connect the studio, wait for the other person, and keep the media preview local to the browser.
+      </p>
+
       <div className="signaling-actions">
         <button className="submit-button signaling-button" type="button" onClick={handleConnect} disabled={!canConnect}>
           Connect signaling
@@ -751,34 +759,38 @@ export function SignalingPanel({
         >
           Disconnect signaling
         </button>
-        <button
-          className="submit-button signaling-button signaling-button--secondary"
-          type="button"
-          onClick={handleSendTestSignal}
-          disabled={!canSendTestSignal}
-        >
-          Send test signal
-        </button>
+        <DebugOnly>
+          <button
+            className="submit-button signaling-button signaling-button--secondary"
+            type="button"
+            onClick={handleSendTestSignal}
+            disabled={!canSendTestSignal}
+          >
+            Send test signal
+          </button>
+        </DebugOnly>
       </div>
 
-      <dl className="details-grid signaling-details">
-        <div className="detail-card">
-          <dt>Detected role</dt>
-          <dd>{role}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Session ID</dt>
-          <dd className="mono">{trimmedSessionId || 'Missing session ID'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Participant ID</dt>
-          <dd className="mono">{trimmedParticipantId || 'Missing participant ID'}</dd>
-        </div>
-        <div className="detail-card">
-          <dt>Signaling URL</dt>
-          <dd className="mono">{roomUrl || roomError}</dd>
-        </div>
-      </dl>
+      <DebugOnly>
+        <dl className="details-grid signaling-details">
+          <div className="detail-card">
+            <dt>Detected role</dt>
+            <dd>{role}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Session ID</dt>
+            <dd className="mono">{trimmedSessionId || 'Missing session ID'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Participant ID</dt>
+            <dd className="mono">{trimmedParticipantId || 'Missing participant ID'}</dd>
+          </div>
+          <div className="detail-card">
+            <dt>Signaling URL</dt>
+            <dd className="mono">{roomUrl || roomError}</dd>
+          </div>
+        </dl>
+      </DebugOnly>
 
       {statusMessage ? (
         <div
@@ -809,20 +821,22 @@ export function SignalingPanel({
           {getPeerPresenceMessage()}
         </div>
 
-        <dl className="details-grid signaling-details">
-          <div className="detail-card">
-            <dt>Peer presence</dt>
-            <dd>{peerPresenceLabels[peerPresence]}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Peer role</dt>
-            <dd>{peerParticipant?.role ?? 'none'}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Peer participant ID</dt>
-            <dd className="mono">{peerParticipant?.participant_id ?? 'none'}</dd>
-          </div>
-        </dl>
+        <DebugOnly>
+          <dl className="details-grid signaling-details">
+            <div className="detail-card">
+              <dt>Peer presence</dt>
+              <dd>{peerPresenceLabels[peerPresence]}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Peer role</dt>
+              <dd>{peerParticipant?.role ?? 'none'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Peer participant ID</dt>
+              <dd className="mono">{peerParticipant?.participant_id ?? 'none'}</dd>
+            </div>
+          </dl>
+        </DebugOnly>
       </section>
 
       <section className="peer-panel" aria-labelledby={`${role}-webrtc-heading`}>
@@ -837,10 +851,7 @@ export function SignalingPanel({
         </div>
 
         <p className="api-note signaling-note">
-          Camera and microphone preview remain browser-local. Media tracks can attach during
-          the initial WebRTC negotiation when preview is active. Recording, upload, and
-          export are not active yet. This foundation covers RTCPeerConnection, ICE, local
-          media track attachment, and a test data channel.
+          Camera and microphone preview stay in the browser while the studio connects.
         </p>
 
         {rtcIceServersConfig.error ? (
@@ -868,68 +879,72 @@ export function SignalingPanel({
           >
             Close peer connection
           </button>
-          <button
-            className="submit-button signaling-button signaling-button--secondary"
-            type="button"
-            onClick={handleSendWebRtcTestMessage}
-            disabled={!canSendWebRtcMessage}
-          >
-            Send data channel test message
-          </button>
+          <DebugOnly>
+            <button
+              className="submit-button signaling-button signaling-button--secondary"
+              type="button"
+              onClick={handleSendWebRtcTestMessage}
+              disabled={!canSendWebRtcMessage}
+            >
+              Send data channel test message
+            </button>
+          </DebugOnly>
         </div>
 
-        <dl className="details-grid signaling-details">
-          <div className="detail-card">
-            <dt>Peer connection state</dt>
-            <dd>{webRtcState.connectionState}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Peer connection exists</dt>
-            <dd>{webRtcState.peerConnectionCreated ? 'yes' : 'no'}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>ICE connection state</dt>
-            <dd>{webRtcState.iceConnectionState}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Signaling state</dt>
-            <dd>{webRtcState.signalingState}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Data channel state</dt>
-            <dd>{webRtcState.dataChannelState}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Local description</dt>
-            <dd>{webRtcState.localDescriptionState}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Remote description</dt>
-            <dd>{webRtcState.remoteDescriptionState}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Local stream available</dt>
-            <dd>{localMediaStreamAvailable ? 'yes' : 'no'}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>Local tracks attached</dt>
-            <dd>{webRtcState.localTracksAttached ? 'yes' : 'no'}</dd>
-          </div>
-          <div className="detail-card">
-            <dt>ICE server config</dt>
-            <dd>
-              {rtcIceServersConfig.error
-                ? 'Fallback to [] because the config could not be parsed.'
-                : rtcIceServersConfig.iceServers.length === 0
-                  ? 'No custom ICE servers configured.'
-                  : `${rtcIceServersConfig.iceServers.length} server(s) configured.`}
-            </dd>
-          </div>
-          <div className="detail-card">
-            <dt>Connection mode</dt>
-            <dd>{role === 'host' ? 'Host creates the offer.' : 'Guest waits for the host offer.'}</dd>
-          </div>
-        </dl>
+        <DebugOnly>
+          <dl className="details-grid signaling-details">
+            <div className="detail-card">
+              <dt>Peer connection state</dt>
+              <dd>{webRtcState.connectionState}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Peer connection exists</dt>
+              <dd>{webRtcState.peerConnectionCreated ? 'yes' : 'no'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>ICE connection state</dt>
+              <dd>{webRtcState.iceConnectionState}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Signaling state</dt>
+              <dd>{webRtcState.signalingState}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Data channel state</dt>
+              <dd>{webRtcState.dataChannelState}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Local description</dt>
+              <dd>{webRtcState.localDescriptionState}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Remote description</dt>
+              <dd>{webRtcState.remoteDescriptionState}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Local stream available</dt>
+              <dd>{localMediaStreamAvailable ? 'yes' : 'no'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>Local tracks attached</dt>
+              <dd>{webRtcState.localTracksAttached ? 'yes' : 'no'}</dd>
+            </div>
+            <div className="detail-card">
+              <dt>ICE server config</dt>
+              <dd>
+                {rtcIceServersConfig.error
+                  ? 'Fallback to [] because the config could not be parsed.'
+                  : rtcIceServersConfig.iceServers.length === 0
+                    ? 'No custom ICE servers configured.'
+                    : `${rtcIceServersConfig.iceServers.length} server(s) configured.`}
+              </dd>
+            </div>
+            <div className="detail-card">
+              <dt>Connection mode</dt>
+              <dd>{role === 'host' ? 'Host creates the offer.' : 'Guest waits for the host offer.'}</dd>
+            </div>
+          </dl>
+        </DebugOnly>
 
         <div
           className={`message ${webRtcMessageKind === 'error' ? 'message--error' : ''}`}
@@ -992,61 +1007,65 @@ export function SignalingPanel({
             {remotePlaybackMessage}
           </div>
 
-          <dl className="details-grid signaling-details">
-            <div className="detail-card">
-              <dt>Remote stream available</dt>
-              <dd>{webRtcState.remoteMediaStreamAvailable ? 'yes' : 'no'}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Remote audio enabled</dt>
-              <dd>{remoteAudioEnabled ? 'yes' : 'no'}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Remote video track count</dt>
-              <dd>{webRtcState.remoteVideoTrackCount}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Remote audio track count</dt>
-              <dd>{webRtcState.remoteAudioTrackCount}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Remote playback</dt>
-              <dd>{remotePlaybackMessage}</dd>
-            </div>
-            <div className="detail-card">
-              <dt>Remote playback error</dt>
-              <dd>{remotePlaybackError ?? 'none'}</dd>
-            </div>
-          </dl>
+          <DebugOnly>
+            <dl className="details-grid signaling-details">
+              <div className="detail-card">
+                <dt>Remote stream available</dt>
+                <dd>{webRtcState.remoteMediaStreamAvailable ? 'yes' : 'no'}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Remote audio enabled</dt>
+                <dd>{remoteAudioEnabled ? 'yes' : 'no'}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Remote video track count</dt>
+                <dd>{webRtcState.remoteVideoTrackCount}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Remote audio track count</dt>
+                <dd>{webRtcState.remoteAudioTrackCount}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Remote playback</dt>
+                <dd>{remotePlaybackMessage}</dd>
+              </div>
+              <div className="detail-card">
+                <dt>Remote playback error</dt>
+                <dd>{remotePlaybackError ?? 'none'}</dd>
+              </div>
+            </dl>
+          </DebugOnly>
         </section>
 
         <p className="api-note signaling-note">{mediaAttachmentNote}</p>
 
-        <section className="signaling-log" aria-labelledby={`${role}-signaling-log-heading`}>
-          <div className="panel__header signaling-log__header">
-            <div>
-              <p className="eyebrow">Event log</p>
-              <h4 id={`${role}-signaling-log-heading`}>Signaling and WebRTC events</h4>
+        <DebugOnly>
+          <section className="signaling-log" aria-labelledby={`${role}-signaling-log-heading`}>
+            <div className="panel__header signaling-log__header">
+              <div>
+                <p className="eyebrow">Event log</p>
+                <h4 id={`${role}-signaling-log-heading`}>Signaling and WebRTC events</h4>
+              </div>
             </div>
-          </div>
 
-          {events.length > 0 ? (
-            <ul className="signaling-log__list">
-              {events.map((event) => (
-                <li key={event.id} className={`signaling-log__item signaling-log__item--${event.kind}`}>
-                  <div className="signaling-log__meta">
-                    <span className="signaling-log__kind">{event.kind}</span>
-                    <span className="signaling-log__time">{event.at}</span>
-                  </div>
-                  <p className="signaling-log__summary">{event.summary}</p>
-                  {event.details ? <pre className="signaling-log__details">{event.details}</pre> : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="message signaling-log__empty">No signaling, presence, or WebRTC events yet.</div>
-          )}
-        </section>
+            {events.length > 0 ? (
+              <ul className="signaling-log__list">
+                {events.map((event) => (
+                  <li key={event.id} className={`signaling-log__item signaling-log__item--${event.kind}`}>
+                    <div className="signaling-log__meta">
+                      <span className="signaling-log__kind">{event.kind}</span>
+                      <span className="signaling-log__time">{event.at}</span>
+                    </div>
+                    <p className="signaling-log__summary">{event.summary}</p>
+                    {event.details ? <pre className="signaling-log__details">{event.details}</pre> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="message signaling-log__empty">No signaling, presence, or WebRTC events yet.</div>
+            )}
+          </section>
+        </DebugOnly>
       </section>
     </section>
   );

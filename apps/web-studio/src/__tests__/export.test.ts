@@ -512,8 +512,8 @@ describe('export panel', () => {
       createElement(ProcessingExportPanel, { recorder }),
     );
 
-    expect(markup).toContain('Processing &amp; Export dashboard');
-    expect(markup).toContain('Export service is not configured. Set VITE_EXPORT_BASE_URL.');
+    expect(markup).toContain('Export your session');
+    expect(markup).toContain('Export is not ready yet.');
     expect(markup).toContain('disabled');
   });
 
@@ -551,8 +551,10 @@ describe('export panel', () => {
       createElement(ProcessingExportPanel, { recorder }),
     );
 
-    expect(markup).toContain('recording-b');
-    expect(markup).toContain('upload-b');
+    expect(markup).toContain('Export your session');
     expect(markup).not.toContain('recording-a');
+    expect(markup).not.toContain('recording-b');
+    expect(markup).not.toContain('upload-a');
+    expect(markup).not.toContain('upload-b');
   });
 });

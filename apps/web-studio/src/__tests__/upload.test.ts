@@ -439,7 +439,7 @@ describe('upload state', () => {
     expect(queuedMarkup).toContain('0/2 chunks, 0 B / 6 B');
   });
 
-  it('renders retrying upload errors with the last failure message', () => {
+  it('hides retrying upload errors from the default view', () => {
     const recording = createMockRecordingRecord('recording-3b');
     const queuedRecorder = createMockRecorder([recording]);
     mockQueue.items = [
@@ -485,8 +485,8 @@ describe('upload state', () => {
       createElement(UploadReadinessPanel, { recorder: queuedRecorder as never }),
     );
 
-    expect(queuedMarkup).toContain('Network error.');
     expect(queuedMarkup).toContain('retrying');
+    expect(queuedMarkup).not.toContain('Network error.');
   });
 
   it('maps upload lifecycle flags without breaking local-first status', () => {

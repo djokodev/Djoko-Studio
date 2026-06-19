@@ -1,3 +1,5 @@
+import { buildGuestInvitePath } from '../navigation/routes';
+
 export type SessionStatus = 'draft' | 'waiting' | 'live' | 'ended' | 'cancelled';
 export type ParticipantRole = 'host' | 'guest';
 export type ParticipantStatus = 'joined' | 'left';
@@ -56,7 +58,7 @@ export function getApiBaseUrl(): string {
 }
 
 export function buildGuestInviteUrl(inviteToken: string): string {
-  return `${window.location.origin}/guest/${encodeURIComponent(inviteToken)}`;
+  return `${window.location.origin}${buildGuestInvitePath(inviteToken)}`;
 }
 
 export async function createSession(
