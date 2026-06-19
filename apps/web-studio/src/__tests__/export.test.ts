@@ -3,8 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ProcessingExportPanel,
+  getStartExportButtonLabel,
   getExportFailureMessage,
   isStartExportDisabled,
+  triggerExportDownload,
 } from '../components/ProcessingExportPanel';
 import {
   buildExportUrl,
@@ -251,6 +253,7 @@ describe('export client', () => {
           ffmpeg: 'unavailable',
           message: 'ffmpeg missing',
         }),
+        exportReady: false,
       }),
     ).toBe(true);
   });
@@ -270,6 +273,7 @@ describe('export client', () => {
           ffmpeg: 'available',
           message: 'storage unavailable',
         }),
+        exportReady: false,
       }),
     ).toBe(true);
   });
@@ -291,6 +295,7 @@ describe('export client', () => {
         readinessStatus: 'ready',
         readinessConfigured: true,
         workerReady,
+        exportReady: false,
       }),
     ).toBe(false);
     expect(
@@ -301,8 +306,52 @@ describe('export client', () => {
         readinessStatus: 'ready',
         readinessConfigured: true,
         workerReady,
+        exportReady: false,
       }),
     ).toBe(true);
+  });
+
+  it('start_export_button_disabled_when_export_ready', () => {
+    expect(
+      isStartExportDisabled({
+        hasConfiguredService: true,
+        hasCandidate: true,
+        isSubmitting: false,
+        readinessStatus: 'ready',
+        readinessConfigured: true,
+        workerReady: true,
+        exportReady: true,
+      }),
+    ).toBe(true);
+    expect(getStartExportButtonLabel(true, false)).toBe('Export already ready');
+  });
+
+  it('download_export_does_not_navigate_current_page', () => {
+    const click = vi.fn();
+    const assign = vi.fn();
+    const anchor = {
+      href: '',
+      target: '',
+      rel: '',
+      click,
+    };
+
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => anchor),
+    });
+    vi.stubGlobal('window', {
+      location: {
+        assign,
+      },
+    });
+
+    triggerExportDownload('http://localhost:8083/api/exports/exp-recording-1/download');
+
+    expect(anchor.href).toBe('http://localhost:8083/api/exports/exp-recording-1/download');
+    expect(anchor.target).toBe('_blank');
+    expect(anchor.rel).toBe('noopener noreferrer');
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(assign).not.toHaveBeenCalled();
   });
 });
 

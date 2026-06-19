@@ -156,6 +156,7 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
     readinessStatus: readinessState.status,
     readinessConfigured: readinessState.configured,
     workerReady,
+    exportReady,
   });
   const refreshDisabled = !hasConfiguredService || isRefreshing;
   const downloadDisabled = !exportReady || isDownloading || activeExportId === null;
@@ -274,7 +275,7 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
           }}
           disabled={startDisabled}
         >
-          {isSubmitting ? 'Starting export…' : 'Start 1080p export'}
+          {getStartExportButtonLabel(exportReady, isSubmitting)}
         </button>
         <button
           className="submit-button signaling-button signaling-button--secondary"
@@ -401,7 +402,7 @@ export function ProcessingExportPanel({ recorder }: ProcessingExportPanelProps) 
     setExportError('');
 
     try {
-      window.location.assign(exportClient.getDownloadUrl(activeExportId));
+      triggerExportDownload(exportClient.getDownloadUrl(activeExportId));
     } catch (error) {
       setExportError(getErrorMessage(error, 'Unable to download export.'));
     } finally {
@@ -425,15 +426,37 @@ export function isStartExportDisabled(input: {
   readinessStatus: ExportReadinessState['status'];
   readinessConfigured: boolean;
   workerReady: boolean;
+  exportReady: boolean;
 }): boolean {
   return (
     !input.hasConfiguredService ||
     !input.hasCandidate ||
     input.isSubmitting ||
+    input.exportReady ||
     !input.workerReady ||
     input.readinessStatus === 'failed' ||
     (input.readinessStatus === 'loading' && input.readinessConfigured)
   );
+}
+
+export function getStartExportButtonLabel(exportReady: boolean, isSubmitting: boolean): string {
+  if (isSubmitting) {
+    return 'Starting export…';
+  }
+
+  if (exportReady) {
+    return 'Export already ready';
+  }
+
+  return 'Start 1080p export';
+}
+
+export function triggerExportDownload(downloadUrl: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = downloadUrl;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  anchor.click();
 }
 
 export function getExportFailureMessage(
