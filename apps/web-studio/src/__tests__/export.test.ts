@@ -30,6 +30,46 @@ const mockQueue = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
 }));
 
+function buildExportQueueItem(input: {
+  recordingId: string;
+  status: string;
+  uploadId?: string | null;
+  sessionId?: string | null;
+  participantId?: string | null;
+  role?: 'host' | 'guest' | null;
+  createdAt?: number;
+  updatedAt?: number;
+  completedAt?: number | null;
+  recordingFirstPersistedAt?: number;
+  recordingLastPersistedAt?: number;
+}) {
+  const fallbackTimestamp =
+    input.completedAt ?? input.updatedAt ?? input.createdAt ?? input.recordingLastPersistedAt ?? 0;
+
+  return {
+    recording: {
+      recordingId: input.recordingId,
+      manifest: {
+        sessionId: input.sessionId,
+        participantId: input.participantId,
+        role: input.role,
+      },
+      firstPersistedAt: input.recordingFirstPersistedAt ?? fallbackTimestamp,
+      lastPersistedAt: input.recordingLastPersistedAt ?? fallbackTimestamp,
+    },
+    state: {
+      status: input.status,
+      sessionId: input.sessionId,
+      participantId: input.participantId,
+      role: input.role,
+      uploadId: input.uploadId ?? null,
+      createdAt: input.createdAt ?? fallbackTimestamp,
+      updatedAt: input.updatedAt ?? fallbackTimestamp,
+      completedAt: input.completedAt ?? null,
+    },
+  };
+}
+
 vi.mock('../upload/useRecordingUploadQueue', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../upload/useRecordingUploadQueue')>();
 
@@ -45,36 +85,138 @@ describe('export client', () => {
     mockQueue.items = [];
   });
 
-  it('selects the latest uploaded export candidate', () => {
+  it('selects_latest_uploaded_recording_for_export', () => {
     mockQueue.items = [
-      {
-        recording: { recordingId: 'recording-1', manifest: {} },
-        state: { status: 'ready' },
-      },
-      {
-        recording: { recordingId: 'recording-2', manifest: {} },
-        state: {
-          status: 'uploaded',
-          sessionId: 'session-2',
-          participantId: 'participant-2',
-          role: 'guest',
-          uploadId: 'upload-2',
-        },
-      },
+      buildExportQueueItem({
+        recordingId: 'recording-a',
+        status: 'uploaded',
+        uploadId: 'upload-a',
+        sessionId: 'session-a',
+        participantId: 'participant-a',
+        role: 'host',
+        completedAt: 1_000,
+        updatedAt: 1_000,
+        createdAt: 1_000,
+      }),
+      buildExportQueueItem({
+        recordingId: 'recording-b',
+        status: 'uploaded',
+        uploadId: 'upload-b',
+        sessionId: 'session-b',
+        participantId: 'participant-b',
+        role: 'guest',
+        completedAt: 2_000,
+        updatedAt: 2_000,
+        createdAt: 2_000,
+      }),
     ];
 
     const candidate = selectLatestExportCandidate(mockQueue.items as never);
 
     expect(candidate).toEqual({
-      recordingId: 'recording-2',
-      sessionId: 'session-2',
-      participantId: 'participant-2',
+      recordingId: 'recording-b',
+      sessionId: 'session-b',
+      participantId: 'participant-b',
       role: 'guest',
-      uploadId: 'upload-2',
+      uploadId: 'upload-b',
       uploadStatus: 'uploaded',
     });
     expect(getExportTargetLabel()).toBe('MP4 1080p');
     expect(getExportStatusSummaryLabel(null)).toBe('Not started');
+  });
+
+  it('ignores_incomplete_or_non_uploaded_recordings', () => {
+    mockQueue.items = [
+      buildExportQueueItem({
+        recordingId: 'recording-newer-not-uploaded',
+        status: 'ready',
+        uploadId: 'upload-newer-not-uploaded',
+        sessionId: 'session-newer',
+        participantId: 'participant-newer',
+        role: 'host',
+        completedAt: 3_000,
+        updatedAt: 3_000,
+        createdAt: 3_000,
+      }),
+      buildExportQueueItem({
+        recordingId: 'recording-older-uploaded',
+        status: 'uploaded',
+        uploadId: 'upload-older-uploaded',
+        sessionId: 'session-older',
+        participantId: 'participant-older',
+        role: 'guest',
+        completedAt: 1_500,
+        updatedAt: 1_500,
+        createdAt: 1_500,
+      }),
+    ];
+
+    expect(selectLatestExportCandidate(mockQueue.items as never)).toEqual({
+      recordingId: 'recording-older-uploaded',
+      sessionId: 'session-older',
+      participantId: 'participant-older',
+      role: 'guest',
+      uploadId: 'upload-older-uploaded',
+      uploadStatus: 'uploaded',
+    });
+  });
+
+  it('selects_latest_uploaded_recording_even_when_input_order_is_oldest_first', () => {
+    mockQueue.items = [
+      buildExportQueueItem({
+        recordingId: 'recording-a',
+        status: 'uploaded',
+        uploadId: 'upload-a',
+        sessionId: 'session-a',
+        participantId: 'participant-a',
+        role: 'host',
+        completedAt: 1_000,
+        updatedAt: 1_000,
+        createdAt: 1_000,
+      }),
+      buildExportQueueItem({
+        recordingId: 'recording-b',
+        status: 'uploaded',
+        uploadId: 'upload-b',
+        sessionId: 'session-b',
+        participantId: 'participant-b',
+        role: 'guest',
+        completedAt: 2_000,
+        updatedAt: 2_000,
+        createdAt: 2_000,
+      }),
+    ];
+
+    expect(selectLatestExportCandidate(mockQueue.items as never)?.recordingId).toBe('recording-b');
+  });
+
+  it('selects_latest_uploaded_recording_even_when_input_order_is_newest_first', () => {
+    mockQueue.items = [
+      buildExportQueueItem({
+        recordingId: 'recording-b',
+        status: 'uploaded',
+        uploadId: 'upload-b',
+        sessionId: 'session-b',
+        participantId: 'participant-b',
+        role: 'guest',
+        completedAt: 2_000,
+        updatedAt: 2_000,
+        createdAt: 2_000,
+      }),
+      buildExportQueueItem({
+        recordingId: 'recording-a',
+        status: 'uploaded',
+        uploadId: 'upload-a',
+        sessionId: 'session-a',
+        participantId: 'participant-a',
+        role: 'host',
+        completedAt: 1_000,
+        updatedAt: 1_000,
+        createdAt: 1_000,
+      }),
+    ];
+
+    expect(selectLatestExportCandidate(mockQueue.items as never)?.uploadId).toBe('upload-b');
   });
 
   it('builds export api paths and serializes requests', async () => {
@@ -373,5 +515,44 @@ describe('export panel', () => {
     expect(markup).toContain('Processing &amp; Export dashboard');
     expect(markup).toContain('Export service is not configured. Set VITE_EXPORT_BASE_URL.');
     expect(markup).toContain('disabled');
+  });
+
+  it('renders the latest uploaded recording details', () => {
+    mockQueue.items = [
+      buildExportQueueItem({
+        recordingId: 'recording-a',
+        status: 'uploaded',
+        uploadId: 'upload-a',
+        sessionId: 'session-a',
+        participantId: 'participant-a',
+        role: 'host',
+        completedAt: 1_000,
+        updatedAt: 1_000,
+        createdAt: 1_000,
+      }),
+      buildExportQueueItem({
+        recordingId: 'recording-b',
+        status: 'uploaded',
+        uploadId: 'upload-b',
+        sessionId: 'session-b',
+        participantId: 'participant-b',
+        role: 'guest',
+        completedAt: 2_000,
+        updatedAt: 2_000,
+        createdAt: 2_000,
+      }),
+    ];
+
+    const recorder = {
+      persistedRecordings: [],
+    } as never;
+
+    const markup = renderToStaticMarkup(
+      createElement(ProcessingExportPanel, { recorder }),
+    );
+
+    expect(markup).toContain('recording-b');
+    expect(markup).toContain('upload-b');
+    expect(markup).not.toContain('recording-a');
   });
 });
