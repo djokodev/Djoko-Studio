@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -75,6 +77,7 @@ pub struct ExportFailure {
 pub struct ExportManifest {
     pub manifest_version: u32,
     pub export_id: String,
+    pub attempt_id: String,
     pub recording_id: String,
     pub upload_id: String,
     pub session_id: String,
@@ -165,6 +168,7 @@ impl ExportManifest {
         Self {
             manifest_version: EXPORT_MANIFEST_VERSION,
             export_id,
+            attempt_id: next_attempt_id(),
             recording_id: request.recording_id.trim().to_string(),
             upload_id: request.upload_id.trim().to_string(),
             session_id: request.session_id.trim().to_string(),
@@ -185,6 +189,7 @@ impl ExportManifest {
 
     pub fn restart_processing(&self, now: DateTime<Utc>) -> Self {
         let mut manifest = self.clone();
+        manifest.attempt_id = next_attempt_id();
         manifest.status = ExportStatus::Processing;
         manifest.updated_at = now;
         manifest.completed_at = None;
@@ -223,4 +228,11 @@ pub fn export_download_filename(export_id: &str) -> String {
 
 pub fn upload_manifest_key(recording_id: &str, upload_id: &str) -> String {
     format!("recordings/{recording_id}/uploads/{upload_id}/manifest.json")
+}
+
+fn next_attempt_id() -> String {
+    static ATTEMPT_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+    let counter = ATTEMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("attempt_{}_{}", Utc::now().timestamp_millis(), counter)
 }

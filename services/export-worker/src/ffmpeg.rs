@@ -1,4 +1,4 @@
-use std::{path::Path, process::Stdio};
+use std::{path::Path, process::Stdio, time::Duration};
 
 use async_trait::async_trait;
 use tokio::process::Command;
@@ -22,12 +22,14 @@ pub trait FfmpegRunner: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct CommandFfmpegRunner {
     binary: String,
+    timeout: Duration,
 }
 
 impl CommandFfmpegRunner {
     pub fn from_env() -> Self {
         Self {
             binary: std::env::var("FFMPEG_BINARY").unwrap_or_else(|_| "ffmpeg".to_string()),
+            timeout: duration_from_env("FFMPEG_TIMEOUT_SECONDS", 1800),
         }
     }
 
@@ -35,6 +37,15 @@ impl CommandFfmpegRunner {
     fn with_binary(binary: impl Into<String>) -> Self {
         Self {
             binary: binary.into(),
+            timeout: Duration::from_secs(1800),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_binary_and_timeout(binary: impl Into<String>, timeout: Duration) -> Self {
+        Self {
+            binary: binary.into(),
+            timeout,
         }
     }
 
@@ -47,10 +58,18 @@ impl CommandFfmpegRunner {
             "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2".to_string(),
             "-c:v".to_string(),
             "libx264".to_string(),
+            "-preset".to_string(),
+            "veryfast".to_string(),
+            "-crf".to_string(),
+            "23".to_string(),
             "-pix_fmt".to_string(),
             "yuv420p".to_string(),
             "-c:a".to_string(),
             "aac".to_string(),
+            "-b:a".to_string(),
+            "160k".to_string(),
+            "-movflags".to_string(),
+            "+faststart".to_string(),
             output_mp4.display().to_string(),
         ]
     }
@@ -98,15 +117,22 @@ impl FfmpegRunner for CommandFfmpegRunner {
             ));
         }
 
-        let output = Command::new(&self.binary)
-            .args(Self::output_arguments(input_webm, output_mp4))
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .map_err(|error| {
-                ExportServiceError::internal(format!("Unable to run FFmpeg: {error}"))
-            })?;
+        let output = tokio::time::timeout(self.timeout, async {
+            Command::new(&self.binary)
+                .args(Self::output_arguments(input_webm, output_mp4))
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .output()
+                .await
+        })
+        .await
+        .map_err(|_| {
+            ExportServiceError::processing_retryable(
+                "ffmpeg_timeout",
+                format!("FFmpeg timed out after {} seconds.", self.timeout.as_secs()),
+            )
+        })?
+        .map_err(|error| ExportServiceError::internal(format!("Unable to run FFmpeg: {error}")))?;
 
         if output.status.success() {
             Ok(())
@@ -118,6 +144,14 @@ impl FfmpegRunner for CommandFfmpegRunner {
             ))
         }
     }
+}
+
+fn duration_from_env(name: &str, default_seconds: u64) -> Duration {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or_else(|| Duration::from_secs(default_seconds))
 }
 
 fn summarize_stderr(stderr: &[u8], limit: usize) -> String {
@@ -212,7 +246,7 @@ mod tests {
     use tokio::runtime::Runtime;
 
     #[test]
-    fn output_arguments_preserve_aspect_ratio() {
+    fn ffmpeg_arguments_include_veryfast_crf_audio_bitrate_and_faststart() {
         let input = Path::new("/tmp/input.webm");
         let output = Path::new("/tmp/output.mp4");
 
@@ -223,9 +257,54 @@ mod tests {
         assert!(arguments
             .iter()
             .any(|argument| argument.contains("pad=1920:1080:(ow-iw)/2:(oh-ih)/2")));
+        assert!(arguments.iter().any(|argument| argument == "veryfast"));
+        assert!(arguments.iter().any(|argument| argument == "23"));
+        assert!(arguments.iter().any(|argument| argument == "160k"));
+        assert!(arguments.iter().any(|argument| argument == "+faststart"));
         assert!(!arguments
             .iter()
             .any(|argument| argument == "scale=1920:1080"));
+    }
+
+    #[test]
+    fn ffmpeg_timeout_returns_retryable_timeout_error() {
+        let temp_dir = tempdir().expect("temp dir");
+        let script_path = temp_dir.path().join("slow-ffmpeg.sh");
+        let script = "#!/bin/sh\nsleep 2\n";
+        fs::write(&script_path, script).expect("write fake ffmpeg script");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&script_path)
+                .expect("script metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&script_path, permissions).expect("set executable bit");
+        }
+
+        let runner = CommandFfmpegRunner::with_binary_and_timeout(
+            script_path.display().to_string(),
+            Duration::from_millis(50),
+        );
+        let runtime = Runtime::new().expect("tokio runtime");
+        let error = runtime
+            .block_on(async {
+                runner
+                    .render(
+                        Path::new("/tmp/input.webm"),
+                        Path::new("/tmp/output.mp4"),
+                        &ExportTargetRequest {
+                            format: TARGET_FORMAT.to_string(),
+                            resolution: TARGET_RESOLUTION.to_string(),
+                        },
+                    )
+                    .await
+            })
+            .expect_err("render should time out");
+
+        assert_eq!(error.code(), "ffmpeg_timeout");
+        assert!(error.retryable());
+        assert!(error.message().contains("timed out"));
     }
 
     #[test]

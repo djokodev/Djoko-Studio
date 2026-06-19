@@ -20,8 +20,9 @@ For local development the expected value is:
 http://localhost:8083
 ```
 
-The worker is configured through `EXPORT_WORKER_PORT`, `FFMPEG_BINARY`, and
-`PROCESSING_STALE_AFTER_SECONDS` (default `1800` seconds).
+The worker is configured through `EXPORT_WORKER_PORT`, `FFMPEG_BINARY`,
+`PROCESSING_STALE_AFTER_SECONDS` (default `1800` seconds), and
+`FFMPEG_TIMEOUT_SECONDS` (default `1800` seconds).
 Local MinIO integration uses `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`,
 `S3_SECRET_KEY`, `S3_REGION`, and `S3_FORCE_PATH_STYLE`.
 
@@ -96,9 +97,12 @@ Behavior:
 - returns `200 OK` when the export is already `ready`
 - restarts stale `processing` or `pending` manifests when `updatedAt` is older than `PROCESSING_STALE_AFTER_SECONDS`
 - restarts `failed` manifests on the next matching `POST`
+- assigns a new `attemptId` on each new or restarted processing attempt
+- only lets the current `attemptId` write terminal `ready` or `failed` states
 - validates the source upload in the background before rendering
 - sorts uploaded chunks by numeric `chunkIndex` before reconstruction
 - rejects uploads with missing chunks, duplicate chunk indexes, failed chunk statuses, invalid byte counts, or checksum mismatches
+- applies an FFmpeg timeout using `FFMPEG_TIMEOUT_SECONDS`
 - captures FFmpeg stderr on failure, truncates the stored summary, and persists the error on the export manifest
 - streams the final MP4 into MinIO and persists the export manifest
 
@@ -110,10 +114,12 @@ Status summary:
 - `200 OK`: current export already `ready`
 - `400 Bad Request`: request payload or target is invalid
 - `409 Conflict`: request identifiers do not match the existing primary export for the recording
+- `422 Unprocessable Entity`: export processing failed, including FFmpeg failures
 
 Response fields:
 
 - `exportId`
+- `attemptId`
 - `recordingId`
 - `uploadId`
 - `sessionId`

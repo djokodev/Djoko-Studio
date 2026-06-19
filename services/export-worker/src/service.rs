@@ -2,6 +2,7 @@ use std::{collections::HashSet, path::Path, sync::Arc, time::Duration};
 
 use chrono::{TimeDelta, Utc};
 use tokio::io::AsyncWriteExt;
+use tracing::{error, warn};
 
 use crate::{
     ffmpeg::FfmpegRunner,
@@ -46,12 +47,31 @@ impl std::fmt::Debug for ExportDownload {
 
 #[derive(Debug, Clone)]
 pub enum ExportServiceError {
-    InvalidRequest { code: String, message: String },
-    NotFound { code: String, message: String },
-    Conflict { code: String, message: String },
-    Unavailable { code: String, message: String },
-    Processing { code: String, message: String },
-    Internal { code: String, message: String },
+    InvalidRequest {
+        code: String,
+        message: String,
+    },
+    NotFound {
+        code: String,
+        message: String,
+    },
+    Conflict {
+        code: String,
+        message: String,
+    },
+    Unavailable {
+        code: String,
+        message: String,
+    },
+    Processing {
+        code: String,
+        message: String,
+        retryable: bool,
+    },
+    Internal {
+        code: String,
+        message: String,
+    },
 }
 
 impl ExportServiceError {
@@ -87,6 +107,15 @@ impl ExportServiceError {
         Self::Processing {
             code: code.into(),
             message: message.into(),
+            retryable: false,
+        }
+    }
+
+    pub fn processing_retryable(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::Processing {
+            code: code.into(),
+            message: message.into(),
+            retryable: true,
         }
     }
 
@@ -120,7 +149,11 @@ impl ExportServiceError {
     }
 
     pub fn retryable(&self) -> bool {
-        matches!(self, Self::Unavailable { .. } | Self::Internal { .. })
+        match self {
+            Self::Unavailable { .. } | Self::Internal { .. } => true,
+            Self::Processing { retryable, .. } => *retryable,
+            _ => false,
+        }
     }
 
     pub fn status_code(&self) -> http::StatusCode {
@@ -296,7 +329,16 @@ impl ExportService {
     fn spawn_export_task(&self, request: CreateExportRequest, manifest: ExportManifest) {
         let service = self.clone();
         tokio::spawn(async move {
-            let _ = service.process_export(&request, &manifest).await;
+            if let Err(error) = service.process_export(&request, &manifest).await {
+                error!(
+                    export_id = %manifest.export_id,
+                    recording_id = %manifest.recording_id,
+                    attempt_id = %manifest.attempt_id,
+                    error_code = error.code(),
+                    error_message = error.message(),
+                    "background export processing failed"
+                );
+            }
         });
     }
 
@@ -353,10 +395,8 @@ impl ExportService {
         ready_manifest.updated_at = now;
         ready_manifest.completed_at = Some(now);
         ready_manifest.error = None;
-        self.store_export_manifest(&export_manifest_key(&manifest.export_id), &ready_manifest)
-            .await?;
-
-        Ok(ready_manifest)
+        self.store_terminal_manifest_if_current_attempt(&ready_manifest)
+            .await
     }
 
     async fn rebuild_webm(
@@ -408,8 +448,44 @@ impl ExportService {
             code: error.code().to_string(),
             message: error.message().to_string(),
         });
-        self.store_export_manifest(&export_manifest_key(&manifest.export_id), &failed)
-            .await
+        let _ = self
+            .store_terminal_manifest_if_current_attempt(&failed)
+            .await?;
+        Ok(())
+    }
+
+    async fn store_terminal_manifest_if_current_attempt(
+        &self,
+        next_manifest: &ExportManifest,
+    ) -> Result<ExportManifest, ExportServiceError> {
+        let manifest_key = export_manifest_key(&next_manifest.export_id);
+        let Some(current_manifest) = self.load_export_manifest(&manifest_key).await? else {
+            warn!(
+                export_id = %next_manifest.export_id,
+                attempt_id = %next_manifest.attempt_id,
+                "skipping terminal export manifest write because current manifest is missing"
+            );
+            return Ok(next_manifest.clone());
+        };
+
+        if current_manifest.attempt_id != next_manifest.attempt_id
+            || current_manifest.status != ExportStatus::Processing
+        {
+            warn!(
+                export_id = %next_manifest.export_id,
+                recording_id = %next_manifest.recording_id,
+                attempt_id = %next_manifest.attempt_id,
+                current_attempt_id = %current_manifest.attempt_id,
+                current_status = ?current_manifest.status,
+                next_status = ?next_manifest.status,
+                "skipping obsolete export attempt terminal write"
+            );
+            return Ok(current_manifest);
+        }
+
+        self.store_export_manifest(&manifest_key, next_manifest)
+            .await?;
+        Ok(next_manifest.clone())
     }
 
     async fn validate_upload_manifest(
@@ -1073,7 +1149,57 @@ mod tests {
             .expect("recent processing manifest should be returned");
         assert_eq!(result.status_code, http::StatusCode::OK);
         assert_eq!(result.manifest.status, ExportStatus::Processing);
+        assert_eq!(result.manifest.attempt_id, existing.attempt_id);
         assert_eq!(result.manifest.updated_at, existing.updated_at);
+    }
+
+    #[tokio::test]
+    async fn create_export_returns_existing_processing_attempt_without_spawning_duplicate_work() {
+        let storage = StorageBackend::memory().into_shared();
+        let ffmpeg = Arc::new(BlockingFfmpegRunner::new(b"attempt-mp4".to_vec()));
+        let service = service_with_custom_stale_after(
+            storage.clone(),
+            ffmpeg.clone(),
+            Duration::from_secs(1800),
+        );
+        let request = create_request("recording-processing", "upload-processing");
+        let chunk_bytes = vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()];
+        let upload_manifest = uploaded_manifest(
+            "recording-processing",
+            "upload-processing",
+            &chunk_bytes,
+            true,
+            true,
+        );
+        seed_upload(&storage, &upload_manifest, &chunk_bytes).await;
+
+        let first_result = service
+            .create_export(request.clone())
+            .await
+            .expect("first export attempt should start processing");
+        assert_eq!(first_result.status_code, http::StatusCode::ACCEPTED);
+
+        ffmpeg.started.notified().await;
+
+        let second_result = service
+            .create_export(request)
+            .await
+            .expect("second create export should reuse current processing attempt");
+        assert_eq!(second_result.status_code, http::StatusCode::OK);
+        assert_eq!(
+            second_result.manifest.attempt_id,
+            first_result.manifest.attempt_id
+        );
+        assert_eq!(ffmpeg.calls.load(Ordering::SeqCst), 1);
+
+        ffmpeg.release.notify_waiters();
+        let ready_manifest = wait_for_export_status(
+            &service,
+            &first_result.manifest.export_id,
+            ExportStatus::Ready,
+        )
+        .await;
+        assert_eq!(ready_manifest.status, ExportStatus::Ready);
     }
 
     #[tokio::test]
@@ -1113,6 +1239,7 @@ mod tests {
             .expect("stale processing manifest should restart");
         assert_eq!(result.status_code, http::StatusCode::ACCEPTED);
         assert_eq!(result.manifest.status, ExportStatus::Processing);
+        assert_ne!(result.manifest.attempt_id, stale_manifest.attempt_id);
         assert!(result.manifest.updated_at > stale_manifest.updated_at);
         assert!(result.manifest.error.is_none());
 
@@ -1122,6 +1249,118 @@ mod tests {
             wait_for_export_status(&service, &result.manifest.export_id, ExportStatus::Ready).await;
         assert_eq!(ready_manifest.output_bytes, Some(b"stale-mp4".len() as u64));
         assert_eq!(ffmpeg.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn restart_processing_assigns_new_attempt_id() {
+        let request = create_request("recording-attempt", "upload-attempt");
+        let original = ExportManifest::new_processing(&request, timestamp());
+        let restarted = original.restart_processing(timestamp() + TimeDelta::seconds(60));
+
+        assert_ne!(restarted.attempt_id, original.attempt_id);
+        assert_eq!(restarted.status, ExportStatus::Processing);
+        assert!(restarted.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn stale_background_job_cannot_overwrite_ready_manifest() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-obsolete-ready", "upload-obsolete-ready");
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        storage
+            .put_object(
+                &export_manifest_key(&attempt_a.export_id),
+                serde_json::to_vec_pretty(&attempt_a).expect("serialize attempt a"),
+                "application/json",
+            )
+            .await
+            .expect("store attempt a");
+
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+        service
+            .store_export_manifest(&export_manifest_key(&attempt_b.export_id), &attempt_b)
+            .await
+            .expect("store attempt b");
+
+        let mut ready_b = attempt_b.clone();
+        ready_b.status = ExportStatus::Ready;
+        ready_b.output_bytes = Some(42);
+        ready_b.completed_at = Some(timestamp() + TimeDelta::seconds(10));
+        ready_b.updated_at = timestamp() + TimeDelta::seconds(10);
+        let persisted_ready = service
+            .store_terminal_manifest_if_current_attempt(&ready_b)
+            .await
+            .expect("persist ready manifest");
+        assert_eq!(persisted_ready.status, ExportStatus::Ready);
+
+        service
+            .mark_export_failed(
+                &attempt_a,
+                &ExportServiceError::processing("ffmpeg_failed", "stale attempt failed"),
+            )
+            .await
+            .expect("obsolete failure should not overwrite ready export");
+
+        let final_manifest = service
+            .get_export(&attempt_a.export_id)
+            .await
+            .expect("final manifest");
+        assert_eq!(final_manifest.status, ExportStatus::Ready);
+        assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
+        assert_eq!(final_manifest.output_bytes, Some(42));
+    }
+
+    #[tokio::test]
+    async fn stale_background_job_cannot_overwrite_failed_manifest_from_newer_attempt() {
+        let (service, storage) = service_with_memory_storage();
+        let request = create_request("recording-obsolete-failed", "upload-obsolete-failed");
+        let attempt_a = ExportManifest::new_processing(&request, timestamp());
+        storage
+            .put_object(
+                &export_manifest_key(&attempt_a.export_id),
+                serde_json::to_vec_pretty(&attempt_a).expect("serialize attempt a"),
+                "application/json",
+            )
+            .await
+            .expect("store attempt a");
+
+        let attempt_b = attempt_a.restart_processing(timestamp() + TimeDelta::seconds(5));
+        service
+            .store_export_manifest(&export_manifest_key(&attempt_b.export_id), &attempt_b)
+            .await
+            .expect("store attempt b");
+        service
+            .mark_export_failed(
+                &attempt_b,
+                &ExportServiceError::processing("ffmpeg_timeout", "newer attempt timed out"),
+            )
+            .await
+            .expect("current failure should persist");
+
+        let mut stale_ready_a = attempt_a.clone();
+        stale_ready_a.status = ExportStatus::Ready;
+        stale_ready_a.output_bytes = Some(24);
+        stale_ready_a.completed_at = Some(timestamp() + TimeDelta::seconds(10));
+        stale_ready_a.updated_at = timestamp() + TimeDelta::seconds(10);
+        let returned_manifest = service
+            .store_terminal_manifest_if_current_attempt(&stale_ready_a)
+            .await
+            .expect("obsolete ready should be ignored");
+        assert_eq!(returned_manifest.status, ExportStatus::Failed);
+
+        let final_manifest = service
+            .get_export(&attempt_a.export_id)
+            .await
+            .expect("final manifest");
+        assert_eq!(final_manifest.status, ExportStatus::Failed);
+        assert_eq!(final_manifest.attempt_id, attempt_b.attempt_id);
+        assert_eq!(
+            final_manifest
+                .error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("ffmpeg_timeout")
+        );
     }
 
     #[tokio::test]
@@ -1284,6 +1523,7 @@ mod tests {
         let manifest = ExportManifest {
             manifest_version: 1,
             export_id: export_id.clone(),
+            attempt_id: "attempt_stream".to_string(),
             recording_id: "recording-stream".to_string(),
             upload_id: "upload-stream".to_string(),
             session_id: "session-1".to_string(),
@@ -1480,6 +1720,7 @@ mod tests {
         let manifest = ExportManifest {
             manifest_version: 1,
             export_id: export_id.clone(),
+            attempt_id: "attempt_processing".to_string(),
             recording_id: "recording-6".to_string(),
             upload_id: "upload-6".to_string(),
             session_id: "session-1".to_string(),
