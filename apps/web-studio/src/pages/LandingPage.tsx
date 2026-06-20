@@ -92,17 +92,6 @@ const workflowSteps: WorkflowStep[] = [
   },
 ];
 
-const useCases = [
-  'Podcasts',
-  'Remote interviews',
-  'Webinars',
-  'Live panels',
-  'Testimonials',
-  'Tutorials',
-  'Internal comms',
-  'Video marketing',
-];
-
 function LandingMetric({ item }: { item: ProofPoint }) {
   return (
     <article className="landing-metric landing-reveal" data-reveal>
@@ -145,7 +134,7 @@ export function LandingPage() {
   const rootRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    document.title = 'DNA STUDIO | Remote interviews. Local quality.';
+    document.title = 'DNA STUDIO | Remote interview recorder';
   }, []);
 
   useEffect(() => {
@@ -223,7 +212,6 @@ export function LandingPage() {
       <header className="landing-nav landing-reveal is-visible" data-reveal>
         <div className="landing-nav__brand">
           <p className="landing-brand">DNA STUDIO</p>
-          <p className="landing-brand__tagline">Remote interviews. Local quality.</p>
         </div>
 
         <nav className="landing-nav__links" aria-label="Primary">
@@ -246,15 +234,11 @@ export function LandingPage() {
 
       <section className="landing-hero" aria-labelledby="landing-hero-title">
         <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
-          <p className="landing-kicker">Remote interviews. Local quality.</p>
           <h1 id="landing-hero-title">
-            Record high-quality conversations locally, recover when the network drops, and ship
-            polished 1080p video.
+            Record remote interviews locally, recover from drops, and export in 1080p.
           </h1>
           <p className="landing-hero__lede">
-            DNA STUDIO is a premium interview recorder for unstable connections: local-first
-            capture, refresh-safe recovery, resumable upload, guest invite links, and a final
-            export flow designed to feel production ready.
+            DNA STUDIO is a premium interview recorder for unstable connection.
           </p>
 
           <div className="landing-hero__actions">
@@ -265,17 +249,13 @@ export function LandingPage() {
               See how it works
             </a>
           </div>
-
-          <ul className="landing-pill-row" aria-label="Product strengths">
-            <li>Local-first recording</li>
-            <li>Resumable upload</li>
-            <li>Recording recovery</li>
-            <li>Guest invite flow</li>
-            <li>1080p export</li>
-          </ul>
         </div>
 
-        <div className="landing-hero__visual landing-reveal is-visible" data-reveal aria-label="DNA STUDIO product preview">
+        <div
+          className="landing-hero__visual landing-reveal is-visible"
+          data-reveal
+          aria-label="DNA STUDIO product preview"
+        >
           <div className="landing-hero__frame">
             <img
               className="landing-hero__image"
@@ -290,25 +270,10 @@ export function LandingPage() {
             <strong>Local capture first</strong>
           </div>
 
-          <div className="landing-hero__badge landing-hero__badge--middle">
+          <div className="landing-hero__badge landing-hero__badge--bottom">
             <span className="landing-hero__badge-label">Guest invite flow</span>
             <strong>Account-light joining</strong>
           </div>
-
-          <div className="landing-hero__badge landing-hero__badge--bottom">
-            <span className="landing-hero__badge-label">Final output</span>
-            <strong>1080p MP4 export</strong>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-rail landing-reveal" data-reveal aria-label="Primary use cases">
-        <div className="landing-rail__track" aria-hidden="true">
-          {[...useCases, ...useCases].map((item, index) => (
-            <span className="landing-rail__item" key={`${item}-${index}`}>
-              {item}
-            </span>
-          ))}
         </div>
       </section>
 
@@ -383,10 +348,7 @@ export function LandingPage() {
         <div>
           <p className="landing-kicker">Ready to run the studio</p>
           <h2 id="landing-cta-title">Start your first remote recording today.</h2>
-          <p>
-            The public landing page introduces the product, while the app keeps the current
-            workflow under /app and guest invite links under /guest/:inviteToken.
-          </p>
+          <p>Launch a calmer interview flow with local-first capture, clean invites, and polished delivery.</p>
         </div>
 
         <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
@@ -396,7 +358,7 @@ export function LandingPage() {
 
       <footer className="landing-footer">
         <p>DNA STUDIO</p>
-        <p>Remote interviews. Local quality.</p>
+        <p>Built for unstable connections.</p>
       </footer>
     </main>
   );
