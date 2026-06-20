@@ -1,129 +1,102 @@
 import { useEffect, useRef } from 'react';
 import { appRoutes } from '../navigation/routes';
 
-type ProofPoint = {
-  label: string;
-  value: string;
-  detail: string;
-};
-
 type FeatureCard = {
-  eyebrow: string;
   title: string;
   description: string;
-  imageSrc: string;
-  imageAlt: string;
 };
 
-type WorkflowStep = {
+type FlowStep = {
   number: string;
   title: string;
   description: string;
 };
 
-const proofPoints: ProofPoint[] = [
-  {
-    label: 'Local-first capture',
-    value: 'Records stay on the host and guest machines first',
-    detail: 'The browser keeps quality high even when the network is not.',
-  },
-  {
-    label: 'Recovery built in',
-    value: 'Refresh-safe recording and persistence recovery',
-    detail: 'Completed work can survive tab closes, crashes, and unstable sessions.',
-  },
-  {
-    label: 'Resumable upload',
-    value: 'Chunked transfer that can continue later',
-    detail: 'Large recordings move safely without forcing a single fragile upload.',
-  },
-  {
-    label: '1080p export',
-    value: 'Final MP4 output tuned for polished delivery',
-    detail: 'The finished result is ready for sharing, publishing, or downloading.',
-  },
-];
-
 const featureCards: FeatureCard[] = [
   {
-    eyebrow: 'Recording',
-    title: 'Local-first recording built for bad connections',
+    title: 'Local-first capture',
     description:
-      'DNA STUDIO records locally in the browser so the source quality is not hostage to the live call.',
-    imageSrc: '/images/landing/feature-local-first-recording.png',
-    imageAlt: 'DNA STUDIO local-first recording screen with browser capture controls',
+      'The recording starts on each participant’s device first, keeping quality protected when the network is unstable.',
   },
   {
-    eyebrow: 'Transport',
-    title: 'Resumable upload for long-form sessions',
-    description:
-      'Chunks upload safely and can be resumed instead of restarting from zero after a network drop.',
-    imageSrc: '/images/landing/feature-resumable-upload.png',
-    imageAlt: 'DNA STUDIO resumable upload dashboard with chunk progress and recovery state',
+    title: 'Recovery built in',
+    description: 'Refreshes, crashes, and interruptions should not destroy the recording flow.',
   },
   {
-    eyebrow: 'Delivery',
-    title: 'Polished 1080p export for the final handoff',
-    description:
-      'The export path is designed to produce a credible finished video, not just a raw capture dump.',
-    imageSrc: '/images/landing/feature-1080p-export.png',
-    imageAlt: 'DNA STUDIO export dashboard showing 1080p MP4 delivery status',
+    title: 'Resumable upload',
+    description: 'Large recordings can continue later instead of restarting from zero.',
+  },
+  {
+    title: '1080p export',
+    description: 'Prepare a clean MP4 output ready for download and publishing.',
   },
 ];
 
-const workflowSteps: WorkflowStep[] = [
+const studioFlowSteps: FlowStep[] = [
   {
     number: '01',
-    title: 'Create the session in the app',
-    description:
-      'Open /app to start the host flow, set up the recording session, and prepare the guest invite.',
+    title: 'Create session',
+    description: 'Set up the recording room and prepare the studio.',
   },
   {
     number: '02',
-    title: 'Let the guest join with the invite link',
-    description:
-      'Guests enter through a single invite URL that stays simple and does not require an account.',
+    title: 'Invite guest',
+    description: 'Share a simple invite link with no account friction.',
   },
   {
     number: '03',
-    title: 'Check devices, record locally, and export',
-    description:
-      'The studio checks camera and microphone, captures locally, recovers from disruption, and exports in 1080p.',
+    title: 'Record locally',
+    description: 'Capture on device first so the source remains protected.',
+  },
+  {
+    number: '04',
+    title: 'Export MP4',
+    description: 'Finish with a clean 1080p deliverable.',
   },
 ];
 
-function LandingMetric({ item }: { item: ProofPoint }) {
+const workflowSteps: FlowStep[] = [
+  {
+    number: '01',
+    title: 'Create the session',
+    description: 'Start the room and define the recording run.',
+  },
+  {
+    number: '02',
+    title: 'Invite your guest',
+    description: 'Send the invite and keep onboarding lightweight.',
+  },
+  {
+    number: '03',
+    title: 'Record locally',
+    description: 'Let the browser capture on each device first.',
+  },
+  {
+    number: '04',
+    title: 'Upload safely',
+    description: 'Move the recording in chunks that can resume.',
+  },
+  {
+    number: '05',
+    title: 'Export in 1080p',
+    description: 'Package a polished MP4 ready to share.',
+  },
+];
+
+function FeatureCardView({ item }: { item: FeatureCard }) {
   return (
-    <article className="landing-metric landing-reveal" data-reveal>
-      <p className="landing-metric__label">{item.label}</p>
-      <h3 className="landing-metric__value">{item.value}</h3>
-      <p className="landing-metric__detail">{item.detail}</p>
+    <article className="landing-card landing-card--feature landing-reveal" data-reveal>
+      <div className="landing-card__accent" aria-hidden="true" />
+      <h3>{item.title}</h3>
+      <p>{item.description}</p>
     </article>
   );
 }
 
-function LandingFeatureCard({ item }: { item: FeatureCard }) {
+function FlowStepView({ item }: { item: FlowStep }) {
   return (
-    <article className="landing-feature-card landing-reveal" data-reveal>
-      <img
-        className="landing-feature-card__image"
-        src={item.imageSrc}
-        alt={item.imageAlt}
-        loading="lazy"
-      />
-      <div className="landing-feature-card__body">
-        <p className="landing-feature-card__eyebrow">{item.eyebrow}</p>
-        <h3>{item.title}</h3>
-        <p>{item.description}</p>
-      </div>
-    </article>
-  );
-}
-
-function LandingWorkflowStep({ item }: { item: WorkflowStep }) {
-  return (
-    <article className="landing-step landing-reveal" data-reveal>
-      <p className="landing-step__number">{item.number}</p>
+    <article className="landing-flow-step landing-reveal" data-reveal>
+      <p className="landing-flow-step__number">{item.number}</p>
       <h3>{item.title}</h3>
       <p>{item.description}</p>
     </article>
@@ -134,36 +107,7 @@ export function LandingPage() {
   const rootRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    document.title = 'DNA STUDIO | Remote interview recorder';
-  }, []);
-
-  useEffect(() => {
-    const root = rootRef.current;
-    if (root === null) {
-      return;
-    }
-
-    const updateMotion = () => {
-      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
-      const progress = Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
-      root.style.setProperty('--landing-scroll-progress', progress.toFixed(4));
-    };
-
-    let rafId = 0;
-    const handleScroll = () => {
-      window.cancelAnimationFrame(rafId);
-      rafId = window.requestAnimationFrame(updateMotion);
-    };
-
-    updateMotion();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-      window.cancelAnimationFrame(rafId);
-    };
+    document.title = 'DNA STUDIO | Public landing page';
   }, []);
 
   useEffect(() => {
@@ -187,8 +131,8 @@ export function LandingPage() {
         }
       },
       {
-        threshold: 0.18,
-        rootMargin: '0px 0px -10% 0px',
+        threshold: 0.16,
+        rootMargin: '0px 0px -8% 0px',
       },
     );
 
@@ -203,11 +147,11 @@ export function LandingPage() {
 
   return (
     <main ref={rootRef} className="landing-page">
-      <div className="landing-progress" aria-hidden="true">
-        <span className="landing-progress__bar" />
+      <div className="landing-page__backdrop" aria-hidden="true">
+        <div className="landing-page__grid" />
+        <div className="landing-page__glow landing-page__glow--one" />
+        <div className="landing-page__glow landing-page__glow--two" />
       </div>
-      <div className="landing-page__glow landing-page__glow--one" aria-hidden="true" />
-      <div className="landing-page__glow landing-page__glow--two" aria-hidden="true" />
 
       <header className="landing-nav landing-reveal is-visible" data-reveal>
         <div className="landing-nav__brand">
@@ -218,6 +162,9 @@ export function LandingPage() {
           <a href="#product">Product</a>
           <a href="#features">Features</a>
           <a href="#workflow">Workflow</a>
+        </nav>
+
+        <div className="landing-nav__actions">
           <a
             className="landing-button landing-button--ghost"
             href={appRoutes.appHome}
@@ -229,14 +176,13 @@ export function LandingPage() {
           <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
             Start for Free
           </a>
-        </nav>
+        </div>
       </header>
 
       <section className="landing-hero" aria-labelledby="landing-hero-title">
         <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
-          <h1 id="landing-hero-title">
-            Record remote interviews locally, recover from drops, and export in 1080p.
-          </h1>
+          <p className="landing-badge">Built for unstable connections</p>
+          <h1 id="landing-hero-title">Record remote interviews that survive bad connections.</h1>
           <p className="landing-hero__lede">
             DNA STUDIO is a premium interview recorder for unstable connection.
           </p>
@@ -249,54 +195,126 @@ export function LandingPage() {
               See how it works
             </a>
           </div>
+
+          <p className="landing-hero__signals" aria-label="Product highlights">
+            <span>Local recording</span>
+            <span>Recovery-ready</span>
+            <span>1080p export</span>
+          </p>
         </div>
 
-        <div
-          className="landing-hero__visual landing-reveal is-visible"
-          data-reveal
-          aria-label="DNA STUDIO product preview"
-        >
-          <div className="landing-hero__frame">
-            <img
-              className="landing-hero__image"
-              src="/images/landing/hero-remote-interviews.png"
-              alt="DNA STUDIO hero preview for remote interviews and local recording"
-              fetchPriority="high"
-            />
-          </div>
+        <aside className="landing-hero__panel landing-reveal is-visible" data-reveal aria-label="Studio highlights">
+          <div className="landing-hero__panel-card">
+            <div className="landing-hero__panel-glow" aria-hidden="true" />
+            <p className="landing-kicker">Why it holds up</p>
 
-          <div className="landing-hero__badge landing-hero__badge--top">
-            <span className="landing-hero__badge-label">Built for unstable networks</span>
-            <strong>Local capture first</strong>
+            <div className="landing-hero__panel-list">
+              <article>
+                <span>Local recording</span>
+                <p>Each device captures first so the source stays protected.</p>
+              </article>
+              <article>
+                <span>Recovery-ready</span>
+                <p>Refreshes and interruptions do not erase the session flow.</p>
+              </article>
+              <article>
+                <span>1080p export</span>
+                <p>Delivery ends in a clean MP4 built for publishing.</p>
+              </article>
+            </div>
           </div>
-
-          <div className="landing-hero__badge landing-hero__badge--bottom">
-            <span className="landing-hero__badge-label">Guest invite flow</span>
-            <strong>Account-light joining</strong>
-          </div>
-        </div>
+        </aside>
       </section>
 
-      <section className="landing-metrics landing-reveal" data-reveal aria-label="Product proof points">
-        {proofPoints.map((item) => (
-          <LandingMetric key={item.label} item={item} />
-        ))}
-      </section>
-
-      <section id="features" className="landing-section landing-reveal" data-reveal aria-labelledby="features-title">
+      <section
+        id="features"
+        className="landing-section landing-section--features landing-reveal"
+        data-reveal
+        aria-labelledby="features-title"
+      >
         <div className="landing-section__heading">
           <p className="landing-kicker">Product strengths</p>
-          <h2 id="features-title">Built for the real failure modes of remote recording.</h2>
+          <h2 id="features-title">Built to protect the session when the network is unstable.</h2>
           <p>
-            The product keeps recording, transport, and export boundaries separate so a bad
-            connection does not destroy the session.
+            Capture, recovery, transport, and export stay separate so a bad connection does not
+            collapse the whole recording.
           </p>
         </div>
 
         <div className="landing-feature-grid">
           {featureCards.map((item) => (
-            <LandingFeatureCard key={item.title} item={item} />
+            <FeatureCardView key={item.title} item={item} />
           ))}
+        </div>
+      </section>
+
+      <section
+        id="product"
+        className="landing-section landing-section--product landing-reveal"
+        data-reveal
+        aria-labelledby="product-title"
+      >
+        <div className="landing-section__heading">
+          <p className="landing-kicker">Studio flow</p>
+          <h2 id="product-title">A clean interface path from invite to export.</h2>
+          <p>
+            The product keeps capture, upload, and delivery visually distinct so the recording
+            story stays calm and easy to follow.
+          </p>
+        </div>
+
+        <div className="landing-product">
+          <div className="landing-product__flow" aria-label="Studio flow steps">
+            {studioFlowSteps.map((item) => (
+              <FlowStepView key={item.number} item={item} />
+            ))}
+          </div>
+
+          <div className="landing-product__notes" aria-label="Studio notes">
+            <article className="landing-note-card">
+              <p className="landing-note-card__label">Session state</p>
+              <p>Keep the recording path clear from the moment the host starts the room.</p>
+            </article>
+            <article className="landing-note-card">
+              <p className="landing-note-card__label">Guest joining</p>
+              <p>Let the invite flow stay lightweight and direct.</p>
+            </article>
+            <article className="landing-note-card">
+              <p className="landing-note-card__label">Delivery</p>
+              <p>Finish with a dependable MP4 instead of a fragile one-off capture.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="landing-section landing-section--reliability landing-reveal"
+        data-reveal
+        aria-labelledby="reliability-title"
+      >
+        <div className="landing-section__heading">
+          <p className="landing-kicker">Reliability</p>
+          <h2 id="reliability-title">Designed for the moments when the network is not perfect.</h2>
+          <p>
+            Remote interviews fail when recording depends on a live connection alone. DNA STUDIO
+            keeps capture, upload, and export as separate steps so the session can survive the
+            rough patches.
+          </p>
+        </div>
+
+        <div className="landing-reliability-grid">
+          <article className="landing-card landing-card--reliability">
+            <p className="landing-note-card__label">Capture</p>
+            <p>The source material stays on the device first, where the quality is safest.</p>
+          </article>
+          <article className="landing-card landing-card--reliability">
+            <p className="landing-note-card__label">Transport</p>
+            <p>Large uploads can recover instead of forcing a full restart after a drop.</p>
+          </article>
+          <article className="landing-card landing-card--reliability">
+            <p className="landing-note-card__label">Export</p>
+            <p>The final MP4 can be prepared without tying delivery to a fragile live call.</p>
+          </article>
         </div>
       </section>
 
@@ -307,58 +325,47 @@ export function LandingPage() {
         aria-labelledby="workflow-title"
       >
         <div className="landing-section__heading">
-          <p className="landing-kicker">Simple workflow</p>
-          <h2 id="workflow-title">A clean host and guest flow, from invite to export.</h2>
+          <p className="landing-kicker">Workflow</p>
+          <h2 id="workflow-title">A simple five-step flow that stays readable at a glance.</h2>
           <p>
-            Hosts create the session, guests join with the invite link, and the studio handles
-            device check, capture, upload, and delivery in a tight sequence.
+            Move through the session in a steady order, from setup to delivery, without any
+            unnecessary visual noise.
           </p>
         </div>
 
         <div className="landing-workflow">
-          <div className="landing-workflow__steps">
-            {workflowSteps.map((item) => (
-              <LandingWorkflowStep key={item.number} item={item} />
-            ))}
-          </div>
-
-          <div className="landing-workflow__visuals" id="product">
-            <figure className="landing-workflow__figure landing-workflow__figure--primary">
-              <img
-                src="/images/landing/dashboard-home.png"
-                alt="DNA STUDIO dashboard home screen with session overview and recording workflow"
-                loading="lazy"
-              />
-              <figcaption>Studio home dashboard</figcaption>
-            </figure>
-
-            <figure className="landing-workflow__figure landing-workflow__figure--secondary">
-              <img
-                src="/images/landing/prejoin-device-check.png"
-                alt="DNA STUDIO pre-join device check screen for camera and microphone readiness"
-                loading="lazy"
-              />
-              <figcaption>Pre-join device check</figcaption>
-            </figure>
-          </div>
+          {workflowSteps.map((item) => (
+            <FlowStepView key={item.number} item={item} />
+          ))}
         </div>
       </section>
 
       <section className="landing-cta landing-reveal" data-reveal aria-labelledby="landing-cta-title">
-        <div>
+        <div className="landing-cta__copy">
           <p className="landing-kicker">Ready to run the studio</p>
           <h2 id="landing-cta-title">Start your first remote recording today.</h2>
-          <p>Launch a calmer interview flow with local-first capture, clean invites, and polished delivery.</p>
+          <p>
+            Create a session, invite your guest, and keep recording quality protected even when
+            the network is not perfect.
+          </p>
         </div>
 
-        <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
+        <a className="landing-button landing-button--primary landing-button--lg" href={appRoutes.appHome}>
           Start for Free
         </a>
       </section>
 
       <footer className="landing-footer">
-        <p>DNA STUDIO</p>
-        <p>Built for unstable connections.</p>
+        <div className="landing-footer__brand">
+          <p className="landing-footer__name">DNA STUDIO</p>
+          <p className="landing-footer__tagline">Premium remote interview recording for unstable connections.</p>
+        </div>
+
+        <nav className="landing-footer__links" aria-label="Footer">
+          <a href="#product">Product</a>
+          <a href="#workflow">Workflow</a>
+          <a href={appRoutes.appHome}>Login</a>
+        </nav>
       </footer>
     </main>
   );

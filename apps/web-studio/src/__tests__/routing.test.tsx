@@ -54,13 +54,18 @@ describe('app routing', () => {
   it('renders the public landing page at /', () => {
     const markup = renderApp('/');
 
+    expect(markup).toContain('Record remote interviews that survive bad connections.');
     expect(markup).toContain('DNA STUDIO is a premium interview recorder for unstable connection.');
     expect(markup).toContain('Start for Free');
     expect(markup).toContain('Login');
     expect(markup).toContain('href="/app"');
     expect(markup).toContain('href="#product"');
+    expect(markup).toContain('href="#workflow"');
     expect(markup).toContain('id="workflow"');
     expect(markup).toContain('id="product"');
+    expect(markup).not.toContain('<img');
+    expect(markup).not.toContain('/images/landing/');
+    expect(markup).not.toContain('Remote interviews. Local quality.');
   });
 
   it('renders the studio app experience at /app', () => {

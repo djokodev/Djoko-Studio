@@ -77,7 +77,7 @@
 | DS-065 | v0.1 Recording Core | Add export foundation API and storage seam | merged | Merged in PR #65. Go API export row, export contract, last_error migration, export worker, and web export dashboard slice. |
 | DS-066 | v0.1 Recording Core | Fix latest uploaded recording selection for export dashboard | merged | Merged in PR #66. |
 | DS-067 | v0.1 UX Polish | Frontend information architecture cleanup | merged | Merged in PR #67. |
-| DS-068 | v0.1 UX Polish | Public landing page | in_review | Public landing page at `/` with the studio app preserved under `/app` and guest invite links under `/guest/:inviteToken`. |
+| DS-068 | v0.1 UX Polish | Public landing page | in_review | Image-free public landing page at `/` with the studio app preserved under `/app` and guest invite links under `/guest/:inviteToken`. |
 
 ## Allowed Statuses
 
