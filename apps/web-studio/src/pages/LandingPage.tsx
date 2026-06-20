@@ -105,7 +105,12 @@ function LandingMetric({ item }: { item: ProofPoint }) {
 function LandingFeatureCard({ item }: { item: FeatureCard }) {
   return (
     <article className="landing-feature-card">
-      <img className="landing-feature-card__image" src={item.imageSrc} alt={item.imageAlt} />
+      <img
+        className="landing-feature-card__image"
+        src={item.imageSrc}
+        alt={item.imageAlt}
+        loading="lazy"
+      />
       <div className="landing-feature-card__body">
         <p className="landing-feature-card__eyebrow">{item.eyebrow}</p>
         <h3>{item.title}</h3>
@@ -142,10 +147,19 @@ export function LandingPage() {
         </div>
 
         <nav className="landing-nav__links" aria-label="Primary">
+          <a href="#product">Product</a>
           <a href="#features">Features</a>
           <a href="#workflow">Workflow</a>
-          <a className="landing-button landing-button--ghost" href={appRoutes.appHome}>
-            Open app
+          <a
+            className="landing-button landing-button--ghost"
+            href={appRoutes.appHome}
+            aria-label="Login is coming soon. Open the app preview."
+            title="Login is coming soon. Open the app preview."
+          >
+            Login
+          </a>
+          <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
+            Start for Free
           </a>
         </nav>
       </header>
@@ -165,7 +179,7 @@ export function LandingPage() {
 
           <div className="landing-hero__actions">
             <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
-              Open the app
+              Start for Free
             </a>
             <a className="landing-button landing-button--secondary" href="#workflow">
               See how it works
@@ -231,7 +245,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="workflow" className="landing-section landing-section--workflow" aria-labelledby="workflow-title">
+      <section className="landing-section landing-section--workflow" aria-labelledby="workflow-title">
         <div className="landing-section__heading">
           <p className="landing-kicker">Simple workflow</p>
           <h2 id="workflow-title">A clean host and guest flow, from invite to export.</h2>
@@ -248,11 +262,12 @@ export function LandingPage() {
             ))}
           </div>
 
-          <div className="landing-workflow__visuals">
+          <div className="landing-workflow__visuals" id="product">
             <figure className="landing-workflow__figure landing-workflow__figure--primary">
               <img
                 src="/images/landing/dashboard-home.png"
                 alt="DNA STUDIO dashboard home screen with session overview and recording workflow"
+                loading="lazy"
               />
               <figcaption>Studio home dashboard</figcaption>
             </figure>
@@ -261,6 +276,7 @@ export function LandingPage() {
               <img
                 src="/images/landing/prejoin-device-check.png"
                 alt="DNA STUDIO pre-join device check screen for camera and microphone readiness"
+                loading="lazy"
               />
               <figcaption>Pre-join device check</figcaption>
             </figure>
@@ -279,7 +295,7 @@ export function LandingPage() {
         </div>
 
         <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
-          Open the app
+          Start for Free
         </a>
       </section>
 

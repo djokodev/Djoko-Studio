@@ -301,6 +301,7 @@ VITE_SIGNALING_BASE_URL=ws://localhost:8081 npm run dev
 - `/`: public landing page
 - `/app`: host session creation screen
 - `/guest/{invite_token}`: guest session join screen
+- unknown routes: currently fall back to the public landing page as a simple temporary default
 
 ## Run the signaling service locally
 

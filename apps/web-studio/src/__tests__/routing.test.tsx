@@ -55,7 +55,8 @@ describe('app routing', () => {
     const markup = renderApp('/');
 
     expect(markup).toContain('Remote interviews. Local quality.');
-    expect(markup).toContain('Open the app');
+    expect(markup).toContain('Start for Free');
+    expect(markup).toContain('Login');
     expect(markup).toContain('href="/app"');
   });
 
