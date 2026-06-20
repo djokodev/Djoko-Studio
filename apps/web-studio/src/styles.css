@@ -123,6 +123,19 @@
   background: rgba(255, 255, 255, 0.86);
 }
 
+.landing-nav--scrolled .landing-button--primary {
+  background: #0f172a;
+  color: #f8fafc;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+}
+
+.landing-nav--scrolled .landing-button--primary:hover,
+.landing-nav--scrolled .landing-button--primary:focus-visible {
+  background: #020617;
+  color: #f8fafc;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.2);
+}
+
 .landing-nav__brand {
   display: flex;
   align-items: center;
@@ -252,6 +265,13 @@
   border-color: rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.62);
   color: #f8fafc;
+}
+
+.landing-nav--scrolled .landing-button--ghost:hover,
+.landing-nav--scrolled .landing-button--ghost:focus-visible {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
 }
 
 .landing-button--lg {
