@@ -376,12 +376,6 @@ export function LandingPage() {
 
             <div className="landing-hero__visual-story">
               <figure className="landing-hero__visual-stage">
-                <img
-                  className="landing-hero__visual-photo"
-                  src="/images/landing/hero-host.jpg"
-                  alt="Host recording a remote interview in a dark home studio"
-                  loading="eager"
-                />
                 <span className="landing-hero__call-tag landing-hero__call-tag--host">Host</span>
 
                 <article className="landing-hero__guest-card">
