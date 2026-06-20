@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { appRoutes } from '../navigation/routes';
 
 type ProofPoint = {
@@ -92,9 +92,20 @@ const workflowSteps: WorkflowStep[] = [
   },
 ];
 
+const useCases = [
+  'Podcasts',
+  'Remote interviews',
+  'Webinars',
+  'Live panels',
+  'Testimonials',
+  'Tutorials',
+  'Internal comms',
+  'Video marketing',
+];
+
 function LandingMetric({ item }: { item: ProofPoint }) {
   return (
-    <article className="landing-metric">
+    <article className="landing-metric landing-reveal" data-reveal>
       <p className="landing-metric__label">{item.label}</p>
       <h3 className="landing-metric__value">{item.value}</h3>
       <p className="landing-metric__detail">{item.detail}</p>
@@ -104,7 +115,7 @@ function LandingMetric({ item }: { item: ProofPoint }) {
 
 function LandingFeatureCard({ item }: { item: FeatureCard }) {
   return (
-    <article className="landing-feature-card">
+    <article className="landing-feature-card landing-reveal" data-reveal>
       <img
         className="landing-feature-card__image"
         src={item.imageSrc}
@@ -122,7 +133,7 @@ function LandingFeatureCard({ item }: { item: FeatureCard }) {
 
 function LandingWorkflowStep({ item }: { item: WorkflowStep }) {
   return (
-    <article className="landing-step">
+    <article className="landing-step landing-reveal" data-reveal>
       <p className="landing-step__number">{item.number}</p>
       <h3>{item.title}</h3>
       <p>{item.description}</p>
@@ -131,16 +142,85 @@ function LandingWorkflowStep({ item }: { item: WorkflowStep }) {
 }
 
 export function LandingPage() {
+  const rootRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     document.title = 'DNA STUDIO | Remote interviews. Local quality.';
   }, []);
 
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null) {
+      return;
+    }
+
+    const updateMotion = () => {
+      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+      const progress = Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
+      root.style.setProperty('--landing-scroll-progress', progress.toFixed(4));
+    };
+
+    let rafId = 0;
+    const handleScroll = () => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(updateMotion);
+    };
+
+    updateMotion();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+      window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null) {
+      return;
+    }
+
+    const targets = root.querySelectorAll<HTMLElement>('[data-reveal]');
+    if (targets.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      {
+        threshold: 0.18,
+        rootMargin: '0px 0px -10% 0px',
+      },
+    );
+
+    for (const target of targets) {
+      observer.observe(target);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   return (
-    <main className="landing-page">
+    <main ref={rootRef} className="landing-page">
+      <div className="landing-progress" aria-hidden="true">
+        <span className="landing-progress__bar" />
+      </div>
       <div className="landing-page__glow landing-page__glow--one" aria-hidden="true" />
       <div className="landing-page__glow landing-page__glow--two" aria-hidden="true" />
 
-      <header className="landing-nav">
+      <header className="landing-nav landing-reveal is-visible" data-reveal>
         <div className="landing-nav__brand">
           <p className="landing-brand">DNA STUDIO</p>
           <p className="landing-brand__tagline">Remote interviews. Local quality.</p>
@@ -165,7 +245,7 @@ export function LandingPage() {
       </header>
 
       <section className="landing-hero" aria-labelledby="landing-hero-title">
-        <div className="landing-hero__copy">
+        <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
           <p className="landing-kicker">Remote interviews. Local quality.</p>
           <h1 id="landing-hero-title">
             Record high-quality conversations locally, recover when the network drops, and ship
@@ -195,7 +275,7 @@ export function LandingPage() {
           </ul>
         </div>
 
-        <div className="landing-hero__visual" aria-label="DNA STUDIO product preview">
+        <div className="landing-hero__visual landing-reveal is-visible" data-reveal aria-label="DNA STUDIO product preview">
           <div className="landing-hero__frame">
             <img
               className="landing-hero__image"
@@ -222,13 +302,23 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-metrics" aria-label="Product proof points">
+      <section className="landing-rail landing-reveal" data-reveal aria-label="Primary use cases">
+        <div className="landing-rail__track" aria-hidden="true">
+          {[...useCases, ...useCases].map((item, index) => (
+            <span className="landing-rail__item" key={`${item}-${index}`}>
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-metrics landing-reveal" data-reveal aria-label="Product proof points">
         {proofPoints.map((item) => (
           <LandingMetric key={item.label} item={item} />
         ))}
       </section>
 
-      <section id="features" className="landing-section" aria-labelledby="features-title">
+      <section id="features" className="landing-section landing-reveal" data-reveal aria-labelledby="features-title">
         <div className="landing-section__heading">
           <p className="landing-kicker">Product strengths</p>
           <h2 id="features-title">Built for the real failure modes of remote recording.</h2>
@@ -247,7 +337,8 @@ export function LandingPage() {
 
       <section
         id="workflow"
-        className="landing-section landing-section--workflow"
+        className="landing-section landing-section--workflow landing-reveal"
+        data-reveal
         aria-labelledby="workflow-title"
       >
         <div className="landing-section__heading">
@@ -288,7 +379,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-cta" aria-labelledby="landing-cta-title">
+      <section className="landing-cta landing-reveal" data-reveal aria-labelledby="landing-cta-title">
         <div>
           <p className="landing-kicker">Ready to run the studio</p>
           <h2 id="landing-cta-title">Start your first remote recording today.</h2>
