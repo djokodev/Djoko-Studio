@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { appRoutes } from '../navigation/routes';
 
 type FeatureCard = {
@@ -12,46 +12,28 @@ type FlowStep = {
   description: string;
 };
 
+type ReliabilityPoint = {
+  label: string;
+  description: string;
+};
+
 const featureCards: FeatureCard[] = [
   {
     title: 'Local-first capture',
     description:
-      'The recording starts on each participant’s device first, keeping quality protected when the network is unstable.',
+      'Recording starts on each participant’s device first, so quality never depends on the call staying up.',
   },
   {
     title: 'Recovery built in',
-    description: 'Refreshes, crashes, and interruptions should not destroy the recording flow.',
+    description: 'A refresh, a crash, or a dropped tab should not be able to destroy a session.',
   },
   {
     title: 'Resumable upload',
-    description: 'Large recordings can continue later instead of restarting from zero.',
+    description: 'Large recordings pick up where they left off instead of restarting from zero.',
   },
   {
     title: '1080p export',
-    description: 'Prepare a clean MP4 output ready for download and publishing.',
-  },
-];
-
-const studioFlowSteps: FlowStep[] = [
-  {
-    number: '01',
-    title: 'Create session',
-    description: 'Set up the recording room and prepare the studio.',
-  },
-  {
-    number: '02',
-    title: 'Invite guest',
-    description: 'Share a simple invite link with no account friction.',
-  },
-  {
-    number: '03',
-    title: 'Record locally',
-    description: 'Capture on device first so the source remains protected.',
-  },
-  {
-    number: '04',
-    title: 'Export MP4',
-    description: 'Finish with a clean 1080p deliverable.',
+    description: 'A clean MP4, ready to download and publish, every time.',
   },
 ];
 
@@ -64,22 +46,37 @@ const workflowSteps: FlowStep[] = [
   {
     number: '02',
     title: 'Invite your guest',
-    description: 'Send the invite and keep onboarding lightweight.',
+    description: 'Share a link. No account, no install, no friction.',
   },
   {
     number: '03',
     title: 'Record locally',
-    description: 'Let the browser capture on each device first.',
+    description: 'Each device captures on its own first, ahead of the network.',
   },
   {
     number: '04',
     title: 'Upload safely',
-    description: 'Move the recording in chunks that can resume.',
+    description: 'The recording moves in chunks that resume after a drop.',
   },
   {
     number: '05',
     title: 'Export in 1080p',
-    description: 'Package a polished MP4 ready to share.',
+    description: 'Package a polished MP4, ready to share.',
+  },
+];
+
+const reliabilityPoints: ReliabilityPoint[] = [
+  {
+    label: 'Capture',
+    description: 'Source material stays on-device first, where the quality is safest.',
+  },
+  {
+    label: 'Transport',
+    description: 'Large uploads resume instead of forcing a full restart after a drop.',
+  },
+  {
+    label: 'Export',
+    description: 'The final MP4 is assembled without tying delivery to a fragile live call.',
   },
 ];
 
@@ -103,8 +100,44 @@ function FlowStepView({ item }: { item: FlowStep }) {
   );
 }
 
+function ReliabilityCard({ item }: { item: ReliabilityPoint }) {
+  return (
+    <article className="landing-note-card landing-reveal" data-reveal>
+      <p className="landing-note-card__label">{item.label}</p>
+      <p>{item.description}</p>
+    </article>
+  );
+}
+
+/**
+ * Signature visual: a signal comparison.
+ * Top track shows an unreliable connection (broken, irregular).
+ * Bottom track shows local capture (continuous, unaffected).
+ * Both resolve into a single clean export — the entire product thesis
+ * in one diagram, no photography required.
+ */
+function SignalDiagram() {
+  return (
+    <div className="landing-signal" aria-hidden="true">
+      <div className="landing-signal__row">
+        <span className="landing-signal__label">Connection</span>
+        <span className="landing-signal__track landing-signal__track--unstable" />
+      </div>
+      <div className="landing-signal__row">
+        <span className="landing-signal__label">Local capture</span>
+        <span className="landing-signal__track landing-signal__track--stable" />
+      </div>
+      <div className="landing-signal__output">
+        <span className="landing-signal__output-dot" />
+        Export 1080p MP4 — intact
+      </div>
+    </div>
+  );
+}
+
 export function LandingPage() {
   const rootRef = useRef<HTMLElement | null>(null);
+  const [isNavScrolled, setIsNavScrolled] = useState(false);
 
   useEffect(() => {
     document.title = 'DNA STUDIO | Public landing page';
@@ -145,6 +178,29 @@ export function LandingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let rafId = 0;
+
+    const updateNavState = () => {
+      setIsNavScrolled(window.scrollY > 16);
+    };
+
+    const handleScroll = () => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(updateNavState);
+    };
+
+    updateNavState();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+      window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   return (
     <main ref={rootRef} className="landing-page">
       <div className="landing-page__backdrop" aria-hidden="true">
@@ -153,7 +209,12 @@ export function LandingPage() {
         <div className="landing-page__glow landing-page__glow--two" />
       </div>
 
-      <header className="landing-nav landing-reveal is-visible" data-reveal>
+      <header
+        className={`landing-nav landing-reveal is-visible ${
+          isNavScrolled ? 'landing-nav--scrolled' : 'landing-nav--top'
+        }`}
+        data-reveal
+      >
         <div className="landing-nav__brand">
           <p className="landing-brand">DNA STUDIO</p>
         </div>
@@ -196,32 +257,30 @@ export function LandingPage() {
             </a>
           </div>
 
-          <p className="landing-hero__signals" aria-label="Product highlights">
-            <span>Local recording</span>
-            <span>Recovery-ready</span>
-            <span>1080p export</span>
-          </p>
+          <ul className="landing-hero__checklist" aria-label="Built for these formats">
+            <li>Interviews</li>
+            <li>Podcasts</li>
+            <li>Webinars</li>
+            <li>Coaching calls</li>
+          </ul>
         </div>
 
-        <aside className="landing-hero__panel landing-reveal is-visible" data-reveal aria-label="Studio highlights">
+        <aside className="landing-hero__panel landing-reveal is-visible" data-reveal aria-label="How DNA STUDIO protects a session">
           <div className="landing-hero__panel-card">
             <div className="landing-hero__panel-glow" aria-hidden="true" />
-            <p className="landing-kicker">Why it holds up</p>
 
-            <div className="landing-hero__panel-list">
-              <article>
-                <span>Local recording</span>
-                <p>Each device captures first so the source stays protected.</p>
-              </article>
-              <article>
-                <span>Recovery-ready</span>
-                <p>Refreshes and interruptions do not erase the session flow.</p>
-              </article>
-              <article>
-                <span>1080p export</span>
-                <p>Delivery ends in a clean MP4 built for publishing.</p>
-              </article>
-            </div>
+            <span className="landing-hero__live">
+              <span className="landing-hero__live-dot" aria-hidden="true" />
+              REC · session protected
+            </span>
+
+            <p className="landing-kicker">What happens when the connection drops</p>
+
+            <SignalDiagram />
+
+            <p className="landing-hero__panel-foot">
+              The network can fail. The recording does not.
+            </p>
           </div>
         </aside>
       </section>
@@ -255,66 +314,26 @@ export function LandingPage() {
         aria-labelledby="product-title"
       >
         <div className="landing-section__heading">
-          <p className="landing-kicker">Studio flow</p>
-          <h2 id="product-title">A clean interface path from invite to export.</h2>
+          <p className="landing-kicker">Reliability</p>
+          <h2 id="product-title">Designed for the moments when the network is not perfect.</h2>
           <p>
-            The product keeps capture, upload, and delivery visually distinct so the recording
-            story stays calm and easy to follow.
+            Remote interviews fail when recording depends on a live connection alone. DNA STUDIO
+            keeps capture, upload, and export as separate steps so the session survives the rough
+            patches.
           </p>
         </div>
 
         <div className="landing-product">
-          <div className="landing-product__flow" aria-label="Studio flow steps">
-            {studioFlowSteps.map((item) => (
-              <FlowStepView key={item.number} item={item} />
+          <div className="landing-product__visual landing-reveal" data-reveal aria-label="Signal reliability diagram">
+            <p className="landing-kicker">Same session, two paths</p>
+            <SignalDiagram />
+          </div>
+
+          <div className="landing-product__notes" aria-label="Reliability breakdown">
+            {reliabilityPoints.map((item) => (
+              <ReliabilityCard key={item.label} item={item} />
             ))}
           </div>
-
-          <div className="landing-product__notes" aria-label="Studio notes">
-            <article className="landing-note-card">
-              <p className="landing-note-card__label">Session state</p>
-              <p>Keep the recording path clear from the moment the host starts the room.</p>
-            </article>
-            <article className="landing-note-card">
-              <p className="landing-note-card__label">Guest joining</p>
-              <p>Let the invite flow stay lightweight and direct.</p>
-            </article>
-            <article className="landing-note-card">
-              <p className="landing-note-card__label">Delivery</p>
-              <p>Finish with a dependable MP4 instead of a fragile one-off capture.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="landing-section landing-section--reliability landing-reveal"
-        data-reveal
-        aria-labelledby="reliability-title"
-      >
-        <div className="landing-section__heading">
-          <p className="landing-kicker">Reliability</p>
-          <h2 id="reliability-title">Designed for the moments when the network is not perfect.</h2>
-          <p>
-            Remote interviews fail when recording depends on a live connection alone. DNA STUDIO
-            keeps capture, upload, and export as separate steps so the session can survive the
-            rough patches.
-          </p>
-        </div>
-
-        <div className="landing-reliability-grid">
-          <article className="landing-card landing-card--reliability">
-            <p className="landing-note-card__label">Capture</p>
-            <p>The source material stays on the device first, where the quality is safest.</p>
-          </article>
-          <article className="landing-card landing-card--reliability">
-            <p className="landing-note-card__label">Transport</p>
-            <p>Large uploads can recover instead of forcing a full restart after a drop.</p>
-          </article>
-          <article className="landing-card landing-card--reliability">
-            <p className="landing-note-card__label">Export</p>
-            <p>The final MP4 can be prepared without tying delivery to a fragile live call.</p>
-          </article>
         </div>
       </section>
 
