@@ -401,14 +401,6 @@ export function LandingPage() {
                     </span>
                   </div>
                 </article>
-
-                <div className="landing-hero__session-hud">
-                  <div className="landing-hero__session-meta">
-                    <p className="landing-hero__session-label">Session protected</p>
-                    <p className="landing-hero__session-time">00:23:14</p>
-                  </div>
-                  <span className="landing-hero__session-pill">2 tracks captured locally</span>
-                </div>
               </figure>
             </div>
           </div>
@@ -497,8 +489,8 @@ export function LandingPage() {
         <article className="landing-workflow-showcase landing-reveal" data-reveal>
           <img
             className="landing-workflow-showcase__photo"
-            src="/images/landing/workflow-banner.jpg"
-            alt="Wide workflow banner showing the recording environment"
+            src="/images/landing/guest-portrait.jpg"
+            alt="Guest joining the interview flow remotely"
             loading="lazy"
           />
           <div className="landing-workflow-showcase__copy">

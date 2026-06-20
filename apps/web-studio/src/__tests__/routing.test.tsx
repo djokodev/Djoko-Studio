@@ -65,7 +65,7 @@ describe('app routing', () => {
     expect(markup).toContain('/images/landing/hero-host.jpg');
     expect(markup).toContain('/images/landing/guest-portrait.jpg');
     expect(markup).toContain('/images/landing/studio-mic-detail.jpg');
-    expect(markup).toContain('/images/landing/workflow-banner.jpg');
+    expect(markup).not.toContain('/images/landing/workflow-banner.jpg');
     expect(markup).not.toContain('landing-logo-mark');
     expect(markup).not.toContain('Built for unstable connections');
     expect(markup).not.toContain('DNA STUDIO is a premium interview recorder for unstable connection.');

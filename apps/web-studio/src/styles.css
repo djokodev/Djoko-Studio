@@ -497,12 +497,26 @@
   border: 1px solid rgba(148, 163, 184, 0.16);
   aspect-ratio: 5 / 6;
   background: #05070d;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 22px 54px rgba(0, 0, 0, 0.34);
+}
+
+.landing-hero__visual-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(3, 7, 18, 0.08) 0%, rgba(3, 7, 18, 0.22) 100%),
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.18), transparent 28%);
+  pointer-events: none;
 }
 
 .landing-hero__visual-photo {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
   display: block;
 }
 
@@ -532,19 +546,22 @@
 
 .landing-hero__guest-card {
   position: absolute;
-  right: 18px;
-  bottom: 88px;
-  width: min(228px, 36%);
+  right: 8px;
+  bottom: 16px;
+  width: min(208px, 31%);
   padding: 8px;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(3, 7, 18, 0.92);
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.46);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(3, 7, 18, 0.94);
+  box-shadow:
+    0 20px 42px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  z-index: 2;
 }
 
 .landing-hero__guest-photo {
   width: 100%;
-  min-height: 148px;
+  min-height: 156px;
   object-fit: cover;
   border-radius: 12px;
   display: block;
@@ -589,58 +606,6 @@
 
 .landing-hero__audio-bars span:nth-child(4) {
   height: 18px;
-}
-
-.landing-hero__session-hud {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(3, 7, 18, 0.16), rgba(3, 7, 18, 0.86));
-  backdrop-filter: blur(12px);
-}
-
-.landing-hero__session-meta {
-  display: grid;
-  gap: 4px;
-}
-
-.landing-hero__session-label,
-.landing-hero__session-time {
-  margin: 0;
-}
-
-.landing-hero__session-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.68);
-}
-
-.landing-hero__session-time {
-  font-family: 'SFMono-Regular', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
-  font-size: 1rem;
-  color: #f8fafc;
-}
-
-.landing-hero__session-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  background: rgba(16, 185, 129, 0.12);
-  color: #d1fae5;
-  font-size: 0.76rem;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .landing-section {
@@ -1231,7 +1196,8 @@
   }
 
   .landing-hero__guest-card {
-    width: min(260px, calc(100% - 24px));
+    right: 12px;
+    width: min(220px, calc(100% - 24px));
   }
 
   .landing-workflow-showcase__photo {
@@ -2287,13 +2253,6 @@ dt {
   .landing-product__caption {
     position: static;
     margin: 14px;
-  }
-
-  .landing-hero__session-hud {
-    position: static;
-    margin: 0 14px 14px;
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .landing-workflow-showcase__photo {
