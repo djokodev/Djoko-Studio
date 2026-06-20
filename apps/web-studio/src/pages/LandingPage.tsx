@@ -337,7 +337,11 @@ export function LandingPage() {
 
       <section className="landing-hero" aria-labelledby="landing-hero-title">
         <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
+          <p className="landing-badge">Built for unstable connections</p>
           <h1 id="landing-hero-title">Record remote interviews that survive bad connections.</h1>
+          <p className="landing-hero__lede">
+            DNA STUDIO is a premium interview recorder for unstable connection.
+          </p>
 
           <div className="landing-hero__actions">
             <a
@@ -375,25 +379,23 @@ export function LandingPage() {
             </div>
 
             <div className="landing-hero__visual-story">
-              <figure className="landing-hero__visual-stage">
+              <figure className="landing-hero__visual-stage landing-hero__call-stage">
+                <img
+                  className="landing-hero__call-photo"
+                  src="/images/landing/hero-host.jpg"
+                  alt="Host recording a remote interview in a dark home studio"
+                  loading="eager"
+                />
                 <span className="landing-hero__call-tag landing-hero__call-tag--host">Host</span>
 
-                <article className="landing-hero__guest-card">
+                <article className="landing-hero__guest-card landing-hero__call-pip">
                   <img
                     className="landing-hero__guest-photo"
                     src="/images/landing/guest-portrait.jpg"
                     alt="Guest joining the interview remotely"
                     loading="lazy"
                   />
-                  <div className="landing-hero__guest-hud">
-                    <span className="landing-hero__call-tag landing-hero__call-tag--inline">Guest</span>
-                    <span className="landing-hero__audio-bars" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                  </div>
+                  <span className="landing-hero__call-tag landing-hero__call-tag--inline">Guest</span>
                 </article>
               </figure>
             </div>
