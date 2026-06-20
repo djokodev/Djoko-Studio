@@ -245,7 +245,11 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-section landing-section--workflow" aria-labelledby="workflow-title">
+      <section
+        id="workflow"
+        className="landing-section landing-section--workflow"
+        aria-labelledby="workflow-title"
+      >
         <div className="landing-section__heading">
           <p className="landing-kicker">Simple workflow</p>
           <h2 id="workflow-title">A clean host and guest flow, from invite to export.</h2>
@@ -287,7 +291,7 @@ export function LandingPage() {
       <section className="landing-cta" aria-labelledby="landing-cta-title">
         <div>
           <p className="landing-kicker">Ready to run the studio</p>
-          <h2 id="landing-cta-title">Open the app and start a recording session.</h2>
+          <h2 id="landing-cta-title">Start your first remote recording today.</h2>
           <p>
             The public landing page introduces the product, while the app keeps the current
             workflow under /app and guest invite links under /guest/:inviteToken.

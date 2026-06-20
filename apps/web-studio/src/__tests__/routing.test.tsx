@@ -58,6 +58,7 @@ describe('app routing', () => {
     expect(markup).toContain('Start for Free');
     expect(markup).toContain('Login');
     expect(markup).toContain('href="/app"');
+    expect(markup).toContain('id="workflow"');
   });
 
   it('renders the studio app experience at /app', () => {
