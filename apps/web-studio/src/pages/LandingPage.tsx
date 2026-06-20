@@ -387,16 +387,6 @@ export function LandingPage() {
                   loading="eager"
                 />
                 <span className="landing-hero__call-tag landing-hero__call-tag--host">Host</span>
-
-                <article className="landing-hero__guest-card landing-hero__call-pip">
-                  <img
-                    className="landing-hero__guest-photo"
-                    src="/images/landing/guest-portrait.jpg"
-                    alt="Guest joining the interview remotely"
-                    loading="lazy"
-                  />
-                  <span className="landing-hero__call-tag landing-hero__call-tag--inline">Guest</span>
-                </article>
               </figure>
             </div>
           </div>

@@ -559,39 +559,6 @@
   left: 14px;
 }
 
-.landing-hero__call-tag--inline {
-  margin: 0;
-}
-
-.landing-hero__guest-card {
-  position: absolute;
-  right: 14px;
-  bottom: 18px;
-  width: min(188px, 26%);
-  padding: 8px;
-  border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(3, 7, 18, 0.94);
-  box-shadow:
-    0 20px 42px rgba(0, 0, 0, 0.48),
-    0 0 0 1px rgba(255, 255, 255, 0.03);
-  z-index: 2;
-}
-
-.landing-hero__guest-photo {
-  width: 100%;
-  min-height: 148px;
-  object-fit: cover;
-  border-radius: 12px;
-  display: block;
-}
-
-.landing-hero__call-pip .landing-hero__call-tag--inline {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-}
-
 .landing-section {
   display: grid;
   gap: 22px;
@@ -1181,11 +1148,6 @@
 
   .landing-workflow-showcase {
     grid-template-columns: 1fr;
-  }
-
-  .landing-hero__guest-card {
-    right: 12px;
-    width: min(220px, calc(100% - 24px));
   }
 
   .landing-workflow-showcase__photo {
@@ -2224,18 +2186,8 @@ dt {
     max-width: 100%;
   }
 
-  .landing-hero__guest-card {
-    position: static;
-    width: 100%;
-    margin: 14px;
-  }
-
   .landing-hero__visual-stage {
     aspect-ratio: auto;
-  }
-
-  .landing-hero__guest-photo {
-    min-height: 180px;
   }
 
   .landing-product__caption {
