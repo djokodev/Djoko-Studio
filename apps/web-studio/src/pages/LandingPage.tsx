@@ -151,34 +151,6 @@ function ReliabilityCard({ item }: { item: ReliabilityPoint }) {
   );
 }
 
-/**
- * Signature visual: a signal comparison.
- * Top track shows an unreliable connection (broken, irregular).
- * Bottom track shows local capture (continuous, unaffected).
- * Both resolve into a single clean export — the entire product thesis
- * in one diagram, no photography required.
- */
-function SignalDiagram() {
-  return (
-    <div className="landing-signal" aria-hidden="true">
-      <div className="landing-signal__row">
-        <span className="landing-signal__label">Connection</span>
-        <span className="landing-signal__track landing-signal__track--unstable" />
-      </div>
-      <div className="landing-signal__row">
-        <span className="landing-signal__label">Local capture</span>
-        <span className="landing-signal__track landing-signal__track--stable">
-          <span className="landing-signal__pulse" />
-        </span>
-      </div>
-      <div className="landing-signal__output">
-        <span className="landing-signal__output-dot" />
-        Export 1080p MP4 — intact
-      </div>
-    </div>
-  );
-}
-
 export function LandingPage() {
   const rootRef = useRef<HTMLElement | null>(null);
   const [isNavScrolled, setIsNavScrolled] = useState(false);
@@ -365,11 +337,7 @@ export function LandingPage() {
 
       <section className="landing-hero" aria-labelledby="landing-hero-title">
         <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
-          <p className="landing-badge">Built for unstable connections</p>
           <h1 id="landing-hero-title">Record remote interviews that survive bad connections.</h1>
-          <p className="landing-hero__lede">
-            DNA STUDIO is a premium interview recorder for unstable connection.
-          </p>
 
           <div className="landing-hero__actions">
             <a
@@ -414,10 +382,7 @@ export function LandingPage() {
                   alt="Host recording a remote interview in a dark home studio"
                   loading="eager"
                 />
-                <figcaption className="landing-hero__visual-caption">
-                  <span className="landing-hero__call-tag">Host</span>
-                  <p>Studio-grade host framing, even before the export is rendered.</p>
-                </figcaption>
+                <span className="landing-hero__call-tag landing-hero__call-tag--host">Host</span>
 
                 <article className="landing-hero__guest-card">
                   <img
@@ -426,32 +391,25 @@ export function LandingPage() {
                     alt="Guest joining the interview remotely"
                     loading="lazy"
                   />
-                  <div className="landing-hero__guest-copy">
+                  <div className="landing-hero__guest-hud">
                     <span className="landing-hero__call-tag landing-hero__call-tag--inline">Guest</span>
-                    <p>Joined on unstable Wi-Fi, still captured safely.</p>
+                    <span className="landing-hero__audio-bars" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                      <span />
+                    </span>
                   </div>
                 </article>
+
+                <div className="landing-hero__session-hud">
+                  <div className="landing-hero__session-meta">
+                    <p className="landing-hero__session-label">Session protected</p>
+                    <p className="landing-hero__session-time">00:23:14</p>
+                  </div>
+                  <span className="landing-hero__session-pill">2 tracks captured locally</span>
+                </div>
               </figure>
-
-              <div className="landing-hero__story-grid">
-                <article className="landing-story-card landing-story-card--image">
-                  <img
-                    className="landing-story-card__photo"
-                    src="/images/landing/studio-mic-detail.jpg"
-                    alt="Studio microphone detail inside the recording setup"
-                    loading="lazy"
-                  />
-                  <div className="landing-story-card__body">
-                    <p className="landing-kicker">Capture detail</p>
-                    <p>The raw source stays clean before the network becomes a problem.</p>
-                  </div>
-                </article>
-
-                <article className="landing-story-card landing-story-card--signal">
-                  <p className="landing-kicker">Protected delivery</p>
-                  <SignalDiagram />
-                </article>
-              </div>
             </div>
           </div>
         </aside>
