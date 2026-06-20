@@ -219,7 +219,7 @@ export function LandingPage() {
           setIsNavScrolled(true);
           revealTimeoutId = 0;
           scheduleTransitionReset(440);
-        }, 1000);
+        }, 333);
         return;
       }
 
