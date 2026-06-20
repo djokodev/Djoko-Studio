@@ -80,6 +80,48 @@ const reliabilityPoints: ReliabilityPoint[] = [
   },
 ];
 
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Nudges an element a few pixels toward the cursor while hovered
+ * ("magnetic" hover). Used only on the two primary CTAs so it reads as
+ * a deliberate touch rather than a gimmick applied everywhere.
+ */
+function useMagneticHover<T extends HTMLElement>(strength = 12) {
+  const ref = useRef<T | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) {
+      return;
+    }
+
+    function handleMove(event: MouseEvent) {
+      const rect = el!.getBoundingClientRect();
+      const relX = (event.clientX - rect.left) / rect.width - 0.5;
+      const relY = (event.clientY - rect.top) / rect.height - 0.5;
+      el!.style.setProperty('--magnet-x', `${relX * strength}px`);
+      el!.style.setProperty('--magnet-y', `${relY * strength}px`);
+    }
+
+    function handleLeave() {
+      el!.style.setProperty('--magnet-x', '0px');
+      el!.style.setProperty('--magnet-y', '0px');
+    }
+
+    el.addEventListener('mousemove', handleMove);
+    el.addEventListener('mouseleave', handleLeave);
+    return () => {
+      el.removeEventListener('mousemove', handleMove);
+      el.removeEventListener('mouseleave', handleLeave);
+    };
+  }, [strength]);
+
+  return ref;
+}
+
 function FeatureCardView({ item }: { item: FeatureCard }) {
   return (
     <article className="landing-card landing-card--feature landing-reveal" data-reveal>
@@ -125,7 +167,9 @@ function SignalDiagram() {
       </div>
       <div className="landing-signal__row">
         <span className="landing-signal__label">Local capture</span>
-        <span className="landing-signal__track landing-signal__track--stable" />
+        <span className="landing-signal__track landing-signal__track--stable">
+          <span className="landing-signal__pulse" />
+        </span>
       </div>
       <div className="landing-signal__output">
         <span className="landing-signal__output-dot" />
@@ -139,9 +183,37 @@ export function LandingPage() {
   const rootRef = useRef<HTMLElement | null>(null);
   const [isNavScrolled, setIsNavScrolled] = useState(false);
   const [navTransition, setNavTransition] = useState<'idle' | 'revealing' | 'hiding'>('idle');
+  const heroCtaRef = useMagneticHover<HTMLAnchorElement>();
+  const finalCtaRef = useMagneticHover<HTMLAnchorElement>();
 
   useEffect(() => {
     document.title = 'DNA STUDIO | Public landing page';
+  }, []);
+
+  // Cursor-spotlight on dark cards: one delegated listener handles every
+  // card on the page instead of attaching a handler per instance.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || prefersReducedMotion()) {
+      return;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const target = (event.target as HTMLElement).closest<HTMLElement>(
+        '.landing-card, .landing-note-card, .landing-flow-step',
+      );
+      if (!target) {
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty('--spot-x', `${event.clientX - rect.left}px`);
+      target.style.setProperty('--spot-y', `${event.clientY - rect.top}px`);
+    }
+
+    root.addEventListener('pointermove', handlePointerMove);
+    return () => {
+      root.removeEventListener('pointermove', handlePointerMove);
+    };
   }, []);
 
   useEffect(() => {
@@ -262,9 +334,8 @@ export function LandingPage() {
       </div>
 
       <header
-        className={`landing-nav landing-reveal is-visible ${
-          isNavScrolled ? 'landing-nav--scrolled' : 'landing-nav--top'
-        } landing-nav--${navTransition}`}
+        className={`landing-nav landing-reveal is-visible ${isNavScrolled ? 'landing-nav--scrolled' : 'landing-nav--top'
+          } landing-nav--${navTransition}`}
         data-reveal
       >
         <div className="landing-nav__brand">
@@ -301,7 +372,11 @@ export function LandingPage() {
           </p>
 
           <div className="landing-hero__actions">
-            <a className="landing-button landing-button--primary" href={appRoutes.appHome}>
+            <a
+              ref={heroCtaRef}
+              className="landing-button landing-button--primary landing-button--magnetic"
+              href={appRoutes.appHome}
+            >
               Start for Free
             </a>
             <a className="landing-button landing-button--secondary" href="#workflow">
@@ -317,22 +392,67 @@ export function LandingPage() {
           </ul>
         </div>
 
-        <aside className="landing-hero__panel landing-reveal is-visible" data-reveal aria-label="How DNA STUDIO protects a session">
+        <aside className="landing-hero__panel landing-reveal is-visible" data-reveal aria-label="Live session preview">
           <div className="landing-hero__panel-card">
             <div className="landing-hero__panel-glow" aria-hidden="true" />
+            <div className="landing-hero__call-bar">
+              <span className="landing-hero__live">
+                <span className="landing-hero__live-dot" aria-hidden="true" />
+                REC
+              </span>
+              <span className="landing-hero__call-badges">
+                <span className="landing-status-chip landing-status-chip--ok">Local recording</span>
+                <span className="landing-status-chip">1080p</span>
+              </span>
+            </div>
 
-            <span className="landing-hero__live">
-              <span className="landing-hero__live-dot" aria-hidden="true" />
-              REC · session protected
-            </span>
+            <div className="landing-hero__visual-story">
+              <figure className="landing-hero__visual-stage">
+                <img
+                  className="landing-hero__visual-photo"
+                  src="/images/landing/hero-host.jpg"
+                  alt="Host recording a remote interview in a dark home studio"
+                  loading="eager"
+                />
+                <figcaption className="landing-hero__visual-caption">
+                  <span className="landing-hero__call-tag">Host</span>
+                  <p>Studio-grade host framing, even before the export is rendered.</p>
+                </figcaption>
 
-            <p className="landing-kicker">What happens when the connection drops</p>
+                <article className="landing-hero__guest-card">
+                  <img
+                    className="landing-hero__guest-photo"
+                    src="/images/landing/guest-portrait.jpg"
+                    alt="Guest joining the interview remotely"
+                    loading="lazy"
+                  />
+                  <div className="landing-hero__guest-copy">
+                    <span className="landing-hero__call-tag landing-hero__call-tag--inline">Guest</span>
+                    <p>Joined on unstable Wi-Fi, still captured safely.</p>
+                  </div>
+                </article>
+              </figure>
 
-            <SignalDiagram />
+              <div className="landing-hero__story-grid">
+                <article className="landing-story-card landing-story-card--image">
+                  <img
+                    className="landing-story-card__photo"
+                    src="/images/landing/studio-mic-detail.jpg"
+                    alt="Studio microphone detail inside the recording setup"
+                    loading="lazy"
+                  />
+                  <div className="landing-story-card__body">
+                    <p className="landing-kicker">Capture detail</p>
+                    <p>The raw source stays clean before the network becomes a problem.</p>
+                  </div>
+                </article>
 
-            <p className="landing-hero__panel-foot">
-              The network can fail. The recording does not.
-            </p>
+                <article className="landing-story-card landing-story-card--signal">
+                  <p className="landing-kicker">Protected delivery</p>
+                  <SignalDiagram />
+                </article>
+              </div>
+            </div>
           </div>
         </aside>
       </section>
@@ -376,10 +496,22 @@ export function LandingPage() {
         </div>
 
         <div className="landing-product">
-          <div className="landing-product__visual landing-reveal" data-reveal aria-label="Signal reliability diagram">
-            <p className="landing-kicker">Same session, two paths</p>
-            <SignalDiagram />
-          </div>
+          <figure className="landing-product__visual landing-reveal" data-reveal>
+            <img
+              className="landing-product__photo"
+              src="/images/landing/studio-mic-detail.jpg"
+              alt="Studio microphone and recording hardware detail"
+              loading="lazy"
+            />
+            <figcaption className="landing-product__caption">
+              <p className="landing-kicker">Same session, two paths</p>
+              <h3>Capture first. Recover second. Export when the session is safe.</h3>
+              <p>
+                DNA STUDIO treats the live call as just one layer, not the single point of
+                failure.
+              </p>
+            </figcaption>
+          </figure>
 
           <div className="landing-product__notes" aria-label="Reliability breakdown">
             {reliabilityPoints.map((item) => (
@@ -397,12 +529,29 @@ export function LandingPage() {
       >
         <div className="landing-section__heading">
           <p className="landing-kicker">Workflow</p>
-          <h2 id="workflow-title">A simple five-step flow that stays readable at a glance.</h2>
+          <h2 id="workflow-title">A calm workflow for sessions that still need to look premium.</h2>
           <p>
-            Move through the session in a steady order, from setup to delivery, without any
-            unnecessary visual noise.
+            The page should feel like a studio product, not a dashboard. Setup, recording, and
+            delivery stay legible from the first glance.
           </p>
         </div>
+
+        <article className="landing-workflow-showcase landing-reveal" data-reveal>
+          <img
+            className="landing-workflow-showcase__photo"
+            src="/images/landing/workflow-banner.jpg"
+            alt="Wide workflow banner showing the recording environment"
+            loading="lazy"
+          />
+          <div className="landing-workflow-showcase__copy">
+            <p className="landing-kicker">Session overview</p>
+            <h3>One recording flow, from invite link to polished export.</h3>
+            <p>
+              Your guest arrives fast, the session records locally, and the final file remains
+              usable even after rough connection moments.
+            </p>
+          </div>
+        </article>
 
         <div className="landing-workflow">
           {workflowSteps.map((item) => (
@@ -421,7 +570,11 @@ export function LandingPage() {
           </p>
         </div>
 
-        <a className="landing-button landing-button--primary landing-button--lg" href={appRoutes.appHome}>
+        <a
+          ref={finalCtaRef}
+          className="landing-button landing-button--primary landing-button--lg landing-button--magnetic"
+          href={appRoutes.appHome}
+        >
           Start for Free
         </a>
       </section>

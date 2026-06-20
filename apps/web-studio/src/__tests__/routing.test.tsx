@@ -63,8 +63,11 @@ describe('app routing', () => {
     expect(markup).toContain('href="#workflow"');
     expect(markup).toContain('id="workflow"');
     expect(markup).toContain('id="product"');
-    expect(markup).not.toContain('<img');
-    expect(markup).not.toContain('/images/landing/');
+    expect(markup).toContain('/images/landing/hero-host.jpg');
+    expect(markup).toContain('/images/landing/guest-portrait.jpg');
+    expect(markup).toContain('/images/landing/studio-mic-detail.jpg');
+    expect(markup).toContain('/images/landing/workflow-banner.jpg');
+    expect(markup).not.toContain('landing-logo-mark');
     expect(markup).not.toContain('Remote interviews. Local quality.');
   });
 
