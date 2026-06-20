@@ -67,6 +67,8 @@
 }
 
 .landing-nav {
+  --landing-nav-transition-duration: 220ms;
+  --landing-nav-transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -81,12 +83,12 @@
   border-bottom: 1px solid transparent;
   background: transparent;
   box-shadow: none;
-  backdrop-filter: none;
+  backdrop-filter: blur(0px);
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    backdrop-filter 180ms ease;
+    background-color var(--landing-nav-transition-duration) var(--landing-nav-transition-ease),
+    border-color var(--landing-nav-transition-duration) var(--landing-nav-transition-ease),
+    box-shadow var(--landing-nav-transition-duration) var(--landing-nav-transition-ease),
+    backdrop-filter var(--landing-nav-transition-duration) var(--landing-nav-transition-ease);
 }
 
 .landing-nav--top {
@@ -95,11 +97,30 @@
   box-shadow: none;
 }
 
+.landing-nav--revealing {
+  --landing-nav-transition-duration: 440ms;
+}
+
+.landing-nav--hiding {
+  --landing-nav-transition-duration: 180ms;
+}
+
 .landing-nav--scrolled {
-  border-color: rgba(148, 163, 184, 0.14);
-  background: rgba(3, 7, 18, 0.92);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(18px);
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.landing-nav--scrolled .landing-brand,
+.landing-nav--scrolled .landing-nav__links a,
+.landing-nav--scrolled .landing-button--ghost {
+  color: #0f172a;
+}
+
+.landing-nav--scrolled .landing-button--ghost {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .landing-nav__brand {
@@ -113,6 +134,7 @@
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.24em;
+  transition: color var(--landing-nav-transition-duration) var(--landing-nav-transition-ease);
 }
 
 .landing-nav__links {
@@ -128,6 +150,11 @@
   align-items: center;
   gap: 10px;
   justify-self: end;
+}
+
+.landing-nav .landing-button--ghost {
+  transition-duration: var(--landing-nav-transition-duration);
+  transition-timing-function: var(--landing-nav-transition-ease);
 }
 
 .landing-nav--top .landing-button--ghost {
@@ -148,6 +175,7 @@
   font-size: 0.94rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+  transition: color var(--landing-nav-transition-duration) var(--landing-nav-transition-ease);
 }
 
 .landing-nav__links a::after {

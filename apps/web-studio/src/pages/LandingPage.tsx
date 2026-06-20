@@ -138,6 +138,7 @@ function SignalDiagram() {
 export function LandingPage() {
   const rootRef = useRef<HTMLElement | null>(null);
   const [isNavScrolled, setIsNavScrolled] = useState(false);
+  const [navTransition, setNavTransition] = useState<'idle' | 'revealing' | 'hiding'>('idle');
 
   useEffect(() => {
     document.title = 'DNA STUDIO | Public landing page';
@@ -180,9 +181,58 @@ export function LandingPage() {
 
   useEffect(() => {
     let rafId = 0;
+    let revealTimeoutId = 0;
+    let transitionResetTimeoutId = 0;
+
+    const clearRevealTimeout = () => {
+      if (revealTimeoutId !== 0) {
+        window.clearTimeout(revealTimeoutId);
+        revealTimeoutId = 0;
+      }
+    };
+
+    const clearTransitionResetTimeout = () => {
+      if (transitionResetTimeoutId !== 0) {
+        window.clearTimeout(transitionResetTimeoutId);
+        transitionResetTimeoutId = 0;
+      }
+    };
+
+    const scheduleTransitionReset = (delayMs: number) => {
+      clearTransitionResetTimeout();
+      transitionResetTimeoutId = window.setTimeout(() => {
+        setNavTransition((current) => (current === 'idle' ? current : 'idle'));
+        transitionResetTimeoutId = 0;
+      }, delayMs);
+    };
 
     const updateNavState = () => {
-      setIsNavScrolled(window.scrollY > 16);
+      const shouldShowScrolledNav = window.scrollY > 16;
+
+      if (shouldShowScrolledNav) {
+        if (isNavScrolled || revealTimeoutId !== 0) {
+          return;
+        }
+
+        setNavTransition('revealing');
+        revealTimeoutId = window.setTimeout(() => {
+          setIsNavScrolled(true);
+          revealTimeoutId = 0;
+          scheduleTransitionReset(440);
+        }, 1000);
+        return;
+      }
+
+      clearRevealTimeout();
+
+      if (!isNavScrolled) {
+        setNavTransition('idle');
+        return;
+      }
+
+      setNavTransition('hiding');
+      setIsNavScrolled(false);
+      scheduleTransitionReset(220);
     };
 
     const handleScroll = () => {
@@ -197,9 +247,11 @@ export function LandingPage() {
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
+      clearRevealTimeout();
+      clearTransitionResetTimeout();
       window.cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [isNavScrolled]);
 
   return (
     <main ref={rootRef} className="landing-page">
@@ -212,7 +264,7 @@ export function LandingPage() {
       <header
         className={`landing-nav landing-reveal is-visible ${
           isNavScrolled ? 'landing-nav--scrolled' : 'landing-nav--top'
-        }`}
+        } landing-nav--${navTransition}`}
         data-reveal
       >
         <div className="landing-nav__brand">
