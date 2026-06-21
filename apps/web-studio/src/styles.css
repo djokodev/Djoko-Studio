@@ -211,6 +211,11 @@
   color: #f8fafc;
 }
 
+.landing-nav--scrolled .landing-nav__links a:hover,
+.landing-nav--scrolled .landing-nav__links a:focus-visible {
+  color: #0f172a;
+}
+
 .landing-nav__links a:hover::after,
 .landing-nav__links a:focus-visible::after {
   right: 0;

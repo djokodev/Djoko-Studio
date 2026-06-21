@@ -98,7 +98,7 @@ function prefersReducedMotion(): boolean {
 
 const landingHeroBackgroundStyle: CSSProperties = {
   backgroundImage:
-    "linear-gradient(120deg, rgba(2, 6, 23, 0.92) 0%, rgba(2, 6, 23, 0.72) 42%, rgba(2, 6, 23, 0.26) 100%), url('/images/landing/freelaner_interview.jpg')",
+    "linear-gradient(120deg, rgba(2, 6, 23, 0.92) 0%, rgba(2, 6, 23, 0.72) 42%, rgba(2, 6, 23, 0.26) 100%), url('/images/landing/hero-interview-optimized.jpg')",
   backgroundPosition: 'center center',
   backgroundRepeat: 'no-repeat',
   backgroundSize: 'cover',
