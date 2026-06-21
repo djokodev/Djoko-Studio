@@ -371,6 +371,10 @@ export function LandingPage() {
       <section className="landing-hero" style={landingHeroBackgroundStyle} aria-labelledby="landing-hero-title">
         <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
           <h1 id="landing-hero-title">Record remote interviews that survive bad connections.</h1>
+          <p className="landing-hero__lede">
+            Keep the guest experience simple while protecting the recording when the connection
+            gets rough.
+          </p>
 
           <div className="landing-hero__actions">
             <a
