@@ -78,6 +78,8 @@ describe('app routing', () => {
     expect(markup).toContain('Coming soon');
     expect(markup).toContain('Recent recordings');
     expect(markup).toContain('Recent exports');
+    expect(markup).toContain('No exports yet.');
+    expect(markup).toContain('Exported videos will appear here.');
     expect(markup).toContain('Start recording');
     expect(markup).not.toContain('Remote interviews. Local quality.');
   });

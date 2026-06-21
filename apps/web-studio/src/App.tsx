@@ -21,6 +21,7 @@ import {
   isGuestInvitePathname,
 } from './navigation/routes';
 import { LandingPage } from './pages/LandingPage';
+import { listRecentPersistedExportSummaries } from './export/recentPersistedExports';
 import { formatBytes } from './recording/formatBytes';
 import {
   listPersistedLocalRecordings,
@@ -76,7 +77,7 @@ function formatRoleLabel(role: 'host' | 'guest' | null | undefined): string {
 }
 
 function AppHomeDashboard() {
-  const [recentRecordings, setRecentRecordings] = useState<PersistedLocalRecordingRecord[]>([]);
+  const [persistedRecordings, setPersistedRecordings] = useState<PersistedLocalRecordingRecord[]>([]);
 
   useEffect(() => {
     let isActive = true;
@@ -87,20 +88,23 @@ function AppHomeDashboard() {
           return;
         }
 
-        setRecentRecordings(recordings.slice(0, 3));
+        setPersistedRecordings(recordings);
       })
       .catch(() => {
         if (!isActive) {
           return;
         }
 
-        setRecentRecordings([]);
+        setPersistedRecordings([]);
       });
 
     return () => {
       isActive = false;
     };
   }, []);
+
+  const recentRecordings = persistedRecordings.slice(0, 3);
+  const recentExports = listRecentPersistedExportSummaries(persistedRecordings);
 
   return (
     <>
@@ -222,10 +226,31 @@ function AppHomeDashboard() {
               </a>
             </div>
 
-            <div className="app-dashboard-empty-state" role="status">
-              <p>No exports yet.</p>
-              <p>Exported videos will appear here.</p>
-            </div>
+            {recentExports.length > 0 ? (
+              <ul className="app-dashboard-list">
+                {recentExports.map((exportSummary) => (
+                  <li className="app-dashboard-list__item" key={exportSummary.exportId}>
+                    <div>
+                      <p className="app-dashboard-list__title">
+                        {formatRoleLabel(exportSummary.role)} export
+                      </p>
+                      <p className="app-dashboard-list__meta">
+                        Recording {exportSummary.recordingId}
+                        {exportSummary.lastSavedAt !== null
+                          ? ` • Saved ${formatDateTime(exportSummary.lastSavedAt)}`
+                          : ''}
+                      </p>
+                    </div>
+                    <span className="app-dashboard-list__value mono">{exportSummary.exportId}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="app-dashboard-empty-state" role="status">
+                <p>No exports yet.</p>
+                <p>Exported videos will appear here.</p>
+              </div>
+            )}
           </article>
         </div>
       </section>
