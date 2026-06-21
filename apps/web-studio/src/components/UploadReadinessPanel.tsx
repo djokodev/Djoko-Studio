@@ -97,7 +97,11 @@ export function UploadReadinessPanel({ recorder }: UploadReadinessPanelProps) {
   const hasVisibleUploadItems = uploadQueue.items.length > 0;
 
   return (
-    <section className="upload-readiness" aria-labelledby="upload-readiness-title">
+    <section
+      className="upload-readiness"
+      aria-labelledby="upload-readiness-title"
+      id="app-upload-flow"
+    >
       <div className="panel__header">
         <div>
           <p className="eyebrow">Upload readiness</p>

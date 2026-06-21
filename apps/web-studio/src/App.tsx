@@ -21,6 +21,11 @@ import {
   isGuestInvitePathname,
 } from './navigation/routes';
 import { LandingPage } from './pages/LandingPage';
+import { formatBytes } from './recording/formatBytes';
+import {
+  listPersistedLocalRecordings,
+  type PersistedLocalRecordingRecord,
+} from './recording/recordingPersistence';
 
 type FormState = {
   title: string;
@@ -34,14 +39,14 @@ const initialFormState: FormState = {
   studioId: '2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d',
 };
 
-function formatDateTime(value: string | null | undefined): string {
+function formatDateTime(value: string | number | null | undefined): string {
   if (!value) {
     return '—';
   }
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return value;
+    return String(value);
   }
 
   return new Intl.DateTimeFormat('en', {
@@ -56,6 +61,189 @@ function getErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function formatRoleLabel(role: 'host' | 'guest' | null | undefined): string {
+  if (role === 'host') {
+    return 'Host recording';
+  }
+
+  if (role === 'guest') {
+    return 'Guest recording';
+  }
+
+  return 'Local recording';
+}
+
+function AppHomeDashboard() {
+  const [recentRecordings, setRecentRecordings] = useState<PersistedLocalRecordingRecord[]>([]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    void listPersistedLocalRecordings()
+      .then((recordings) => {
+        if (!isActive) {
+          return;
+        }
+
+        setRecentRecordings(recordings.slice(0, 3));
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setRecentRecordings([]);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  return (
+    <>
+      <header className="app-shell__header">
+        <div>
+          <p className="eyebrow">DNA STUDIO</p>
+          <h1 className="app-shell__title">Preview app</h1>
+          <p className="app-shell__subtitle">Local-first studio for remote interviews.</p>
+        </div>
+        <a className="app-shell__back-link" href={appRoutes.publicLanding}>
+          Back to landing
+        </a>
+      </header>
+
+      <section className="app-dashboard-hero" aria-labelledby="app-dashboard-title">
+        <div className="app-dashboard-hero__copy">
+          <p className="app-dashboard-hero__kicker">App home</p>
+          <h2 id="app-dashboard-title">What would you like to create today?</h2>
+          <p className="app-dashboard-hero__lede">
+            Start a remote recording, continue an upload, or check the latest work saved in this browser.
+          </p>
+        </div>
+        <div className="app-dashboard-hero__highlights" aria-label="Studio highlights">
+          <span>Local capture</span>
+          <span>Guest invites</span>
+          <span>Resumable upload</span>
+        </div>
+      </section>
+
+      <section className="app-dashboard-actions" aria-labelledby="app-dashboard-actions-title">
+        <div className="app-dashboard-section-heading">
+          <p className="eyebrow">Main actions</p>
+          <h3 id="app-dashboard-actions-title">Choose your next step</h3>
+        </div>
+
+        <div className="app-dashboard-card-grid">
+          <article className="app-dashboard-card app-dashboard-card--primary">
+            <div className="app-dashboard-card__header">
+              <p className="eyebrow">Record</p>
+              <span className="app-dashboard-card__pill">Primary</span>
+            </div>
+            <h4>Record a remote interview</h4>
+            <p>Start a remote recording session with local capture and recovery.</p>
+            <a className="app-dashboard-card__link" href="#app-record-flow">
+              Start recording
+            </a>
+          </article>
+
+          <article className="app-dashboard-card">
+            <div className="app-dashboard-card__header">
+              <p className="eyebrow">Upload</p>
+              <span className="app-dashboard-card__pill app-dashboard-card__pill--muted">Secondary</span>
+            </div>
+            <h4>Upload a recording</h4>
+            <p>Upload an existing recording with resumable transfer.</p>
+            <a className="app-dashboard-card__link app-dashboard-card__link--secondary" href="#app-upload-flow">
+              Upload recording
+            </a>
+          </article>
+
+          <article className="app-dashboard-card app-dashboard-card--disabled" aria-disabled="true">
+            <div className="app-dashboard-card__header">
+              <p className="eyebrow">Edit</p>
+              <span className="app-dashboard-card__pill app-dashboard-card__pill--soon">Coming soon</span>
+            </div>
+            <h4>Edit a video</h4>
+            <p>Trim, polish, and prepare your final video.</p>
+            <span className="app-dashboard-card__link app-dashboard-card__link--disabled">
+              Edit coming soon
+            </span>
+          </article>
+        </div>
+      </section>
+
+      <section className="app-dashboard-recent" aria-labelledby="app-dashboard-recent-title">
+        <div className="app-dashboard-section-heading">
+          <p className="eyebrow">Recent work</p>
+          <h3 id="app-dashboard-recent-title">Keep moving from your last saved step</h3>
+        </div>
+
+        <div className="app-dashboard-recent__grid">
+          <article className="app-dashboard-panel">
+            <div className="app-dashboard-panel__header">
+              <h4>Recent recordings</h4>
+              <a className="app-dashboard-panel__link" href="#app-record-flow">
+                Start recording
+              </a>
+            </div>
+
+            {recentRecordings.length > 0 ? (
+              <ul className="app-dashboard-list">
+                {recentRecordings.map((record) => (
+                  <li className="app-dashboard-list__item" key={record.recordingId}>
+                    <div>
+                      <p className="app-dashboard-list__title">
+                        {formatRoleLabel(record.manifest.role)}
+                      </p>
+                      <p className="app-dashboard-list__meta">
+                        Saved {formatDateTime(record.lastPersistedAt)} • {formatBytes(record.manifest.totalBytes)}
+                      </p>
+                    </div>
+                    <span className="app-dashboard-list__value mono">{record.recordingId}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="app-dashboard-empty-state" role="status">
+                <p>No local recordings yet.</p>
+                <p>Start a recording to see it here.</p>
+              </div>
+            )}
+          </article>
+
+          <article className="app-dashboard-panel">
+            <div className="app-dashboard-panel__header">
+              <h4>Recent exports</h4>
+              <a className="app-dashboard-panel__link" href="#app-upload-flow">
+                Open export flow
+              </a>
+            </div>
+
+            <div className="app-dashboard-empty-state" role="status">
+              <p>No exports yet.</p>
+              <p>Exported videos will appear here.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="app-dashboard-safety" aria-labelledby="app-dashboard-safety-title">
+        <div className="app-dashboard-section-heading">
+          <p className="eyebrow">Recovery</p>
+          <h3 id="app-dashboard-safety-title">Local recovery is built in.</h3>
+        </div>
+        <p className="app-dashboard-safety__copy">
+          If a session drops, DNA STUDIO helps you recover recordings saved in the browser.
+        </p>
+        <a className="app-dashboard-card__link app-dashboard-card__link--secondary" href="#app-recovery-flow">
+          Open recovery tools
+        </a>
+      </section>
+    </>
+  );
 }
 
 function SessionDetails({
@@ -286,22 +474,22 @@ function HostSessionPage() {
   }
 
   return (
-    <main className="layout">
-      <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA STUDIO</p>
-        <h1 id="page-title">Create a session and invite your guest.</h1>
-        <p className="lede">
-          Set up the session, share the invite link, and keep the flow moving from
-          device check to local recording and export.
+    <main className="layout layout--app-home">
+      <AppHomeDashboard />
+
+      <section className="panel app-workspace" aria-labelledby="form-title" id="app-record-flow">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Record</p>
+            <h2 id="form-title">Start a recording session</h2>
+          </div>
+          {isSubmitting ? <span className="status-pill">Creating</span> : null}
+        </div>
+
+        <p className="api-note app-workspace__note">
+          Create your host session, invite your guest, then continue into preview, recording, upload, and export.
         </p>
-        <ul className="scope-list" aria-label="Current scope">
-          <li>Session setup</li>
-          <li>Guest invite link</li>
-          <li>Device preview</li>
-          <li>Local recording</li>
-          <li>Upload and export</li>
-        </ul>
-        <p className="api-note">Account and workspace settings are prefilled for now.</p>
+
         <DebugOnly>
           <p className="api-note">
             API base URL: <span className="mono">{getApiBaseUrl()}</span>
@@ -310,16 +498,6 @@ function HostSessionPage() {
             Signaling base URL: <span className="mono">{getSignalingBaseUrl()}</span>
           </p>
         </DebugOnly>
-      </section>
-
-      <section className="panel" aria-labelledby="form-title">
-        <div className="panel__header">
-          <div>
-            <p className="eyebrow">Host flow</p>
-            <h2 id="form-title">Create session</h2>
-          </div>
-          {isSubmitting ? <span className="status-pill">Creating</span> : null}
-        </div>
 
         <form className="session-form" onSubmit={handleSubmit}>
           <label className="field">

@@ -744,7 +744,11 @@ function LocalRecordingPrototype({
       <UploadReadinessPanel recorder={recorder} />
       <ProcessingExportPanel recorder={recorder} />
 
-      <section className="recording-recovery" aria-labelledby="local-recording-recovery-title">
+      <section
+        className="recording-recovery"
+        aria-labelledby="local-recording-recovery-title"
+        id="app-recovery-flow"
+      >
         <div className="panel__header">
           <div>
             <p className="eyebrow">Recovery</p>

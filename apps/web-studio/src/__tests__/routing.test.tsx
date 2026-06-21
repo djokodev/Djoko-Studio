@@ -71,7 +71,14 @@ describe('app routing', () => {
   it('renders the studio app experience at /app', () => {
     const markup = renderApp('/app');
 
-    expect(markup).toContain('Create a session and invite your guest.');
+    expect(markup).toContain('What would you like to create today?');
+    expect(markup).toContain('Record a remote interview');
+    expect(markup).toContain('Upload a recording');
+    expect(markup).toContain('Edit a video');
+    expect(markup).toContain('Coming soon');
+    expect(markup).toContain('Recent recordings');
+    expect(markup).toContain('Recent exports');
+    expect(markup).toContain('Start recording');
     expect(markup).not.toContain('Remote interviews. Local quality.');
   });
 

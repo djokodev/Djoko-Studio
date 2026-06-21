@@ -62,7 +62,8 @@ The formal browser recording acceptance checklist lives in
 
 - shows the public DNA STUDIO landing page on `/`
 - shows the DNA Studio title and short product description
-- keeps the existing host session creation screen under `/app`
+- shows a simplified app home dashboard under `/app`
+- keeps the host session creation, local recording, upload, export, and recovery flow available from the `/app` dashboard
 - supports guest join URLs like `http://localhost:5173/guest/{invite_token}`
 - reads the invite token from the `/guest/{invite_token}` path segment
 - looks up the session with `GET /v1/guest/sessions/{invite_token}`
@@ -299,7 +300,7 @@ VITE_SIGNALING_BASE_URL=ws://localhost:8081 npm run dev
 ## Routes
 
 - `/`: public landing page
-- `/app`: host session creation screen
+- `/app`: app home dashboard with record, upload, and recent work entry points
 - `/guest/{invite_token}`: guest session join screen
 - unknown routes: currently fall back to the public landing page as a simple temporary default
 
