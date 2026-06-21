@@ -15,6 +15,18 @@ export function isGuestInvitePathname(pathname: string): boolean {
   return pathname === appRoutes.guestInviteRoot || pathname.startsWith(`${appRoutes.guestInviteRoot}/`);
 }
 
+export function isAppPathname(pathname: string): boolean {
+  if (
+    pathname === appRoutes.appHome ||
+    pathname.startsWith(`${appRoutes.appHome}/`) ||
+    pathname === appRoutes.recordSetup
+  ) {
+    return true;
+  }
+
+  return /^\/session\/[^/]+\/studio\/?$/.test(pathname);
+}
+
 export function getGuestInviteTokenFromPathname(pathname: string): string | null {
   if (!isGuestInvitePathname(pathname)) {
     return null;

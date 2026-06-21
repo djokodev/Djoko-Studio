@@ -17,8 +17,10 @@ import { debugLog } from './lib/debug';
 import {
   appRoutes,
   getGuestInviteTokenFromPathname,
+  isAppPathname,
   isGuestInvitePathname,
 } from './navigation/routes';
+import { LandingPage } from './pages/LandingPage';
 
 type FormState = {
   title: string;
@@ -286,7 +288,7 @@ function HostSessionPage() {
   return (
     <main className="layout">
       <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA Studio</p>
+        <p className="eyebrow">DNA STUDIO</p>
         <h1 id="page-title">Create a session and invite your guest.</h1>
         <p className="lede">
           Set up the session, share the invite link, and keep the flow moving from
@@ -487,7 +489,7 @@ function GuestSessionPage() {
   return (
     <main className="layout">
       <section className="hero-card" aria-labelledby="page-title">
-        <p className="eyebrow">DNA Studio</p>
+        <p className="eyebrow">DNA STUDIO</p>
         <h1 id="page-title">Join the session and check your device.</h1>
         <p className="lede">
           Open the invite link, add your display name, and join. Camera, microphone,
@@ -641,8 +643,11 @@ function GuestSessionPage() {
 export default function App() {
   const pathname = window.location.pathname;
   const isGuestRoute = isGuestInvitePathname(pathname);
+  const isAppRoute = isAppPathname(pathname);
 
-  return (
-    <div className="page">{isGuestRoute ? <GuestSessionPage /> : <HostSessionPage />}</div>
-  );
+  if (!isGuestRoute && !isAppRoute) {
+    return <LandingPage />;
+  }
+
+  return <div className="page">{isGuestRoute ? <GuestSessionPage /> : <HostSessionPage />}</div>;
 }

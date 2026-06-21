@@ -1,7 +1,8 @@
 # Web Studio
 
 `apps/web-studio` is the React + TypeScript + Vite frontend for DNA Studio.
-It now includes the first host-facing session creation flow, the first guest-facing session join flow,
+It now includes the public landing page, the first host-facing session creation flow,
+the first guest-facing session join flow,
 a local camera and microphone preview foundation with local mic/camera toggle controls,
 the first local MediaRecorder chunked prototype for the preview stream,
 initial WebRTC media track attachment during negotiation,
@@ -59,8 +60,9 @@ The formal browser recording acceptance checklist lives in
 
 ## What this app does
 
+- shows the public DNA STUDIO landing page on `/`
 - shows the DNA Studio title and short product description
-- keeps the existing host session creation screen on the default route
+- keeps the existing host session creation screen under `/app`
 - supports guest join URLs like `http://localhost:5173/guest/{invite_token}`
 - reads the invite token from the `/guest/{invite_token}` path segment
 - looks up the session with `GET /v1/guest/sessions/{invite_token}`
@@ -296,8 +298,10 @@ VITE_SIGNALING_BASE_URL=ws://localhost:8081 npm run dev
 
 ## Routes
 
-- default route: host session creation screen
+- `/`: public landing page
+- `/app`: host session creation screen
 - `/guest/{invite_token}`: guest session join screen
+- unknown routes: currently fall back to the public landing page as a simple temporary default
 
 ## Run the signaling service locally
 
