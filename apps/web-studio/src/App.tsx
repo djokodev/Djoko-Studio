@@ -12,6 +12,8 @@ import {
 import { getSignalingBaseUrl } from './signaling/client';
 import { SignalingPanel } from './components/SignalingPanel';
 import { LocalMediaPreview } from './components/LocalMediaPreview';
+import { ProcessingExportPanel } from './components/ProcessingExportPanel';
+import { UploadReadinessPanel } from './components/UploadReadinessPanel';
 import { DebugOnly } from './components/debug/DebugOnly';
 import { debugLog } from './lib/debug';
 import {
@@ -27,12 +29,15 @@ import {
   listPersistedLocalRecordings,
   type PersistedLocalRecordingRecord,
 } from './recording/recordingPersistence';
+import { useLocalMediaRecorder } from './recording/useLocalMediaRecorder';
 
 type FormState = {
   title: string;
   hostUserId: string;
   studioId: string;
 };
+
+type HostWorkspace = 'dashboard' | 'record' | 'upload';
 
 const initialFormState: FormState = {
   title: 'Interview with guest',
@@ -76,7 +81,63 @@ function formatRoleLabel(role: 'host' | 'guest' | null | undefined): string {
   return 'Local recording';
 }
 
-function AppHomeDashboard() {
+function formatCompactId(value: string | null | undefined): string {
+  if (!value) {
+    return '—';
+  }
+
+  if (value.length <= 18) {
+    return value;
+  }
+
+  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+}
+
+function formatDuration(value: number | null | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  const totalSeconds = Math.max(1, Math.round(value / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function getHostWorkspaceFromSearch(search: string): HostWorkspace {
+  const workspace = new URLSearchParams(search).get('workspace');
+
+  if (workspace === 'record' || workspace === 'upload') {
+    return workspace;
+  }
+
+  return 'dashboard';
+}
+
+function syncHostWorkspaceUrl(workspace: HostWorkspace): void {
+  try {
+    const url = new URL(window.location.href);
+
+    if (workspace === 'dashboard') {
+      url.searchParams.delete('workspace');
+    } else {
+      url.searchParams.set('workspace', workspace);
+    }
+
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // Best-effort URL sync for dashboard workspace state.
+  }
+}
+
+function AppHomeDashboard({
+  onOpenRecord,
+  onOpenUpload,
+}: {
+  onOpenRecord: () => void;
+  onOpenUpload: () => void;
+}) {
   const [persistedRecordings, setPersistedRecordings] = useState<PersistedLocalRecordingRecord[]>([]);
 
   useEffect(() => {
@@ -105,77 +166,69 @@ function AppHomeDashboard() {
 
   const recentRecordings = persistedRecordings.slice(0, 3);
   const recentExports = listRecentPersistedExportSummaries(persistedRecordings);
+  const recordWorkspaceHref = `${appRoutes.appHome}?workspace=record#app-record-flow`;
+  const uploadWorkspaceHref = `${appRoutes.appHome}?workspace=upload#app-upload-flow`;
 
   return (
-    <>
-      <header className="app-shell__header">
+    <div className="app-dashboard-home">
+      <header className="app-dashboard-home__header">
         <div>
-          <p className="eyebrow">DNA STUDIO</p>
-          <h1 className="app-shell__title">Preview app</h1>
-          <p className="app-shell__subtitle">Local-first studio for remote interviews.</p>
-        </div>
-        <a className="app-shell__back-link" href={appRoutes.publicLanding}>
-          Back to landing
-        </a>
-      </header>
-
-      <section className="app-dashboard-hero" aria-labelledby="app-dashboard-title">
-        <div className="app-dashboard-hero__copy">
-          <p className="app-dashboard-hero__kicker">App home</p>
-          <h2 id="app-dashboard-title">What would you like to create today?</h2>
-          <p className="app-dashboard-hero__lede">
-            Start a remote recording, continue an upload, or check the latest work saved in this browser.
+          <p className="eyebrow">Home</p>
+          <h1 className="app-dashboard-home__title">Dashboard</h1>
+          <p className="app-dashboard-home__subtitle">
+            Start recording, continue an upload, or jump back into recent work.
           </p>
         </div>
-        <div className="app-dashboard-hero__highlights" aria-label="Studio highlights">
-          <span>Local capture</span>
-          <span>Guest invites</span>
-          <span>Resumable upload</span>
-        </div>
-      </section>
+      </header>
 
-      <section className="app-dashboard-actions" aria-labelledby="app-dashboard-actions-title">
+      <section className="app-dashboard-shortcuts" aria-labelledby="app-dashboard-shortcuts-title">
         <div className="app-dashboard-section-heading">
-          <p className="eyebrow">Main actions</p>
-          <h3 id="app-dashboard-actions-title">Choose your next step</h3>
+          <p className="eyebrow">Quick actions</p>
+          <h2 id="app-dashboard-shortcuts-title">What would you like to create today?</h2>
+          <p className="app-dashboard-home__subtitle">
+            Keep the first screen focused on your next action, not the full studio internals.
+          </p>
         </div>
 
-        <div className="app-dashboard-card-grid">
-          <article className="app-dashboard-card app-dashboard-card--primary">
-            <div className="app-dashboard-card__header">
-              <p className="eyebrow">Record</p>
-              <span className="app-dashboard-card__pill">Primary</span>
-            </div>
-            <h4>Record a remote interview</h4>
-            <p>Start a remote recording session with local capture and recovery.</p>
-            <a className="app-dashboard-card__link" href="#app-record-flow">
-              Start recording
-            </a>
-          </article>
-
-          <article className="app-dashboard-card">
-            <div className="app-dashboard-card__header">
-              <p className="eyebrow">Upload</p>
-              <span className="app-dashboard-card__pill app-dashboard-card__pill--muted">Secondary</span>
-            </div>
-            <h4>Upload a recording</h4>
-            <p>Upload an existing recording with resumable transfer.</p>
-            <a className="app-dashboard-card__link app-dashboard-card__link--secondary" href="#app-upload-flow">
-              Upload recording
-            </a>
-          </article>
-
-          <article className="app-dashboard-card app-dashboard-card--disabled" aria-disabled="true">
-            <div className="app-dashboard-card__header">
-              <p className="eyebrow">Edit</p>
-              <span className="app-dashboard-card__pill app-dashboard-card__pill--soon">Coming soon</span>
-            </div>
-            <h4>Edit a video</h4>
-            <p>Trim, polish, and prepare your final video.</p>
-            <span className="app-dashboard-card__link app-dashboard-card__link--disabled">
-              Edit coming soon
+        <div className="app-dashboard-shortcuts__grid">
+          <button
+            className="app-dashboard-shortcut app-dashboard-shortcut--primary"
+            type="button"
+            onClick={onOpenRecord}
+          >
+            <span className="app-dashboard-shortcut__icon" aria-hidden="true">
+              R
             </span>
-          </article>
+            <span className="app-dashboard-shortcut__label">Record</span>
+            <span className="app-dashboard-shortcut__copy">
+              Start a remote recording session with local capture and recovery.
+            </span>
+          </button>
+
+          <button
+            className="app-dashboard-shortcut"
+            type="button"
+            onClick={onOpenUpload}
+          >
+            <span className="app-dashboard-shortcut__icon" aria-hidden="true">
+              U
+            </span>
+            <span className="app-dashboard-shortcut__label">Upload</span>
+            <span className="app-dashboard-shortcut__copy">
+              Continue uploads and exports from recordings saved in this browser.
+            </span>
+          </button>
+
+          <div className="app-dashboard-shortcut app-dashboard-shortcut--disabled" aria-disabled="true">
+            <span className="app-dashboard-shortcut__icon" aria-hidden="true">
+              E
+            </span>
+            <span className="app-dashboard-shortcut__label">Edit a video</span>
+            <span className="app-dashboard-shortcut__badge">Coming soon</span>
+            <span className="app-dashboard-shortcut__copy">
+              Trim, polish, and prepare your final video.
+            </span>
+          </div>
         </div>
       </section>
 
@@ -189,7 +242,7 @@ function AppHomeDashboard() {
           <article className="app-dashboard-panel">
             <div className="app-dashboard-panel__header">
               <h4>Recent recordings</h4>
-              <a className="app-dashboard-panel__link" href="#app-record-flow">
+              <a className="app-dashboard-panel__link" href={recordWorkspaceHref}>
                 Start recording
               </a>
             </div>
@@ -199,14 +252,22 @@ function AppHomeDashboard() {
                 {recentRecordings.map((record) => (
                   <li className="app-dashboard-list__item" key={record.recordingId}>
                     <div>
-                      <p className="app-dashboard-list__title">
-                        {formatRoleLabel(record.manifest.role)}
-                      </p>
+                      <div className="app-dashboard-list__title-row">
+                        <p className="app-dashboard-list__title">
+                          {formatRoleLabel(record.manifest.role)}
+                        </p>
+                        <span className="app-dashboard-list__badge">Saved</span>
+                      </div>
                       <p className="app-dashboard-list__meta">
-                        Saved {formatDateTime(record.lastPersistedAt)} • {formatBytes(record.manifest.totalBytes)}
+                        Saved {formatDateTime(record.lastPersistedAt)}
+                        {record.manifest.approximateDurationMs !== null
+                          ? ` • ${formatDuration(record.manifest.approximateDurationMs)}`
+                          : ''}
+                        {' • '}
+                        {formatBytes(record.manifest.totalBytes)}
                       </p>
                     </div>
-                    <span className="app-dashboard-list__value mono">{record.recordingId}</span>
+                    <span className="app-dashboard-list__value mono">{formatCompactId(record.recordingId)}</span>
                   </li>
                 ))}
               </ul>
@@ -221,7 +282,7 @@ function AppHomeDashboard() {
           <article className="app-dashboard-panel">
             <div className="app-dashboard-panel__header">
               <h4>Recent exports</h4>
-              <a className="app-dashboard-panel__link" href="#app-upload-flow">
+              <a className="app-dashboard-panel__link" href={uploadWorkspaceHref}>
                 Open export flow
               </a>
             </div>
@@ -231,17 +292,24 @@ function AppHomeDashboard() {
                 {recentExports.map((exportSummary) => (
                   <li className="app-dashboard-list__item" key={exportSummary.exportId}>
                     <div>
-                      <p className="app-dashboard-list__title">
-                        {formatRoleLabel(exportSummary.role)} export
-                      </p>
+                      <div className="app-dashboard-list__title-row">
+                        <p className="app-dashboard-list__title">
+                          {formatRoleLabel(exportSummary.role)} export
+                        </p>
+                        <span className="app-dashboard-list__badge app-dashboard-list__badge--export">
+                          Export
+                        </span>
+                      </div>
                       <p className="app-dashboard-list__meta">
-                        Recording {exportSummary.recordingId}
+                        Recording {formatCompactId(exportSummary.recordingId)}
                         {exportSummary.lastSavedAt !== null
                           ? ` • Saved ${formatDateTime(exportSummary.lastSavedAt)}`
                           : ''}
                       </p>
                     </div>
-                    <span className="app-dashboard-list__value mono">{exportSummary.exportId}</span>
+                    <span className="app-dashboard-list__value mono">
+                      {formatCompactId(exportSummary.exportId)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -256,18 +324,139 @@ function AppHomeDashboard() {
       </section>
 
       <section className="app-dashboard-safety" aria-labelledby="app-dashboard-safety-title">
-        <div className="app-dashboard-section-heading">
-          <p className="eyebrow">Recovery</p>
-          <h3 id="app-dashboard-safety-title">Local recovery is built in.</h3>
-        </div>
+        <p className="eyebrow">Recovery</p>
+        <h3 id="app-dashboard-safety-title">Recover saved recordings</h3>
         <p className="app-dashboard-safety__copy">
-          If a session drops, DNA STUDIO helps you recover recordings saved in the browser.
+          DNA STUDIO keeps local recordings in your browser so you can recover work after a drop.
         </p>
-        <a className="app-dashboard-card__link app-dashboard-card__link--secondary" href="#app-recovery-flow">
-          Open recovery tools
-        </a>
       </section>
-    </>
+    </div>
+  );
+}
+
+function DashboardSidebar({
+  activeWorkspace,
+  onChangeWorkspace,
+}: {
+  activeWorkspace: HostWorkspace;
+  onChangeWorkspace: (workspace: HostWorkspace) => void;
+}) {
+  return (
+    <aside className="app-sidebar" aria-label="Dashboard navigation">
+      <div className="app-sidebar__brand">
+        <p className="app-sidebar__eyebrow">DNA STUDIO</p>
+        <h1 className="app-sidebar__title">Dashboard</h1>
+      </div>
+
+      <nav className="app-sidebar__nav">
+        <SidebarNavButton
+          label="Home"
+          active={activeWorkspace === 'dashboard'}
+          onClick={() => onChangeWorkspace('dashboard')}
+        />
+        <SidebarNavButton
+          label="Record"
+          active={activeWorkspace === 'record'}
+          onClick={() => onChangeWorkspace('record')}
+        />
+        <SidebarNavButton
+          label="Upload"
+          active={activeWorkspace === 'upload'}
+          onClick={() => onChangeWorkspace('upload')}
+        />
+        <SidebarNavButton label="Projects" disabled detail="Coming soon" />
+        <SidebarNavButton label="Settings" disabled detail="Coming soon" />
+      </nav>
+
+      <div className="app-sidebar__footer">
+        <a className="app-sidebar__back-link" href={appRoutes.publicLanding}>
+          Back to landing
+        </a>
+      </div>
+    </aside>
+  );
+}
+
+function SidebarNavButton({
+  label,
+  active = false,
+  disabled = false,
+  detail,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  detail?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      className={`app-sidebar__nav-button${active ? ' app-sidebar__nav-button--active' : ''}`}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span>{label}</span>
+      {detail ? <span className="app-sidebar__nav-detail">{detail}</span> : null}
+    </button>
+  );
+}
+
+function WorkspaceToolbar({
+  title,
+  description,
+  onBack,
+}: {
+  title: string;
+  description: string;
+  onBack: () => void;
+}) {
+  return (
+    <header className="app-workspace-toolbar">
+      <button
+        className="app-workspace-toolbar__back"
+        type="button"
+        onClick={onBack}
+      >
+        Back to dashboard
+      </button>
+      <div>
+        <p className="eyebrow">Workspace</p>
+        <h2>{title}</h2>
+        <p className="app-workspace-toolbar__description">{description}</p>
+      </div>
+    </header>
+  );
+}
+
+function UploadWorkspace({ onBack }: { onBack: () => void }) {
+  const recorder = useLocalMediaRecorder();
+
+  return (
+    <div className="app-workspace-screen">
+      <WorkspaceToolbar
+        title="Upload workspace"
+        description="Continue uploads and exports for recordings already saved in this browser."
+        onBack={onBack}
+      />
+
+      <section className="panel app-workspace app-workspace--upload" aria-labelledby="upload-workspace-title">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Upload</p>
+            <h3 id="upload-workspace-title">Continue upload and export</h3>
+          </div>
+        </div>
+
+        <p className="api-note app-workspace__note">
+          Use this workspace when you already have local recordings and want to resume upload or export work.
+        </p>
+
+        <UploadReadinessPanel recorder={recorder} />
+        <ProcessingExportPanel recorder={recorder} />
+      </section>
+    </div>
   );
 }
 
@@ -471,6 +660,21 @@ function HostSessionPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<HostWorkspace>(() =>
+    getHostWorkspaceFromSearch(window.location.search),
+  );
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveWorkspace(getHostWorkspaceFromSearch(window.location.search));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -498,96 +702,127 @@ function HostSessionPage() {
     }
   }
 
+  function handleWorkspaceChange(nextWorkspace: HostWorkspace) {
+    setActiveWorkspace(nextWorkspace);
+    syncHostWorkspaceUrl(nextWorkspace);
+  }
+
   return (
-    <main className="layout layout--app-home">
-      <AppHomeDashboard />
+    <main className="app-shell">
+      <DashboardSidebar
+        activeWorkspace={activeWorkspace}
+        onChangeWorkspace={handleWorkspaceChange}
+      />
 
-      <section className="panel app-workspace" aria-labelledby="form-title" id="app-record-flow">
-        <div className="panel__header">
-          <div>
-            <p className="eyebrow">Record</p>
-            <h2 id="form-title">Start a recording session</h2>
-          </div>
-          {isSubmitting ? <span className="status-pill">Creating</span> : null}
-        </div>
+      <div className="app-shell__main">
+        {activeWorkspace === 'dashboard' ? (
+          <AppHomeDashboard
+            onOpenRecord={() => handleWorkspaceChange('record')}
+            onOpenUpload={() => handleWorkspaceChange('upload')}
+          />
+        ) : null}
 
-        <p className="api-note app-workspace__note">
-          Create your host session, invite your guest, then continue into preview, recording, upload, and export.
-        </p>
-
-        <DebugOnly>
-          <p className="api-note">
-            API base URL: <span className="mono">{getApiBaseUrl()}</span>
-          </p>
-          <p className="api-note">
-            Signaling base URL: <span className="mono">{getSignalingBaseUrl()}</span>
-          </p>
-        </DebugOnly>
-
-        <form className="session-form" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>Session title</span>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, title: event.target.value }))
-              }
-              placeholder="Interview with guest"
-              required
+        {activeWorkspace === 'record' ? (
+          <div className="app-workspace-screen">
+            <WorkspaceToolbar
+              title="Recording workspace"
+              description="Create your host session, invite your guest, then continue into preview, recording, upload, and export."
+              onBack={() => handleWorkspaceChange('dashboard')}
             />
-          </label>
 
-          <DebugOnly>
-            <label className="field">
-              <span>Host user ID</span>
-              <input
-                type="text"
-                value={form.hostUserId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, hostUserId: event.target.value }))
-                }
-                placeholder="3c9abfe7-3133-4924-b159-f62277dfce7c"
-                required
+            <section className="panel app-workspace" aria-labelledby="form-title" id="app-record-flow">
+              <div className="panel__header">
+                <div>
+                  <p className="eyebrow">Record</p>
+                  <h3 id="form-title">Start a recording session</h3>
+                </div>
+                {isSubmitting ? <span className="status-pill">Creating</span> : null}
+              </div>
+
+              <p className="api-note app-workspace__note">
+                Set up the session first, then use the studio tools below when you are ready to record.
+              </p>
+
+              <DebugOnly>
+                <p className="api-note">
+                  API base URL: <span className="mono">{getApiBaseUrl()}</span>
+                </p>
+                <p className="api-note">
+                  Signaling base URL: <span className="mono">{getSignalingBaseUrl()}</span>
+                </p>
+              </DebugOnly>
+
+              <form className="session-form" onSubmit={handleSubmit}>
+                <label className="field">
+                  <span>Session title</span>
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, title: event.target.value }))
+                    }
+                    placeholder="Interview with guest"
+                    required
+                  />
+                </label>
+
+                <DebugOnly>
+                  <label className="field">
+                    <span>Host user ID</span>
+                    <input
+                      type="text"
+                      value={form.hostUserId}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, hostUserId: event.target.value }))
+                      }
+                      placeholder="3c9abfe7-3133-4924-b159-f62277dfce7c"
+                      required
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Studio ID</span>
+                    <input
+                      type="text"
+                      value={form.studioId}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, studioId: event.target.value }))
+                      }
+                      placeholder="2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d"
+                      required
+                    />
+                  </label>
+                </DebugOnly>
+
+                <button className="submit-button" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Creating session…' : 'Create session'}
+                </button>
+              </form>
+
+              {errorMessage ? (
+                <div className="message message--error" role="alert">
+                  {errorMessage}
+                </div>
+              ) : null}
+
+              <LocalMediaPreview
+                onStreamChange={setLocalMediaStream}
+                sessionId={sessionResult?.session.id}
+                participantId={sessionResult?.session.host_user_id}
+                role="host"
               />
-            </label>
+            </section>
 
-            <label className="field">
-              <span>Studio ID</span>
-              <input
-                type="text"
-                value={form.studioId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, studioId: event.target.value }))
-                }
-                placeholder="2fd9c6d2-7328-4710-bf1d-ab6bd0d9fb2d"
-                required
-              />
-            </label>
-          </DebugOnly>
-
-          <button className="submit-button" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating session…' : 'Create session'}
-          </button>
-        </form>
-
-        {errorMessage ? (
-          <div className="message message--error" role="alert">
-            {errorMessage}
+            {sessionResult ? (
+              <HostSessionSummary result={sessionResult} localMediaStream={localMediaStream} />
+            ) : null}
           </div>
         ) : null}
 
-        <LocalMediaPreview
-          onStreamChange={setLocalMediaStream}
-          sessionId={sessionResult?.session.id}
-          participantId={sessionResult?.session.host_user_id}
-          role="host"
-        />
-      </section>
-
-      {sessionResult ? (
-        <HostSessionSummary result={sessionResult} localMediaStream={localMediaStream} />
-      ) : null}
+        {activeWorkspace === 'upload' ? (
+          <UploadWorkspace onBack={() => handleWorkspaceChange('dashboard')} />
+        ) : null}
+      </div>
     </main>
   );
 }
