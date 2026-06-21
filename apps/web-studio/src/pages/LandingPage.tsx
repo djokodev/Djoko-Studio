@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { appRoutes } from '../navigation/routes';
 
 type FeatureCard = {
+  label: string;
   title: string;
   description: string;
 };
@@ -14,24 +15,29 @@ type FlowStep = {
 
 type ReliabilityPoint = {
   label: string;
+  title: string;
   description: string;
 };
 
 const featureCards: FeatureCard[] = [
   {
+    label: 'Capture',
     title: 'Local-first capture',
     description:
       'Recording starts on each participant’s device first, so quality never depends on the call staying up.',
   },
   {
+    label: 'Recovery',
     title: 'Recovery built in',
     description: 'A refresh, a crash, or a dropped tab should not be able to destroy a session.',
   },
   {
+    label: 'Transport',
     title: 'Resumable upload',
     description: 'Large recordings pick up where they left off instead of restarting from zero.',
   },
   {
+    label: 'Delivery',
     title: '1080p export',
     description: 'A clean MP4, ready to download and publish, every time.',
   },
@@ -40,49 +46,63 @@ const featureCards: FeatureCard[] = [
 const workflowSteps: FlowStep[] = [
   {
     number: '01',
-    title: 'Create the session',
-    description: 'Start the room and define the recording run.',
+    title: 'Open the session',
+    description: 'Start the room with a clean recording setup that already feels ready for production.',
   },
   {
     number: '02',
-    title: 'Invite your guest',
-    description: 'Share a link. No account, no install, no friction.',
+    title: 'Send one simple link',
+    description: 'Bring your guest in fast without accounts, installs, or setup friction slowing the conversation.',
   },
   {
     number: '03',
-    title: 'Record locally',
-    description: 'Each device captures on its own first, ahead of the network.',
+    title: 'Capture with confidence',
+    description: 'Each side records with quality in mind, so the session keeps its value beyond the live call.',
   },
   {
     number: '04',
-    title: 'Upload safely',
-    description: 'The recording moves in chunks that resume after a drop.',
+    title: 'Recover through rough moments',
+    description: 'Uploads resume safely in the background instead of collapsing after one unstable connection moment.',
   },
   {
     number: '05',
-    title: 'Export in 1080p',
-    description: 'Package a polished MP4, ready to share.',
+    title: 'Hand off a polished file',
+    description: 'Move into review with a final export that already feels ready for editing, delivery, and release.',
   },
 ];
 
 const reliabilityPoints: ReliabilityPoint[] = [
   {
-    label: 'Capture',
-    description: 'Source material stays on-device first, where the quality is safest.',
+    label: 'Studio feel',
+    title: 'Audio that feels intentional from the first take.',
+    description:
+      'The session is built to support clear spoken recordings that already feel close to a polished studio setup.',
   },
   {
-    label: 'Transport',
-    description: 'Large uploads resume instead of forcing a full restart after a drop.',
+    label: 'Host focus',
+    title: 'The conversation stays in front. The technical stress stays behind.',
+    description:
+      'DNA STUDIO keeps the recording workflow calm enough that hosts can focus on pacing, tone, and presence.',
   },
   {
-    label: 'Export',
-    description: 'The final MP4 is assembled without tying delivery to a fragile live call.',
+    label: 'Ready to publish',
+    title: 'A final file that is already moving toward delivery.',
+    description:
+      'Exports are shaped for real editorial handoff, so interviews can move quickly into review, editing, and release.',
   },
 ];
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
+
+const landingHeroBackgroundStyle: CSSProperties = {
+  backgroundImage:
+    "linear-gradient(120deg, rgba(2, 6, 23, 0.92) 0%, rgba(2, 6, 23, 0.72) 42%, rgba(2, 6, 23, 0.26) 100%), url('/images/landing/freelaner_interview.jpg')",
+  backgroundPosition: 'center center',
+  backgroundRepeat: 'no-repeat',
+  backgroundSize: 'cover',
+};
 
 /**
  * Nudges an element a few pixels toward the cursor while hovered
@@ -122,10 +142,15 @@ function useMagneticHover<T extends HTMLElement>(strength = 12) {
   return ref;
 }
 
-function FeatureCardView({ item }: { item: FeatureCard }) {
+function FeatureCardView({ item, index }: { item: FeatureCard; index: number }) {
   return (
     <article className="landing-card landing-card--feature landing-reveal" data-reveal>
       <div className="landing-card__accent" aria-hidden="true" />
+      <div className="landing-card__meta">
+        <p className="landing-card__number" aria-hidden="true">
+          {String(index + 1).padStart(2, '0')}
+        </p>
+      </div>
       <h3>{item.title}</h3>
       <p>{item.description}</p>
     </article>
@@ -135,17 +160,25 @@ function FeatureCardView({ item }: { item: FeatureCard }) {
 function FlowStepView({ item }: { item: FlowStep }) {
   return (
     <article className="landing-flow-step landing-reveal" data-reveal>
-      <p className="landing-flow-step__number">{item.number}</p>
       <h3>{item.title}</h3>
       <p>{item.description}</p>
+      <span className="landing-flow-step__watermark" aria-hidden="true">
+        {item.number}
+      </span>
     </article>
   );
 }
 
-function ReliabilityCard({ item }: { item: ReliabilityPoint }) {
+function ReliabilityCard({ item, index }: { item: ReliabilityPoint; index: number }) {
   return (
     <article className="landing-note-card landing-reveal" data-reveal>
-      <p className="landing-note-card__label">{item.label}</p>
+      <div className="landing-note-card__meta">
+        <p className="landing-note-card__label">{item.label}</p>
+        <p className="landing-note-card__number" aria-hidden="true">
+          {String(index + 1).padStart(2, '0')}
+        </p>
+      </div>
+      <h3>{item.title}</h3>
       <p>{item.description}</p>
     </article>
   );
@@ -335,13 +368,9 @@ export function LandingPage() {
         </div>
       </header>
 
-      <section className="landing-hero" aria-labelledby="landing-hero-title">
+      <section className="landing-hero" style={landingHeroBackgroundStyle} aria-labelledby="landing-hero-title">
         <div className="landing-hero__copy landing-reveal is-visible" data-reveal>
-          <p className="landing-badge">Built for unstable connections</p>
           <h1 id="landing-hero-title">Record remote interviews that survive bad connections.</h1>
-          <p className="landing-hero__lede">
-            DNA STUDIO is a premium interview recorder for unstable connection.
-          </p>
 
           <div className="landing-hero__actions">
             <a
@@ -364,33 +393,6 @@ export function LandingPage() {
           </ul>
         </div>
 
-        <aside className="landing-hero__panel landing-reveal is-visible" data-reveal aria-label="Live session preview">
-          <div className="landing-hero__panel-card">
-            <div className="landing-hero__panel-glow" aria-hidden="true" />
-            <div className="landing-hero__call-bar">
-              <span className="landing-hero__live">
-                <span className="landing-hero__live-dot" aria-hidden="true" />
-                REC
-              </span>
-              <span className="landing-hero__call-badges">
-                <span className="landing-status-chip landing-status-chip--ok">Local recording</span>
-                <span className="landing-status-chip">1080p</span>
-              </span>
-            </div>
-
-            <div className="landing-hero__visual-story">
-              <figure className="landing-hero__visual-stage landing-hero__call-stage">
-                <img
-                  className="landing-hero__call-photo"
-                  src="/images/landing/hero-host.jpg"
-                  alt="Host recording a remote interview in a dark home studio"
-                  loading="eager"
-                />
-                <span className="landing-hero__call-tag landing-hero__call-tag--host">Host</span>
-              </figure>
-            </div>
-          </div>
-        </aside>
       </section>
 
       <section
@@ -399,18 +401,29 @@ export function LandingPage() {
         data-reveal
         aria-labelledby="features-title"
       >
-        <div className="landing-section__heading">
-          <p className="landing-kicker">Product strengths</p>
-          <h2 id="features-title">Built to protect the session when the network is unstable.</h2>
-          <p>
-            Capture, recovery, transport, and export stay separate so a bad connection does not
-            collapse the whole recording.
-          </p>
+        <div className="landing-feature-intro">
+          <div className="landing-section__heading landing-section__heading--feature-intro">
+            <p className="landing-kicker">Product strengths</p>
+            <h2 id="features-title">Built to protect the session when the network is unstable.</h2>
+            <p>
+              Capture, recovery, transport, and export stay separate so a bad connection does not
+              collapse the whole recording.
+            </p>
+          </div>
+
+          <figure className="landing-feature-visual landing-reveal" data-reveal>
+            <img
+              className="landing-feature-visual__photo"
+              src="/images/landing/network_unstable.jpg"
+              alt="Remote session stress caused by an unstable network"
+              loading="lazy"
+            />
+          </figure>
         </div>
 
         <div className="landing-feature-grid">
-          {featureCards.map((item) => (
-            <FeatureCardView key={item.title} item={item} />
+          {featureCards.map((item, index) => (
+            <FeatureCardView key={item.title} item={item} index={index} />
           ))}
         </div>
       </section>
@@ -424,11 +437,6 @@ export function LandingPage() {
         <div className="landing-section__heading">
           <p className="landing-kicker">Reliability</p>
           <h2 id="product-title">Designed for the moments when the network is not perfect.</h2>
-          <p>
-            Remote interviews fail when recording depends on a live connection alone. DNA STUDIO
-            keeps capture, upload, and export as separate steps so the session survives the rough
-            patches.
-          </p>
         </div>
 
         <div className="landing-product">
@@ -439,19 +447,11 @@ export function LandingPage() {
               alt="Studio microphone and recording hardware detail"
               loading="lazy"
             />
-            <figcaption className="landing-product__caption">
-              <p className="landing-kicker">Same session, two paths</p>
-              <h3>Capture first. Recover second. Export when the session is safe.</h3>
-              <p>
-                DNA STUDIO treats the live call as just one layer, not the single point of
-                failure.
-              </p>
-            </figcaption>
           </figure>
 
           <div className="landing-product__notes" aria-label="Reliability breakdown">
-            {reliabilityPoints.map((item) => (
-              <ReliabilityCard key={item.label} item={item} />
+            {reliabilityPoints.map((item, index) => (
+              <ReliabilityCard key={item.label} item={item} index={index} />
             ))}
           </div>
         </div>
@@ -466,19 +466,9 @@ export function LandingPage() {
         <div className="landing-section__heading">
           <p className="landing-kicker">Workflow</p>
           <h2 id="workflow-title">A calm workflow for sessions that still need to look premium.</h2>
-          <p>
-            The page should feel like a studio product, not a dashboard. Setup, recording, and
-            delivery stay legible from the first glance.
-          </p>
         </div>
 
         <article className="landing-workflow-showcase landing-reveal" data-reveal>
-          <img
-            className="landing-workflow-showcase__photo"
-            src="/images/landing/guest-portrait.jpg"
-            alt="Guest joining the interview flow remotely"
-            loading="lazy"
-          />
           <div className="landing-workflow-showcase__copy">
             <p className="landing-kicker">Session overview</p>
             <h3>One recording flow, from invite link to polished export.</h3>
@@ -487,6 +477,12 @@ export function LandingPage() {
               usable even after rough connection moments.
             </p>
           </div>
+          <img
+            className="landing-workflow-showcase__photo"
+            src="/images/landing/guest-portrait.jpg"
+            alt="Guest joining the interview flow remotely"
+            loading="lazy"
+          />
         </article>
 
         <div className="landing-workflow">
@@ -518,7 +514,6 @@ export function LandingPage() {
       <footer className="landing-footer">
         <div className="landing-footer__brand">
           <p className="landing-footer__name">DNA STUDIO</p>
-          <p className="landing-footer__tagline">Premium remote interview recording for unstable connections.</p>
         </div>
 
         <nav className="landing-footer__links" aria-label="Footer">

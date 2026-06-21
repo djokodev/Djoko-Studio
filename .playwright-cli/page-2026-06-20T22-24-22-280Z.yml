@@ -1,0 +1,129 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - paragraph [ref=e6]: DNA STUDIO
+    - navigation "Primary" [ref=e7]:
+      - link "Product" [ref=e8] [cursor=pointer]:
+        - /url: "#product"
+      - link "Features" [ref=e9] [cursor=pointer]:
+        - /url: "#features"
+      - link "Workflow" [ref=e10] [cursor=pointer]:
+        - /url: "#workflow"
+    - generic [ref=e11]:
+      - link "Login is coming soon. Open the app preview." [ref=e12] [cursor=pointer]:
+        - /url: /app
+        - text: Login
+      - link "Start for Free" [ref=e13] [cursor=pointer]:
+        - /url: /app
+  - region "Record remote interviews that survive bad connections." [ref=e14]:
+    - generic [ref=e15]:
+      - heading "Record remote interviews that survive bad connections." [level=1] [ref=e16]
+      - generic [ref=e17]:
+        - link "Start for Free" [ref=e18] [cursor=pointer]:
+          - /url: /app
+        - link "See how it works" [ref=e19] [cursor=pointer]:
+          - /url: "#workflow"
+      - list "Built for these formats" [ref=e20]:
+        - listitem [ref=e21]: Interviews
+        - listitem [ref=e22]: Podcasts
+        - listitem [ref=e23]: Webinars
+        - listitem [ref=e24]: Coaching calls
+    - complementary "Live session preview" [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e28]:
+          - generic [ref=e29]: REC
+          - generic [ref=e31]:
+            - generic [ref=e32]: Local recording
+            - generic [ref=e33]: 1080p
+        - figure [ref=e35]:
+          - img "Host recording a remote interview in a dark home studio" [ref=e36]
+          - generic [ref=e37]: Host
+  - region "Built to protect the session when the network is unstable." [ref=e38]:
+    - generic [ref=e39]:
+      - paragraph [ref=e40]: Product strengths
+      - heading "Built to protect the session when the network is unstable." [level=2] [ref=e41]
+      - paragraph [ref=e42]: Capture, recovery, transport, and export stay separate so a bad connection does not collapse the whole recording.
+    - generic [ref=e43]:
+      - article [ref=e44]:
+        - heading "Local-first capture" [level=3] [ref=e46]
+        - paragraph [ref=e47]: Recording starts on each participant’s device first, so quality never depends on the call staying up.
+      - article [ref=e48]:
+        - heading "Recovery built in" [level=3] [ref=e50]
+        - paragraph [ref=e51]: A refresh, a crash, or a dropped tab should not be able to destroy a session.
+      - article [ref=e52]:
+        - heading "Resumable upload" [level=3] [ref=e54]
+        - paragraph [ref=e55]: Large recordings pick up where they left off instead of restarting from zero.
+      - article [ref=e56]:
+        - heading "1080p export" [level=3] [ref=e58]
+        - paragraph [ref=e59]: A clean MP4, ready to download and publish, every time.
+  - region "Designed for the moments when the network is not perfect." [ref=e60]:
+    - generic [ref=e61]:
+      - paragraph [ref=e62]: Reliability
+      - heading "Designed for the moments when the network is not perfect." [level=2] [ref=e63]
+      - paragraph [ref=e64]: Remote interviews fail when recording depends on a live connection alone. DNA STUDIO keeps capture, upload, and export as separate steps so the session survives the rough patches.
+    - generic [ref=e65]:
+      - figure "Same session, two paths Capture first. Recover second. Export when the session is safe. DNA STUDIO treats the live call as just one layer, not the single point of failure." [ref=e66]:
+        - img "Studio microphone and recording hardware detail" [ref=e67]
+        - generic [ref=e68]:
+          - paragraph [ref=e69]: Same session, two paths
+          - heading "Capture first. Recover second. Export when the session is safe." [level=3] [ref=e70]
+          - paragraph [ref=e71]: DNA STUDIO treats the live call as just one layer, not the single point of failure.
+      - generic "Reliability breakdown" [ref=e72]:
+        - article [ref=e73]:
+          - paragraph [ref=e74]: Capture
+          - paragraph [ref=e75]: Source material stays on-device first, where the quality is safest.
+        - article [ref=e76]:
+          - paragraph [ref=e77]: Transport
+          - paragraph [ref=e78]: Large uploads resume instead of forcing a full restart after a drop.
+        - article [ref=e79]:
+          - paragraph [ref=e80]: Export
+          - paragraph [ref=e81]: The final MP4 is assembled without tying delivery to a fragile live call.
+  - region "A calm workflow for sessions that still need to look premium." [ref=e82]:
+    - generic [ref=e83]:
+      - paragraph [ref=e84]: Workflow
+      - heading "A calm workflow for sessions that still need to look premium." [level=2] [ref=e85]
+      - paragraph [ref=e86]: The page should feel like a studio product, not a dashboard. Setup, recording, and delivery stay legible from the first glance.
+    - article [ref=e87]:
+      - img "Guest joining the interview flow remotely" [ref=e88]
+      - generic [ref=e89]:
+        - paragraph [ref=e90]: Session overview
+        - heading "One recording flow, from invite link to polished export." [level=3] [ref=e91]
+        - paragraph [ref=e92]: Your guest arrives fast, the session records locally, and the final file remains usable even after rough connection moments.
+    - generic [ref=e93]:
+      - article [ref=e94]:
+        - paragraph [ref=e95]: "01"
+        - heading "Create the session" [level=3] [ref=e96]
+        - paragraph [ref=e97]: Start the room and define the recording run.
+      - article [ref=e98]:
+        - paragraph [ref=e99]: "02"
+        - heading "Invite your guest" [level=3] [ref=e100]
+        - paragraph [ref=e101]: Share a link. No account, no install, no friction.
+      - article [ref=e102]:
+        - paragraph [ref=e103]: "03"
+        - heading "Record locally" [level=3] [ref=e104]
+        - paragraph [ref=e105]: Each device captures on its own first, ahead of the network.
+      - article [ref=e106]:
+        - paragraph [ref=e107]: "04"
+        - heading "Upload safely" [level=3] [ref=e108]
+        - paragraph [ref=e109]: The recording moves in chunks that resume after a drop.
+      - article [ref=e110]:
+        - paragraph [ref=e111]: "05"
+        - heading "Export in 1080p" [level=3] [ref=e112]
+        - paragraph [ref=e113]: Package a polished MP4, ready to share.
+  - region "Start your first remote recording today." [ref=e114]:
+    - generic [ref=e115]:
+      - paragraph [ref=e116]: Ready to run the studio
+      - heading "Start your first remote recording today." [level=2] [ref=e117]
+      - paragraph [ref=e118]: Create a session, invite your guest, and keep recording quality protected even when the network is not perfect.
+    - link "Start for Free" [ref=e119] [cursor=pointer]:
+      - /url: /app
+  - generic [ref=e120]:
+    - generic [ref=e121]:
+      - paragraph [ref=e122]: DNA STUDIO
+      - paragraph [ref=e123]: Premium remote interview recording for unstable connections.
+    - navigation "Footer" [ref=e124]:
+      - link "Product" [ref=e125] [cursor=pointer]:
+        - /url: "#product"
+      - link "Workflow" [ref=e126] [cursor=pointer]:
+        - /url: "#workflow"
+      - link "Login" [ref=e127] [cursor=pointer]:
+        - /url: /app
