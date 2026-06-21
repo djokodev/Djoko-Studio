@@ -20,11 +20,13 @@ import {
   getPersistedExportId,
   savePersistedExportId,
 } from '../export/recordingExportPersistence';
+import { listRecentPersistedExportSummaries } from '../export/recentPersistedExports';
 import {
   getExportStatusSummaryLabel,
   getExportTargetLabel,
   selectLatestExportCandidate,
 } from '../export/recordingExportSelection';
+import type { PersistedLocalRecordingRecord } from '../recording/recordingPersistence';
 
 const mockQueue = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
@@ -343,6 +345,68 @@ describe('export client', () => {
     expect(getPersistedExportId('recording-1')).toBeNull();
   });
 
+  it('lists_recent_persisted_exports_from_saved_recording_references', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size;
+      },
+    } satisfies Storage);
+
+    savePersistedExportId('recording-1', 'exp-recording-1');
+    savePersistedExportId('recording-3', 'exp-recording-3');
+
+    expect(
+      listRecentPersistedExportSummaries([
+        createPersistedRecordingRecord({
+          recordingId: 'recording-1',
+          role: 'host',
+          startedAt: 1718960400000,
+          stoppedAt: 1718960700000,
+          lastPersistedAt: 1718960760000,
+        }),
+        createPersistedRecordingRecord({
+          recordingId: 'recording-2',
+          role: 'guest',
+          startedAt: 1718961400000,
+          stoppedAt: 1718961700000,
+          lastPersistedAt: 1718961760000,
+        }),
+        createPersistedRecordingRecord({
+          recordingId: 'recording-3',
+          role: 'host',
+          startedAt: 1718962400000,
+          stoppedAt: 1718962700000,
+          lastPersistedAt: 1718962760000,
+        }),
+      ]),
+    ).toEqual([
+      {
+        exportId: 'exp-recording-3',
+        recordingId: 'recording-3',
+        role: 'host',
+        lastSavedAt: 1718962760000,
+      },
+      {
+        exportId: 'exp-recording-1',
+        recordingId: 'recording-1',
+        role: 'host',
+        lastSavedAt: 1718960760000,
+      },
+    ]);
+  });
+
   it('describes failed exports with their error message', () => {
     const manifest: RecordingExportManifest = {
       manifestVersion: 1,
@@ -558,3 +622,33 @@ describe('export panel', () => {
     expect(markup).not.toContain('upload-b');
   });
 });
+
+function createPersistedRecordingRecord(input: {
+  recordingId: string;
+  role: 'host' | 'guest';
+  startedAt: number;
+  stoppedAt: number;
+  lastPersistedAt: number;
+}): PersistedLocalRecordingRecord {
+  return {
+    recordingId: input.recordingId,
+    firstPersistedAt: input.startedAt,
+    lastPersistedAt: input.lastPersistedAt,
+    manifest: {
+      recordingId: input.recordingId,
+      sourceKind: 'local_preview_audio_video',
+      selectedMimeType: 'video/webm',
+      startedAt: input.startedAt,
+      stoppedAt: input.stoppedAt,
+      status: 'stopped',
+      chunkCount: 1,
+      totalBytes: 1024,
+      latestChunkAt: input.stoppedAt,
+      approximateDurationMs: input.stoppedAt - input.startedAt,
+      chunks: [],
+      sessionId: `session-${input.recordingId}`,
+      participantId: `participant-${input.recordingId}`,
+      role: input.role,
+    },
+  };
+}

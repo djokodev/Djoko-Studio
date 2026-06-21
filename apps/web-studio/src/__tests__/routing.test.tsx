@@ -37,8 +37,10 @@ const windowMock: WindowMock = {
   },
 };
 
-function renderApp(pathname: string): string {
-  windowMock.location.pathname = pathname;
+function renderApp(path: string): string {
+  const url = new URL(path, windowMock.location.origin);
+  windowMock.location.pathname = url.pathname;
+  windowMock.location.search = url.search;
   return renderToStaticMarkup(<App />);
 }
 
@@ -71,8 +73,48 @@ describe('app routing', () => {
   it('renders the studio app experience at /app', () => {
     const markup = renderApp('/app');
 
-    expect(markup).toContain('Create a session and invite your guest.');
+    expect(markup).toContain('Dashboard');
+    expect(markup).toContain('What would you like to create today?');
+    expect(markup).toContain('Record');
+    expect(markup).toContain('Upload');
+    expect(markup).toContain('Edit a video');
+    expect(markup).toContain('Coming soon');
+    expect(markup).toContain('Recent work');
+    expect(markup).toContain('Recent recordings');
+    expect(markup).toContain('Recent exports');
+    expect(markup).toContain('No exports yet.');
+    expect(markup).toContain('Exported videos will appear here.');
+    expect(markup).toContain('href="/app?workspace=record#app-record-flow"');
+    expect(markup).toContain('href="/app?workspace=upload#app-upload-flow"');
+    expect(markup).not.toContain('Preview app');
+    expect(markup).not.toContain('Start a recording session');
+    expect(markup).not.toContain('Local camera/microphone preview');
+    expect(markup).not.toContain('Local recording prototype');
+    expect(markup).not.toContain('Playback preview');
+    expect(markup).not.toContain('Upload readiness');
+    expect(markup).not.toContain('Upload queue item');
     expect(markup).not.toContain('Remote interviews. Local quality.');
+  });
+
+  it('renders the recording workspace when requested inside /app', () => {
+    const markup = renderApp('/app?workspace=record');
+
+    expect(markup).toContain('Recording workspace');
+    expect(markup).toContain('Back to dashboard');
+    expect(markup).toContain('Start a recording session');
+    expect(markup).toContain('Local camera/microphone preview');
+    expect(markup).toContain('Local recording prototype');
+  });
+
+  it('renders the upload workspace when requested inside /app', () => {
+    const markup = renderApp('/app?workspace=upload');
+
+    expect(markup).toContain('Upload workspace');
+    expect(markup).toContain('Back to dashboard');
+    expect(markup).toContain('Upload local copy');
+    expect(markup).not.toContain('Local camera/microphone preview');
+    expect(markup).not.toContain('Local recording prototype');
+    expect(markup).not.toContain('Playback preview');
   });
 
   it('renders the guest invite flow for invite links', () => {
